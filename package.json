@@ -1,0 +1,18 @@
+{
+  "name": "watchtower",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WATCHTOWER — browser-based 3D incident command dashboard (FDNY / NYCEM common operating picture demo)",
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
+    "build": "npm run build -w server && npm run build -w web",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -1,0 +1,27 @@
+# WATCHTOWER infrastructure.
+# Phase 1 needs no containers — `docker compose up` is required from Phase 3 onward.
+# mediamtx is defined now (runs fine with defaults, used by Phase 6 video pipeline);
+# takserver and whisper are stubs that activate in Phases 3 and 7.
+
+services:
+  # Phase 6 — RTSP in -> WebRTC/HLS out video gateway.
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: watchtower-mediamtx
+    restart: unless-stopped
+    ports:
+      - "8554:8554"   # RTSP ingest
+      - "8888:8888"   # HLS
+      - "8889:8889"   # WebRTC
+      - "8189:8189/udp" # WebRTC ICE
+
+  # Phase 3 — OpenTAKServer (real TAK/CoT server). Stub: activated in Phase 3.
+  # takserver:
+  #   image: TBD-phase-3
+  #   ports:
+  #     - "8087:8087"   # CoT TCP (plain)
+  #     - "8089:8089"   # CoT TLS
+
+  # Phase 7 — faster-whisper transcription sidecar. Stub: activated in Phase 7.
+  # whisper:
+  #   build: ./whisper
