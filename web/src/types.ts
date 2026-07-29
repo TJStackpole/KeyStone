@@ -2,6 +2,8 @@ export type IncidentType = 'Structural Fire' | 'Hazmat' | 'Collapse' | 'Mass Cas
 
 export const INCIDENT_TYPES: IncidentType[] = ['Structural Fire', 'Hazmat', 'Collapse', 'Mass Casualty']
 
+export type AlarmLevel = '10-75' | 'all-hands' | '2nd' | '3rd'
+
 export interface Incident {
   id: string
   address: string
@@ -11,6 +13,7 @@ export interface Incident {
   lat: number
   lon: number
   type: IncidentType
+  alarmLevel?: AlarmLevel
   createdAt: string
 }
 

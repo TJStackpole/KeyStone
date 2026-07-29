@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { runDemoScenario } from '../actions'
 import { setAppState, useAppState } from '../state/store'
 import { SearchBar } from './SearchBar'
 
@@ -45,6 +46,9 @@ export function TopBar() {
         <span className="sub">Common Operating Picture · FDNY / NYCEM</span>
       </div>
       <SearchBar />
+      <button className="demo-btn" onClick={() => void runDemoScenario()} title="Structural fire, 100 Gold St — full flow unattended">
+        ▶ DEMO: 100 GOLD ST
+      </button>
       <div className="topbar-right">
         {down.map((k) => (
           <span key={k} className="chip warn">

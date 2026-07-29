@@ -287,6 +287,25 @@ function suggestHotZone(incident: Incident): void {
   })
 }
 
+/**
+ * One-click demo (Phase 8): full flow unattended — geocode 100 Gold St,
+ * stand up the incident (fly-in, intel, auto-perimeter), then dispatch.
+ * Comms channels are always rolling.
+ */
+export async function runDemoScenario(): Promise<void> {
+  try {
+    const { autocompleteAddress } = await import('./api/geosearch')
+    const hits = await autocompleteAddress('100 Gold Street')
+    const hit = hits.find((h) => h.borough === 'Manhattan') ?? hits[0]
+    if (!hit) throw new Error('geocoder returned nothing for 100 Gold Street')
+    await standUpIncident(hit, 'Structural Fire')
+    // Let the fly-in land and the perimeter draw before units start rolling.
+    setTimeout(() => void dispatchAssignment(), 4000)
+  } catch (err) {
+    console.error('[demo] scenario failed:', err)
+  }
+}
+
 /** "Dispatch Assignment" — the server spawns the simulated first alarm. */
 export async function dispatchAssignment(): Promise<void> {
   setAppState({ dispatching: true })

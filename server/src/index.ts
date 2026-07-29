@@ -83,7 +83,27 @@ tak.on('event', (ev) => {
   if (isUnitEvent(ev)) registry.upsertFromCot(ev)
 })
 
-registry.on('unit', (unit) => broadcast({ type: 'unit', unit }))
+// Compact unit-track sampling for REPLAY: at most one timeline sample per unit
+// per 8 s (plus every status change) keeps incident.json small but animatable.
+const lastTrackSample = new Map<string, { t: number; status?: string }>()
+registry.on('unit', (unit) => {
+  broadcast({ type: 'unit', unit })
+  const prev = lastTrackSample.get(unit.uid)
+  const now = Date.now()
+  if (!prev || now - prev.t > 8000 || prev.status !== unit.status) {
+    lastTrackSample.set(unit.uid, { t: now, status: unit.status })
+    appendTimeline('unit.track', {
+      uid: unit.uid,
+      callsign: unit.callsign,
+      category: unit.category,
+      agency: unit.agency,
+      lat: unit.lat,
+      lon: unit.lon,
+      hae: unit.hae,
+      status: unit.status,
+    })
+  }
+})
 registry.on('remove', (uid) => broadcast({ type: 'unit.remove', uid }))
 
 tak.start()
@@ -121,6 +141,23 @@ app.post('/api/dispatch', async (_req, res) => {
 app.post('/api/dispatch/stop', (_req, res) => {
   simulator.stop()
   res.json({ stopped: true })
+})
+
+app.post('/api/alarm', async (req, res) => {
+  const { level } = req.body as { level?: string }
+  if (!level || !['10-75', 'all-hands', '2nd', '3rd'].includes(level)) {
+    return res.status(400).json({ error: 'level must be 10-75 | all-hands | 2nd | 3rd' })
+  }
+  const state = getState()
+  if (!state.incident) return res.status(400).json({ error: 'no active incident' })
+  const updated = updateIncident({ alarmLevel: level as Incident['alarmLevel'] })
+  broadcast({ type: 'incident', incident: updated.incident })
+  let added: string[] = []
+  if (level !== '10-75') {
+    const result = await simulator.escalate(level as 'all-hands' | '2nd' | '3rd')
+    added = result.added
+  }
+  res.json({ level, added })
 })
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 export type IncidentType = 'Structural Fire' | 'Hazmat' | 'Collapse' | 'Mass Casualty'
 
+export type AlarmLevel = '10-75' | 'all-hands' | '2nd' | '3rd'
+
 export interface Incident {
   id: string
   /** Display label, e.g. "100 GOLD STREET, New York, NY, USA" */
@@ -10,6 +12,7 @@ export interface Incident {
   lat: number
   lon: number
   type: IncidentType
+  alarmLevel?: AlarmLevel
   createdAt: string
 }
 

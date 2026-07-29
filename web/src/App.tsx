@@ -7,6 +7,7 @@ import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { BodycamWall } from './components/BodycamWall'
+import { CommandStrip } from './components/CommandStrip'
 import { CommsPanel } from './components/CommsPanel'
 import { DrawToolbar } from './components/DrawToolbar'
 import { DronePanel } from './components/DronePanel'
@@ -52,6 +53,7 @@ export default function App() {
     <div className="app">
       <div ref={globeRef} className="globe" />
       <TopBar />
+      <CommandStrip />
       <div className="left-dock">
         <IncidentCard />
         <RosterPanel />

@@ -112,6 +112,52 @@ export async function buildFirstAlarm(lat: number, lon: number): Promise<UnitSpe
   return units
 }
 
+/** Escalation reinforcements: next-nearest real companies not already assigned. */
+export async function buildReinforcements(
+  lat: number,
+  lon: number,
+  plan: { e: number; l: number; bc: number },
+  assignedCallsigns: Set<string>,
+): Promise<UnitSpec[]> {
+  let firehouses: Firehouse[] = []
+  try {
+    firehouses = await fetchFirehousesNear(lat, lon)
+  } catch {
+    // fall through — synthetic reinforcements below
+  }
+  const units: UnitSpec[] = []
+
+  const pick = (
+    count: number,
+    numbersOf: (f: Firehouse) => number[],
+    prefix: string,
+    category: UnitSpec['category'],
+    speed: number,
+  ) => {
+    let found = 0
+    for (const f of firehouses) {
+      if (found >= count) break
+      for (const n of numbersOf(f)) {
+        const callsign = `${prefix}-${n}`
+        if (assignedCallsigns.has(callsign)) continue
+        assignedCallsigns.add(callsign)
+        units.push({ callsign, category, origin: { lat: f.lat, lon: f.lon }, speedMps: speed })
+        found++
+        break
+      }
+    }
+    for (; found < count; found++) {
+      const callsign = `${prefix}-${200 + Math.floor(Math.random() * 90)}`
+      units.push(synthetic(callsign, category, lat, lon, 2500 + found * 600, speed))
+    }
+  }
+
+  pick(plan.e, (f) => f.engines, 'E', 'engine', 11)
+  pick(plan.l, (f) => f.ladders, 'L', 'ladder', 10.5)
+  if (plan.bc > 0) pick(plan.bc, (f) => f.battalions, 'BC', 'battalion', 13)
+  return units
+}
+
 function synthetic(
   callsign: string,
   category: UnitCategory,

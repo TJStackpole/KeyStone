@@ -45,6 +45,7 @@ export interface AppState {
   commsChannel: CommsChannel
   transcripts: Record<CommsChannel, TranscriptLine[]>
   commsConfig: CommsConfig | null
+  replay: { active: boolean; playing: boolean; t: number; duration: number }
 }
 
 const initial: AppState = {
@@ -79,6 +80,7 @@ const initial: AppState = {
   commsChannel: 'fdny',
   transcripts: { fdny: [], nypd: [], ems: [], oem: [] },
   commsConfig: null,
+  replay: { active: false, playing: false, t: 0, duration: 0 },
 }
 
 let state: AppState = initial

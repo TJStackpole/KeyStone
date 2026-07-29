@@ -1,6 +1,6 @@
-import { bearingDeg, destination, haversineMeters, Polyline, type PathPoint } from '../lib/geo.js'
+import { bearingDeg, destination, Polyline, type PathPoint } from '../lib/geo.js'
 import { buildCotXml, CATEGORY_COT_TYPE } from '../tak/cot.js'
-import { buildFirstAlarm, type UnitSpec } from './assignment.js'
+import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
 
 const TICK_MS = 2000
 const OSRM = 'https://router.project-osrm.org/route/v1/driving'
@@ -76,6 +76,23 @@ export class FirstAlarmSimulator {
     console.log(`[sim] dispatched first alarm: ${callsigns.join(', ')}`)
     this.onEvent?.('sim.dispatched', { callsigns })
     return { callsigns }
+  }
+
+  /**
+   * Alarm escalation (Phase 8): each level adds reinforcements from the next-
+   * nearest real companies not already assigned.
+   */
+  async escalate(level: 'all-hands' | '2nd' | '3rd'): Promise<{ added: string[] }> {
+    if (!this.active || !this.incident) return { added: [] }
+    const plan = { 'all-hands': { e: 1, l: 1, bc: 0 }, '2nd': { e: 4, l: 2, bc: 1 }, '3rd': { e: 4, l: 2, bc: 1 } }[level]
+    const assigned = new Set(this.units.map((u) => u.spec.callsign))
+    const extra = await buildReinforcements(this.incident.lat, this.incident.lon, plan, assigned)
+    const built = await Promise.all(extra.map((spec) => this.buildSimUnit(spec, this.incident!.lat, this.incident!.lon)))
+    this.units.push(...built)
+    const added = built.map((u) => u.spec.callsign)
+    console.log(`[sim] ${level} escalation: ${added.join(', ') || 'no companies available'}`)
+    this.onEvent?.('sim.escalated', { level, added })
+    return { added }
   }
 
   stop(): void {

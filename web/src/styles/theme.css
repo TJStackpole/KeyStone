@@ -748,6 +748,84 @@ html, body {
 .line-text mark.kw-urgent { color: #f87171; background: rgba(248, 113, 113, 0.15); }
 .line-text mark.kw-address { color: #4ade80; background: rgba(74, 222, 128, 0.12); }
 
+/* ---------- command strip (Phase 8) ---------- */
+.demo-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--amber-bright);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--glow-amber);
+  transition: all 120ms;
+}
+.demo-btn:hover { background: rgba(245, 158, 11, 0.22); }
+
+.command-strip {
+  position: absolute;
+  top: 74px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 38px;
+  padding: 0 14px;
+  z-index: 26;
+  white-space: nowrap;
+}
+.strip-mono { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.strip-mono.elapsed { color: var(--amber-bright); font-weight: 600; }
+.strip-counts { display: flex; gap: 8px; }
+.count-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  border: 1px solid rgba(91, 107, 128, 0.4);
+  border-radius: 2px;
+  padding: 2px 6px;
+}
+.count-chip b { color: #4ade80; }
+.strip-alarms { display: flex; gap: 4px; }
+.alarm-btn {
+  height: 22px;
+  padding: 0 8px;
+  background: rgba(7, 12, 20, 0.6);
+  border: 1px solid rgba(91, 107, 128, 0.4);
+  border-radius: 2px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 120ms;
+}
+.alarm-btn.reached { border-color: rgba(245, 158, 11, 0.5); color: var(--amber-bright); }
+.alarm-btn.current { background: rgba(245, 158, 11, 0.16); box-shadow: var(--glow-amber); }
+.strip-btn {
+  height: 24px;
+  padding: 0 10px;
+  background: rgba(7, 12, 20, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.strip-btn:hover { border-color: var(--border-strong); }
+.strip-btn.exit { color: var(--amber-bright); border-color: rgba(245, 158, 11, 0.5); }
+.command-strip.replaying { border-color: rgba(245, 158, 11, 0.45); box-shadow: var(--glow-amber); }
+.replay-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber-bright); }
+.replay-scrub { width: 260px; accent-color: #f59e0b; }
+
 /* ---------- scene loading veil ---------- */
 .scene-veil {
   position: absolute;

@@ -85,6 +85,9 @@ export function connectWs(): void {
 }
 
 function handle(msg: ServerMsg): void {
+  // During REPLAY the globe belongs to the replay engine — hold live mutations
+  // (transcripts still flow; they're history-safe).
+  if (getAppState().replay.active && msg.type !== 'transcript' && msg.type !== 'tak.status') return
   switch (msg.type) {
     case 'snapshot': {
       // Authoritative rebuild — clears units/shapes that changed while

@@ -9,13 +9,15 @@ Operator types a NYC address → camera flies to a 3D view built from **real NYC
 ## Quick start
 
 ```bash
+docker compose up -d   # TAK server, MediaMTX + demo streams, whisper sidecar
 npm install
-npm run dev        # server on :4000, web on :5173
+npm run dev            # backend on :4000, dashboard on :5173
 ```
 
-Open http://localhost:5173 and type `100 Gold Street`.
-
-Docker (`docker compose up`) is required starting at Phase 3 (TAK server) — not needed for Phases 1–2.
+Open http://localhost:5173 and press **▶ DEMO: 100 GOLD ST**. That's the whole
+demo: geocode → 3D fly-in → site intel → auto-perimeter → first-alarm dispatch
+→ live comms. (First `docker compose up` downloads images and the Whisper
+model; give it a few minutes once.)
 
 ## `.env` upgrades (all optional)
 
@@ -99,6 +101,54 @@ docs/     ATAK connection guide (Phase 3+)
 scripts/  operational scripts (CoT test publisher, etc.)
 ```
 
+## The 5-minute demo (for a non-technical presenter)
+
+Everything below is one click or one sentence. Practice once and it runs itself.
+
+**Before the audience arrives:** run the two commands in Quick start, open
+http://localhost:5173, and confirm the top bar shows **TAK LINK**.
+
+1. **"This is a live common operating picture of New York City."**
+   Click **▶ DEMO: 100 GOLD ST** (top bar). The camera flies to a 3D view of
+   Lower Manhattan and locks onto 100 Gold Street, highlighted in amber.
+   *Say: every building, hydrant, and firehouse you'll see is real city data,
+   loading live from NYC Open Data.*
+
+2. **"The system already knows the building."**
+   Point at the **Site Intel** panel (right): floors, year built, land use from
+   city records; the three nearest hydrants with distances; the three nearest
+   firehouses — real companies, real addresses.
+
+3. **"A perimeter is already suggested — and it's shared."**
+   Point at the red **HOT ZONE** ring. *Say: this perimeter isn't a picture on
+   this screen — it's broadcast over the same military-grade protocol (TAK)
+   that's on responders' phones. Anyone running ATAK sees the same zone.*
+   Optionally draw a warm zone: click **WARM**, click 3–4 corners, press Enter.
+
+4. **"Watch the first alarm arrive."** (units are already rolling from the demo
+   button) Point at the roster (left): *these are the actual companies that
+   would get this box — Engine 6 from Beekman Street, the real firehouse 600
+   feet away.* Watch statuses flip Enroute → On Scene → Operating.
+
+5. **"Every unit is a real radio track."**
+   Click a drone (cyan rotor) → its video panel opens (labeled SIMULATED).
+   Click **BODYCAMS** (top right) → the 2×2 wall, tiles tied to units on the
+   globe.
+
+6. **"And the radio runs through it."**
+   Point at the comms dock (bottom): the FDNY tab is machine-transcribed audio
+   with unit numbers highlighted — *when dispatch says Engine 10, watch Engine
+   10 flash on the map.* The NYPD/EMS/OEM tabs are simulations — NYPD radio is
+   encrypted, and we don't pretend otherwise.
+
+7. **"Command escalates with one touch."**
+   Click **2ND ALARM** in the command strip — reinforcement companies appear
+   and converge. Point at the elapsed clock and on-scene counts.
+
+8. **The closer: click ⟲ REPLAY.**
+   The whole incident re-runs at 4× with a scrub bar. *Say: every incident
+   becomes its own after-action review. Nothing extra to write down.*
+
 ## Build status
 
 | Phase | Scope | Status |
@@ -110,4 +160,4 @@ scripts/  operational scripts (CoT test publisher, etc.)
 | 5 | ICS perimeter + command post tools | ✅ |
 | 6 | Video: drones + body-cam wall (MediaMTX) | ✅ |
 | 7 | Comms fusion + live transcription | ✅ |
-| 8 | Command header, demo scenario, replay, polish | — |
+| 8 | Command header, demo scenario, replay, polish | ✅ |
