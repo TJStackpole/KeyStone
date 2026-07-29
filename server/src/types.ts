@@ -19,9 +19,33 @@ export interface TimelineEvent {
   payload?: unknown
 }
 
-/** Envelope persisted to data/incident.json. Shapes arrive in Phase 5, timeline grows from Phase 1 on. */
+// ------------------------------ ICS shapes (Phase 5) ------------------------
+
+export type ZoneKind = 'hot' | 'warm' | 'cold'
+export type PostKind = 'icp' | 'staging' | 'triage' | 'media' | 'transport'
+
+export interface ZoneShape {
+  id: string
+  kind: 'zone'
+  zone: ZoneKind
+  positions: { lat: number; lon: number }[]
+  createdAt: string
+}
+
+export interface PostShape {
+  id: string
+  kind: 'post'
+  post: PostKind
+  lat: number
+  lon: number
+  createdAt: string
+}
+
+export type IcsShape = ZoneShape | PostShape
+
+/** Envelope persisted to data/incident.json. */
 export interface IncidentFile {
   incident: Incident | null
-  shapes: unknown[]
+  shapes: IcsShape[]
   timeline: TimelineEvent[]
 }

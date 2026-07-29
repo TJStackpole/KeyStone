@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Incident, IncidentFile, TimelineEvent } from './types.js'
+import type { IcsShape, Incident, IncidentFile, TimelineEvent } from './types.js'
 
 // Single-file persistence per CLAUDE.md: in-memory state mirrored to data/incident.json.
 const DATA_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../data/incident.json')
@@ -57,4 +57,22 @@ export function updateIncident(patch: Partial<Incident>): IncidentFile {
   state.incident = { ...state.incident, ...patch }
   appendTimeline('incident.updated', patch)
   return state
+}
+
+/** Insert or replace one ICS shape (vertex edits arrive as full replacements). */
+export function upsertShape(shape: IcsShape): void {
+  const i = state.shapes.findIndex((s) => s.id === shape.id)
+  if (i >= 0) state.shapes[i] = shape
+  else state.shapes.push(shape)
+  appendTimeline('shape.upserted', shape)
+}
+
+export function removeShape(id: string): boolean {
+  const before = state.shapes.length
+  state.shapes = state.shapes.filter((s) => s.id !== id)
+  if (state.shapes.length !== before) {
+    appendTimeline('shape.removed', { id })
+    return true
+  }
+  return false
 }

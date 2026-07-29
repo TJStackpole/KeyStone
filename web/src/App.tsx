@@ -6,6 +6,7 @@ import { restoreIncident } from './actions'
 import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
+import { DrawToolbar } from './components/DrawToolbar'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
@@ -52,6 +53,7 @@ export default function App() {
         <IncidentCard />
         <RosterPanel />
       </div>
+      <DrawToolbar />
       <SiteIntelPanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">WATCHTOWER</div>

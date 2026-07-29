@@ -86,7 +86,7 @@ scripts/  operational scripts (CoT test publisher, etc.)
 | 2 | Site intel (PLUTO, hydrants, firehouses) | ✅ |
 | 3 | TAK spine (CoT in/out through real TAK server) | ✅ |
 | 4 | First-alarm simulator + unit roster | ✅ |
-| 5 | ICS perimeter + command post tools | — |
+| 5 | ICS perimeter + command post tools | ✅ |
 | 6 | Video: drones + body-cam wall (MediaMTX) | — |
 | 7 | Comms fusion + live transcription | — |
 | 8 | Command header, demo scenario, replay, polish | — |

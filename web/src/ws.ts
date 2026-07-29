@@ -1,12 +1,21 @@
-import { getUnitLayer } from './cesium/scene'
+import { getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
-import type { Incident, Unit } from './types'
+import type { IcsShape, Incident, Unit } from './types'
 
 interface SnapshotMsg {
   type: 'snapshot'
   incident: Incident | null
   units?: Unit[]
+  shapes?: IcsShape[]
   takConnected?: boolean
+}
+interface ShapeMsg {
+  type: 'shape'
+  shape: IcsShape
+}
+interface ShapeRemoveMsg {
+  type: 'shape.remove'
+  id: string
 }
 interface IncidentMsg {
   type: 'incident'
@@ -24,7 +33,19 @@ interface TakStatusMsg {
   type: 'tak.status'
   connected: boolean
 }
-type ServerMsg = SnapshotMsg | IncidentMsg | UnitMsg | UnitRemoveMsg | TakStatusMsg
+interface TimelineMsg {
+  type: 'timeline'
+  event: { t: string; kind: string; payload?: unknown }
+}
+type ServerMsg =
+  | SnapshotMsg
+  | IncidentMsg
+  | UnitMsg
+  | UnitRemoveMsg
+  | TakStatusMsg
+  | ShapeMsg
+  | ShapeRemoveMsg
+  | TimelineMsg
 
 let started = false
 
@@ -60,15 +81,21 @@ export function connectWs(): void {
 function handle(msg: ServerMsg): void {
   switch (msg.type) {
     case 'snapshot': {
-      // Authoritative rebuild — clears units that vanished while disconnected
-      // (e.g. server restart swept the registry).
+      // Authoritative rebuild — clears units/shapes that changed while
+      // disconnected (e.g. server restart swept the registry).
       getUnitLayer()?.clear()
       const units: Record<string, Unit> = {}
       for (const u of msg.units ?? []) {
         units[u.uid] = u
         getUnitLayer()?.upsert(u, getAppState().unitToggles[u.category] ?? true)
       }
-      setAppState({ units, takConnected: msg.takConnected ?? null })
+      getShapeLayer()?.clear()
+      const shapes: Record<string, IcsShape> = {}
+      for (const s of msg.shapes ?? []) {
+        shapes[s.id] = s
+        getShapeLayer()?.upsert(s)
+      }
+      setAppState({ units, shapes, takConnected: msg.takConnected ?? null })
       break
     }
     case 'incident':
@@ -89,5 +116,19 @@ function handle(msg: ServerMsg): void {
     case 'tak.status':
       setAppState({ takConnected: msg.connected })
       break
+    case 'shape':
+      setAppState((s) => ({ shapes: { ...s.shapes, [msg.shape.id]: msg.shape } }))
+      getShapeLayer()?.upsert(msg.shape)
+      break
+    case 'shape.remove':
+      setAppState((s) => {
+        const shapes = { ...s.shapes }
+        delete shapes[msg.id]
+        return { shapes }
+      })
+      getShapeLayer()?.remove(msg.id)
+      break
+    case 'timeline':
+      break // consumed in Phase 8 (replay); nothing to do live yet
   }
 }

@@ -2,11 +2,19 @@ import express from 'express'
 import { createServer } from 'node:http'
 import { WebSocketServer, WebSocket } from 'ws'
 import { env } from './env.js'
-import { appendTimeline, createIncident, getState, updateIncident } from './incidentStore.js'
+import {
+  appendTimeline,
+  createIncident,
+  getState,
+  removeShape,
+  updateIncident,
+  upsertShape,
+} from './incidentStore.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
-import type { Incident } from './types.js'
+import { shapeDeleteCot, shapeToCot } from './tak/shapes.js'
+import type { IcsShape, Incident } from './types.js'
 import { UnitRegistry } from './units.js'
 
 // Deliberately NOT process.env.PORT — dev harnesses inject PORT for the web app,
@@ -39,7 +47,7 @@ wss.on('connection', (socket) => {
   socket.send(
     JSON.stringify({
       type: 'snapshot',
-      ...getState(),
+      ...getState(), // includes shapes
       units: registry.all(),
       takConnected: tak.connected,
     }),
@@ -110,6 +118,32 @@ app.post('/api/dispatch', async (_req, res) => {
 app.post('/api/dispatch/stop', (_req, res) => {
   simulator.stop()
   res.json({ stopped: true })
+})
+
+// ---------------------------------------------------------------------------
+// ICS shapes (Phase 5): persist to incident.json, broadcast to dashboards,
+// publish as CoT so connected ATAK clients render the same perimeter.
+// ---------------------------------------------------------------------------
+app.put('/api/shapes/:id', (req, res) => {
+  const shape = req.body as IcsShape
+  if (!shape || shape.id !== req.params.id || (shape.kind !== 'zone' && shape.kind !== 'post')) {
+    return res.status(400).json({ error: 'invalid shape' })
+  }
+  if (shape.kind === 'zone' && (!Array.isArray(shape.positions) || shape.positions.length < 3)) {
+    return res.status(400).json({ error: 'zone needs >= 3 vertices' })
+  }
+  upsertShape(shape)
+  broadcast({ type: 'shape', shape })
+  publishCot(shapeToCot(shape))
+  res.json(shape)
+})
+
+app.delete('/api/shapes/:id', (req, res) => {
+  const removed = removeShape(req.params.id)
+  if (!removed) return res.status(404).json({ error: 'unknown shape' })
+  broadcast({ type: 'shape.remove', id: req.params.id })
+  publishCot(shapeDeleteCot(req.params.id))
+  res.json({ removed: true })
 })
 
 // ---------------------------------------------------------------------------

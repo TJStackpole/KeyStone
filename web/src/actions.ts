@@ -2,9 +2,16 @@ import * as Cesium from 'cesium'
 import { fetchFirehouses, fetchHydrants, fetchPluto } from './api/nyc'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
-import { getFootprintLayer, getIntelLayer, getScene, getUnitLayer } from './cesium/scene'
+import {
+  getDrawController,
+  getFootprintLayer,
+  getIntelLayer,
+  getScene,
+  getShapeLayer,
+  getUnitLayer,
+} from './cesium/scene'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
-import type { GeoHit, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
+import type { GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
 
 function newIncidentId(): string {
   return `INC-${Date.now().toString(36).toUpperCase()}`
@@ -35,6 +42,12 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   void loadFootprints(incident)
   void loadSiteIntel(incident)
   void persistIncident(incident)
+
+  // Fresh incident, fresh overlay: clear local shapes and suggest the initial
+  // 75 m hot zone (server-side shape list was reset by the incident POST).
+  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null })
+  getShapeLayer()?.clear()
+  suggestHotZone(incident)
 }
 
 export async function changeIncidentType(type: IncidentType): Promise<void> {
@@ -198,6 +211,80 @@ export function toggleUnitCategory(category: UnitCategory): void {
   const next = !state.unitToggles[category]
   setAppState((s) => ({ unitToggles: { ...s.unitToggles, [category]: next } }))
   getUnitLayer()?.setCategoryVisible(category, next, Object.values(state.units))
+}
+
+// ---------------------------------------------------------------------------
+// ICS shapes (Phase 5)
+// ---------------------------------------------------------------------------
+
+/** Persist + broadcast + CoT-publish one shape (create or vertex edit). */
+export async function saveShape(shape: IcsShape): Promise<void> {
+  // Optimistic local apply; the WS echo is idempotent.
+  setAppState((s) => ({ shapes: { ...s.shapes, [shape.id]: shape } }))
+  getShapeLayer()?.upsert(shape)
+  try {
+    const res = await fetch(`/api/shapes/${encodeURIComponent(shape.id)}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(shape),
+    })
+    if (!res.ok) throw new Error(`shapes PUT ${res.status}`)
+  } catch (err) {
+    console.error('[shapes] save failed:', err)
+    setLayerStatus('persistence', 'unavailable')
+  }
+}
+
+export async function deleteShape(id: string): Promise<void> {
+  setAppState((s) => {
+    const shapes = { ...s.shapes }
+    delete shapes[id]
+    return { shapes }
+  })
+  getShapeLayer()?.remove(id)
+  try {
+    await fetch(`/api/shapes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  } catch (err) {
+    console.error('[shapes] delete failed:', err)
+  }
+}
+
+export function setDrawTool(tool: ReturnType<typeof getAppState>['drawTool']): void {
+  const current = getAppState().drawTool
+  getDrawController()?.cancelDraft()
+  setAppState({ drawTool: current === tool ? null : tool, selectedShapeId: null })
+  getDrawController()?.renderHandles()
+}
+
+export function deleteSelectedShape(): void {
+  const id = getAppState().selectedShapeId
+  if (!id) return
+  void deleteShape(id)
+  setAppState({ selectedShapeId: null })
+  getDrawController()?.renderHandles()
+}
+
+/**
+ * Auto-suggested initial perimeter: a 75 m hot-zone circle around the incident
+ * (spec F3). A real, editable, deletable shape like any hand-drawn zone.
+ */
+function suggestHotZone(incident: Incident): void {
+  const R_EARTH = 6371008.8
+  const radius = 75
+  const positions: { lat: number; lon: number }[] = []
+  for (let i = 0; i < 20; i++) {
+    const theta = (i / 20) * 2 * Math.PI
+    const dLat = ((radius * Math.cos(theta)) / R_EARTH) * (180 / Math.PI)
+    const dLon = ((radius * Math.sin(theta)) / (R_EARTH * Math.cos((incident.lat * Math.PI) / 180))) * (180 / Math.PI)
+    positions.push({ lat: incident.lat + dLat, lon: incident.lon + dLon })
+  }
+  void saveShape({
+    id: `WT-ICS-ZONE-HOT-AUTO-${incident.id}`,
+    kind: 'zone',
+    zone: 'hot',
+    positions,
+    createdAt: new Date().toISOString(),
+  })
 }
 
 /** "Dispatch Assignment" — the server spawns the simulated first alarm. */

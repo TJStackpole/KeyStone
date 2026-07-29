@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react'
 import type { Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
   DataLayerId,
+  DrawTool,
+  IcsShape,
   Incident,
   LayerStatus,
   ProviderMode,
@@ -28,6 +30,9 @@ export interface AppState {
   takConnected: boolean | null
   unitToggles: Record<UnitCategory, boolean>
   dispatching: boolean
+  shapes: Record<string, IcsShape>
+  drawTool: DrawTool
+  selectedShapeId: string | null
 }
 
 const initial: AppState = {
@@ -52,6 +57,9 @@ const initial: AppState = {
     unknown: true,
   },
   dispatching: false,
+  shapes: {},
+  drawTool: null,
+  selectedShapeId: null,
 }
 
 let state: AppState = initial
