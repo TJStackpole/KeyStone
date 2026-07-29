@@ -1,6 +1,9 @@
 import express from 'express'
 import { createServer } from 'node:http'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
+import { SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
 import { env } from './env.js'
 import {
   appendTimeline,
@@ -145,6 +148,35 @@ app.delete('/api/shapes/:id', (req, res) => {
   publishCot(shapeDeleteCot(req.params.id))
   res.json({ removed: true })
 })
+
+// ---------------------------------------------------------------------------
+// Comms fusion (Phase 7): FDNY = real Whisper transcription (bundled recording
+// as-if-live, or Broadcastify when configured); NYPD/EMS/OEM = scripted SIM.
+// Legal posture documented in comms.ts and the README.
+// ---------------------------------------------------------------------------
+const AUDIO_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../assets/audio/fdny-dispatch-demo.mp3')
+const BROADCASTIFY_URL = env('BROADCASTIFY_URL', '')
+
+app.get('/api/audio/fdny-dispatch-demo.mp3', (_req, res) => res.sendFile(AUDIO_PATH))
+
+app.get('/api/comms/config', (_req, res) =>
+  res.json({
+    live: !!BROADCASTIFY_URL,
+    audioUrl: BROADCASTIFY_URL || '/api/audio/fdny-dispatch-demo.mp3',
+  }),
+)
+
+const whisper = new WhisperLink(env('WHISPER_WS', 'ws://127.0.0.1:8765'))
+whisper.on('line', (line: TranscriptLine) => {
+  broadcast({ type: 'transcript', channel: 'fdny' as CommsChannel, line })
+})
+whisper.start()
+
+const simComms = new SimComms()
+simComms.on('line', (channel: CommsChannel, line: TranscriptLine) => {
+  broadcast({ type: 'transcript', channel, line })
+})
+simComms.start()
 
 // ---------------------------------------------------------------------------
 // Incident API

@@ -7,6 +7,7 @@ import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { BodycamWall } from './components/BodycamWall'
+import { CommsPanel } from './components/CommsPanel'
 import { DrawToolbar } from './components/DrawToolbar'
 import { DronePanel } from './components/DronePanel'
 import { IncidentCard } from './components/IncidentCard'
@@ -59,6 +60,7 @@ export default function App() {
       <SiteIntelPanel />
       <BodycamWall />
       <DronePanel />
+      <CommsPanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">WATCHTOWER</div>
         <div className="status">{bootMsg}</div>

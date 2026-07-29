@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import type { Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
+  CommsChannel,
+  CommsConfig,
   DataLayerId,
   DrawTool,
   IcsShape,
@@ -8,6 +10,7 @@ import type {
   LayerStatus,
   ProviderMode,
   ToggleLayerId,
+  TranscriptLine,
   Unit,
   UnitCategory,
 } from '../types'
@@ -38,6 +41,10 @@ export interface AppState {
   bodycamOpen: boolean
   /** Bodycam wall <-> globe highlight sync. */
   selectedUnitUid: string | null
+  commsOpen: boolean
+  commsChannel: CommsChannel
+  transcripts: Record<CommsChannel, TranscriptLine[]>
+  commsConfig: CommsConfig | null
 }
 
 const initial: AppState = {
@@ -68,6 +75,10 @@ const initial: AppState = {
   dronePanelUid: null,
   bodycamOpen: false,
   selectedUnitUid: null,
+  commsOpen: true,
+  commsChannel: 'fdny',
+  transcripts: { fdny: [], nypd: [], ems: [], oem: [] },
+  commsConfig: null,
 }
 
 let state: AppState = initial

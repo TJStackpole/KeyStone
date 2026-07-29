@@ -200,6 +200,18 @@ export class UnitLayer {
     this.source.entities.removeById(`unit:${uid}:cone`)
   }
 
+  /** Transcript mention: pulse the unit's marker for ~3 s (F6/F7 spec). */
+  flash(uid: string): void {
+    const entity = this.source.entities.getById(`unit:${uid}`)
+    if (!entity?.billboard) return
+    entity.billboard.scale = new Cesium.ConstantProperty(1.8)
+    if (entity.label) entity.label.fillColor = new Cesium.ConstantProperty(Cesium.Color.fromCssColorString('#fbbf24'))
+    setTimeout(() => {
+      if (entity.billboard) entity.billboard.scale = new Cesium.ConstantProperty(1)
+      if (entity.label) entity.label.fillColor = new Cesium.ConstantProperty(LABEL_FILL)
+    }, 3000)
+  }
+
   /** Bodycam wall <-> globe sync: enlarge + tint the selected unit's marker. */
   setSelected(uid: string | null): void {
     for (const e of this.source.entities.values) {

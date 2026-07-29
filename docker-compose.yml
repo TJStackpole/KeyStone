@@ -45,9 +45,22 @@ services:
       - ./video/streams.sh:/streams.sh:ro
       - streams-clips:/clips
 
-  # Phase 7 — faster-whisper transcription sidecar. Stub: activated in Phase 7.
-  # whisper:
-  #   build: ./whisper
+  # Phase 7 — faster-whisper transcription sidecar. Default: transcribes the
+  # bundled FDNY-style recording (synthetic TTS, no real radio content) and
+  # replays it as-if-live. Set BROADCASTIFY_URL in .env for rolling-chunk
+  # transcription of an authenticated live stream instead.
+  whisper:
+    build: ./whisper
+    container_name: watchtower-whisper
+    restart: unless-stopped
+    environment:
+      BROADCASTIFY_URL: ${BROADCASTIFY_URL:-}
+    ports:
+      - "8765:8765"   # transcript WebSocket (consumed by the backend)
+    volumes:
+      - ./assets/audio:/audio:ro
+      - whisper-models:/models
 
 volumes:
   streams-clips:
+  whisper-models:

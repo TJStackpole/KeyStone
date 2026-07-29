@@ -60,6 +60,28 @@ export type IcsShape = ZoneShape | PostShape
 
 export type DrawTool = ZoneKind | PostKind | null
 
+// ------------------------------ comms (Phase 7) -----------------------------
+
+export type CommsChannel = 'fdny' | 'nypd' | 'ems' | 'oem'
+
+export interface TranscriptKeyword {
+  kind: 'unit' | 'code' | 'urgent' | 'address'
+  text: string
+  callsign?: string
+}
+
+export interface TranscriptLine {
+  ts: string
+  text: string
+  keywords: TranscriptKeyword[]
+  live: boolean
+}
+
+export interface CommsConfig {
+  live: boolean
+  audioUrl: string
+}
+
 // ------------------------------ units (Phase 3+) ----------------------------
 
 export type UnitCategory =

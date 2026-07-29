@@ -68,6 +68,27 @@ npm run publish-test-unit   # publishes CoT for "E-99" — appears on the globe 
 
 How to connect a real ATAK/iTAK phone: [docs/connect-atak.md](docs/connect-atak.md).
 
+## Comms & legal posture (Phase 7)
+
+The **FDNY channel** is real speech-to-text: a `faster-whisper` sidecar
+transcribes the audio source and streams timestamped lines to the dashboard.
+By default the source is `assets/audio/fdny-dispatch-demo.mp3` — a **synthetic,
+TTS-generated FDNY-style dispatch recording** (no real radio traffic is bundled)
+streamed as-if-live and labeled **AS-LIVE**. If `BROADCASTIFY_URL` is set to an
+authenticated premium stream, the sidecar transcribes that live feed instead
+(labeled **LIVE**), and falls back to the bundled recording automatically if
+the stream is unreachable.
+
+Two legal realities shape this design:
+
+- **NYPD radio is encrypted** (migration beginning 2023) — real interception is
+  neither technically possible nor legal, so the NYPD channel (and EMS/OEM) are
+  **scripted simulations**, visibly watermarked SIMULATED.
+- **Broadcastify's terms restrict rebroadcast/embedding** — the private demo
+  uses the operator's own authenticated premium stream URL from `.env`, never a
+  scraped or shared feed. A production deployment would ingest the department's
+  own authorized radio-over-IP feed instead.
+
 ## Repo layout
 
 ```
@@ -88,5 +109,5 @@ scripts/  operational scripts (CoT test publisher, etc.)
 | 4 | First-alarm simulator + unit roster | ✅ |
 | 5 | ICS perimeter + command post tools | ✅ |
 | 6 | Video: drones + body-cam wall (MediaMTX) | ✅ |
-| 7 | Comms fusion + live transcription | — |
+| 7 | Comms fusion + live transcription | ✅ |
 | 8 | Command header, demo scenario, replay, polish | — |

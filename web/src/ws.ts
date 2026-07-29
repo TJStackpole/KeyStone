@@ -1,6 +1,6 @@
 import { getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
-import type { IcsShape, Incident, Unit } from './types'
+import type { CommsChannel, IcsShape, Incident, TranscriptLine, Unit } from './types'
 
 interface SnapshotMsg {
   type: 'snapshot'
@@ -37,6 +37,11 @@ interface TimelineMsg {
   type: 'timeline'
   event: { t: string; kind: string; payload?: unknown }
 }
+interface TranscriptMsg {
+  type: 'transcript'
+  channel: CommsChannel
+  line: TranscriptLine
+}
 type ServerMsg =
   | SnapshotMsg
   | IncidentMsg
@@ -46,6 +51,7 @@ type ServerMsg =
   | ShapeMsg
   | ShapeRemoveMsg
   | TimelineMsg
+  | TranscriptMsg
 
 let started = false
 
@@ -130,5 +136,24 @@ function handle(msg: ServerMsg): void {
       break
     case 'timeline':
       break // consumed in Phase 8 (replay); nothing to do live yet
+    case 'transcript': {
+      const MAX_LINES = 200
+      setAppState((s) => ({
+        transcripts: {
+          ...s.transcripts,
+          [msg.channel]: [...s.transcripts[msg.channel], msg.line].slice(-MAX_LINES),
+        },
+      }))
+      // FDNY designator mentions flash the matching roster unit on the globe.
+      if (msg.channel === 'fdny') {
+        const units = Object.values(getAppState().units)
+        for (const kw of msg.line.keywords) {
+          if (kw.kind !== 'unit' || !kw.callsign) continue
+          const unit = units.find((u) => u.callsign.toUpperCase() === kw.callsign)
+          if (unit) getUnitLayer()?.flash(unit.uid)
+        }
+      }
+      break
+    }
   }
 }
