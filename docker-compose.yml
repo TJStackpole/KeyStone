@@ -19,12 +19,35 @@ services:
     image: bluenviron/mediamtx:latest
     container_name: watchtower-mediamtx
     restart: unless-stopped
+    environment:
+      # Advertise reachable ICE candidates (the container IP is useless to the
+      # browser) and offer ICE over TCP 8189 alongside UDP.
+      MTX_WEBRTCADDITIONALHOSTS: 127.0.0.1,localhost
+      MTX_WEBRTCLOCALTCPADDRESS: :8189
     ports:
       - "8554:8554"     # RTSP ingest
       - "8888:8888"     # HLS
-      - "8889:8889"     # WebRTC
-      - "8189:8189/udp" # WebRTC ICE
+      - "8889:8889"     # WebRTC (WHEP)
+      - "8189:8189/udp" # WebRTC ICE (UDP)
+      - "8189:8189"     # WebRTC ICE (TCP)
+
+  # Phase 6 — demo stream source: generates 4 synthetic placeholder clips
+  # (no real footage) and loops them into MediaMTX as RTSP. A real drone is a
+  # config swap: publish its RTSP to rtsp://<host>:8554/drone1 instead.
+  streams:
+    image: linuxserver/ffmpeg:latest
+    container_name: watchtower-streams
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
+    entrypoint: ["/bin/sh", "/streams.sh"]
+    volumes:
+      - ./video/streams.sh:/streams.sh:ro
+      - streams-clips:/clips
 
   # Phase 7 — faster-whisper transcription sidecar. Stub: activated in Phase 7.
   # whisper:
   #   build: ./whisper
+
+volumes:
+  streams-clips:

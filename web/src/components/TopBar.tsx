@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAppState } from '../state/store'
+import { setAppState, useAppState } from '../state/store'
 import { SearchBar } from './SearchBar'
 
 const MODE_LABEL: Record<string, string> = {
@@ -36,7 +36,7 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected } = useAppState()
+  const { providerMode, layers, takConnected, bodycamOpen } = useAppState()
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
   return (
     <header className="topbar glass">
@@ -61,6 +61,13 @@ export function TopBar() {
             <span className="dot" /> TAK OFFLINE
           </span>
         )}
+        <button
+          className={`chip chip-btn${bodycamOpen ? ' active' : ''}`}
+          onClick={() => setAppState((s) => ({ bodycamOpen: !s.bodycamOpen }))}
+          title="Toggle body-cam wall"
+        >
+          <span className="dot" /> BODYCAMS
+        </button>
         {providerMode && (
           <span className="chip">
             <span className="dot" /> {MODE_LABEL[providerMode]}

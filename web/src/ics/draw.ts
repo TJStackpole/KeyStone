@@ -85,7 +85,7 @@ export class DrawController {
       return
     }
 
-    // No tool: select/deselect shapes.
+    // No tool: select/deselect shapes, open drone feeds, sync bodycam wall.
     const picked = this.viewer.scene.pick(e.position) as { id?: Cesium.Entity } | undefined
     const entityId = picked?.id?.id
     if (typeof entityId === 'string' && entityId.startsWith('shape:')) {
@@ -93,6 +93,20 @@ export class DrawController {
       if (shapeId) {
         setAppState({ selectedShapeId: shapeId })
         this.renderHandles()
+        return
+      }
+    }
+    if (typeof entityId === 'string' && entityId.startsWith('unit:')) {
+      const uid = entityId.replace(/^unit:/, '').replace(/:(proj|cone)$/, '')
+      const unit = getAppState().units[uid]
+      if (unit?.category === 'drone') {
+        setAppState({ dronePanelUid: uid })
+        return
+      }
+      if (unit && unit.agency === 'FDNY' && getAppState().bodycamOpen) {
+        setAppState({ selectedUnitUid: uid })
+        // dynamic import: scene.ts owns this controller, so a static import would cycle
+        void import('../cesium/scene').then((m) => m.getUnitLayer()?.setSelected(uid))
         return
       }
     }

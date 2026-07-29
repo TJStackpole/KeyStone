@@ -6,7 +6,9 @@ import { restoreIncident } from './actions'
 import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
+import { BodycamWall } from './components/BodycamWall'
 import { DrawToolbar } from './components/DrawToolbar'
+import { DronePanel } from './components/DronePanel'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
@@ -55,6 +57,8 @@ export default function App() {
       </div>
       <DrawToolbar />
       <SiteIntelPanel />
+      <BodycamWall />
+      <DronePanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">WATCHTOWER</div>
         <div className="status">{bootMsg}</div>

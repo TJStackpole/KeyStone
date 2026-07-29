@@ -44,6 +44,25 @@ const ICONS: Record<UnitCategory, string> = {
 
 const LABEL_FILL = Cesium.Color.fromCssColorString('#dbe4f0')
 const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.75)
+const CYAN = Cesium.Color.fromCssColorString('#22d3ee')
+
+/** Orientation quaternion whose local +Z axis points along `dir` (unit ECEF). */
+function quaternionAlong(dir: Cesium.Cartesian3): Cesium.Quaternion {
+  const helper =
+    Math.abs(Cesium.Cartesian3.dot(dir, Cesium.Cartesian3.UNIT_Z)) > 0.95
+      ? Cesium.Cartesian3.UNIT_X
+      : Cesium.Cartesian3.UNIT_Z
+  const right = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(helper, dir, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  )
+  const up = Cesium.Cartesian3.cross(dir, right, new Cesium.Cartesian3())
+  const m = new Cesium.Matrix3()
+  Cesium.Matrix3.setColumn(m, 0, right, m)
+  Cesium.Matrix3.setColumn(m, 1, up, m)
+  Cesium.Matrix3.setColumn(m, 2, dir, m)
+  return Cesium.Quaternion.fromRotationMatrix(m)
+}
 
 /**
  * Renders the live unit picture as Cesium billboards with callsign labels.
@@ -103,10 +122,96 @@ export class UnitLayer {
         entity.billboard.image = new Cesium.ConstantProperty(ICONS[unit.category] ?? ICONS.unknown)
       }
     }
+
+    if (unit.category === 'drone') this.updateDroneExtras(unit, show)
+  }
+
+  /**
+   * Drones fly at true CoT altitude: render a dashed ground-projection line and
+   * a camera-frustum cone pointed ahead-and-down along the drone's course.
+   */
+  private updateDroneExtras(unit: Unit, show: boolean): void {
+    const projId = `unit:${unit.uid}:proj`
+    const coneId = `unit:${unit.uid}:cone`
+    const dronePos = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae)
+    const groundPos = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, 0)
+
+    // Camera look target: ahead of the drone along course, on the ground.
+    const R = 6371008.8
+    const lookDist = Math.max(40, unit.hae * 0.9)
+    const courseRad = ((unit.course ?? 0) * Math.PI) / 180
+    const dLat = ((lookDist * Math.cos(courseRad)) / R) * (180 / Math.PI)
+    const dLon = ((lookDist * Math.sin(courseRad)) / (R * Math.cos((unit.lat * Math.PI) / 180))) * (180 / Math.PI)
+    const target = Cesium.Cartesian3.fromDegrees(unit.lon + dLon, unit.lat + dLat, 0)
+
+    const toDrone = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(dronePos, target, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    )
+    const length = Cesium.Cartesian3.distance(dronePos, target)
+    const mid = Cesium.Cartesian3.midpoint(dronePos, target, new Cesium.Cartesian3())
+    const orientation = quaternionAlong(toDrone)
+
+    let proj = this.source.entities.getById(projId)
+    if (!proj) {
+      proj = this.source.entities.add({
+        id: projId,
+        polyline: {
+          positions: [dronePos, groundPos],
+          width: 2,
+          material: new Cesium.PolylineDashMaterialProperty({ color: CYAN.withAlpha(0.8), dashLength: 12 }),
+        },
+      })
+    } else if (proj.polyline) {
+      proj.polyline.positions = new Cesium.ConstantProperty([dronePos, groundPos])
+    }
+    proj.show = show
+
+    let cone = this.source.entities.getById(coneId)
+    if (!cone) {
+      cone = this.source.entities.add({
+        id: coneId,
+        position: mid,
+        orientation: new Cesium.ConstantProperty(orientation),
+        cylinder: {
+          length,
+          topRadius: 2, // apex at the drone (+Z end)
+          bottomRadius: Math.max(18, length * 0.28),
+          material: CYAN.withAlpha(0.14),
+          outline: true,
+          outlineColor: CYAN.withAlpha(0.45),
+          numberOfVerticalLines: 4,
+        },
+      })
+    } else {
+      cone.position = new Cesium.ConstantPositionProperty(mid)
+      cone.orientation = new Cesium.ConstantProperty(orientation)
+      if (cone.cylinder) {
+        cone.cylinder.length = new Cesium.ConstantProperty(length)
+        cone.cylinder.bottomRadius = new Cesium.ConstantProperty(Math.max(18, length * 0.28))
+      }
+    }
+    cone.show = show
   }
 
   remove(uid: string): void {
     this.source.entities.removeById(`unit:${uid}`)
+    this.source.entities.removeById(`unit:${uid}:proj`)
+    this.source.entities.removeById(`unit:${uid}:cone`)
+  }
+
+  /** Bodycam wall <-> globe sync: enlarge + tint the selected unit's marker. */
+  setSelected(uid: string | null): void {
+    for (const e of this.source.entities.values) {
+      if (!e.billboard || !e.id.startsWith('unit:') || e.id.includes(':', 5)) continue
+      const isSel = uid !== null && e.id === `unit:${uid}`
+      e.billboard.scale = new Cesium.ConstantProperty(isSel ? 1.5 : 1)
+      if (e.label) {
+        e.label.fillColor = new Cesium.ConstantProperty(
+          isSel ? Cesium.Color.fromCssColorString('#fbbf24') : LABEL_FILL,
+        )
+      }
+    }
   }
 
   /** Latest known position, for click-to-fly. */

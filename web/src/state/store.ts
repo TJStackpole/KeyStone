@@ -33,6 +33,11 @@ export interface AppState {
   shapes: Record<string, IcsShape>
   drawTool: DrawTool
   selectedShapeId: string | null
+  /** Drone whose video panel is open. */
+  dronePanelUid: string | null
+  bodycamOpen: boolean
+  /** Bodycam wall <-> globe highlight sync. */
+  selectedUnitUid: string | null
 }
 
 const initial: AppState = {
@@ -60,6 +65,9 @@ const initial: AppState = {
   shapes: {},
   drawTool: null,
   selectedShapeId: null,
+  dronePanelUid: null,
+  bodycamOpen: false,
+  selectedUnitUid: null,
 }
 
 let state: AppState = initial
@@ -87,4 +95,10 @@ export function useAppState(): AppState {
     },
     getAppState,
   )
+}
+
+if (import.meta.env.DEV) {
+  // Debug handle — dev builds only. (Console `import()` would get a separate
+  // module instance under Vite HMR, so expose the live store explicitly.)
+  ;(window as unknown as Record<string, unknown>).__wtStore = { getAppState, setAppState }
 }
