@@ -62,7 +62,7 @@ def load_model() -> WhisperModel:
 async def replay_file_forever(model: WhisperModel) -> None:
     """Transcribe the bundled recording once, then replay lines paced as live."""
     print(f"[whisper] transcribing {AUDIO_FILE} …")
-    segments, info = model.transcribe(AUDIO_FILE, vad_filter=True, beam_size=3)
+    segments, info = model.transcribe(AUDIO_FILE, vad_filter=True, beam_size=3, language="en")
     lines = [
         {"t0": float(s.start), "t1": float(s.end), "text": s.text.strip()}
         for s in segments
@@ -114,7 +114,7 @@ async def transcribe_live_forever(model: WhisperModel) -> None:
                 nxt = os.path.join(tempfile.gettempdir(), f"live-{index + 1:06d}.wav")
                 # A chunk is complete once ffmpeg starts writing the next one.
                 if os.path.exists(nxt):
-                    segments, _info = model.transcribe(path, vad_filter=True, beam_size=3)
+                    segments, _info = model.transcribe(path, vad_filter=True, beam_size=3, language="en")
                     for s in segments:
                         text = s.text.strip()
                         if text:

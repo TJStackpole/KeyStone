@@ -1,21 +1,37 @@
+import { useState } from 'react'
 import { changeIncidentType } from '../actions'
 import { useAppState } from '../state/store'
 import { INCIDENT_TYPES } from '../types'
 
 export function IncidentCard() {
   const { incident } = useAppState()
+  const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
   const created = new Date(incident.createdAt)
   const hhmmss = created.toTimeString().slice(0, 8)
 
+  if (collapsed) {
+    return (
+      <section className="incident-card glass collapsed">
+        <button className="card-head as-btn" onClick={() => setCollapsed(false)}>
+          <span className="card-title">Incident</span>
+          <span className="incident-id">{incident.id}</span>
+          <span className="pulse" title="Active incident" />
+          <span className="chev closed">▾</span>
+        </button>
+      </section>
+    )
+  }
+
   return (
     <section className="incident-card glass">
-      <div className="card-head">
+      <button className="card-head as-btn" onClick={() => setCollapsed(true)}>
         <span className="card-title">Incident</span>
         <span className="incident-id">{incident.id}</span>
         <span className="pulse" title="Active incident" />
-      </div>
+        <span className="chev">▾</span>
+      </button>
       <div className="addr">{incident.address}</div>
       <div className="meta">
         {incident.bin && (

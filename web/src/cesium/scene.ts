@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium'
 import type { SceneHandle } from './providers'
 import { DrawController } from '../ics/draw'
+import { BoundaryLayer } from './boundaries'
 import { FootprintLayer } from './footprints'
 import { IntelMarkerLayer } from './intelMarkers'
 import { ShapeLayer } from './shapes'
@@ -16,6 +17,7 @@ let intelLayer: IntelMarkerLayer | null = null
 let unitLayer: UnitLayer | null = null
 let shapeLayer: ShapeLayer | null = null
 let drawController: DrawController | null = null
+let boundaryLayer: BoundaryLayer | null = null
 
 export function registerScene(h: SceneHandle): void {
   handle = h
@@ -24,6 +26,7 @@ export function registerScene(h: SceneHandle): void {
   unitLayer = new UnitLayer(h.viewer)
   shapeLayer = new ShapeLayer(h.viewer)
   drawController = new DrawController(h.viewer, shapeLayer)
+  boundaryLayer = new BoundaryLayer(h.viewer)
   if (import.meta.env.DEV) {
     // Debug handle for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
@@ -39,6 +42,7 @@ export function unregisterScene(): void {
   unitLayer = null
   shapeLayer = null
   drawController = null
+  boundaryLayer = null
 }
 
 export function getShapeLayer(): ShapeLayer | null {
@@ -47,6 +51,10 @@ export function getShapeLayer(): ShapeLayer | null {
 
 export function getDrawController(): DrawController | null {
   return drawController
+}
+
+export function getBoundaryLayer(): BoundaryLayer | null {
+  return boundaryLayer
 }
 
 export function getIntelLayer(): IntelMarkerLayer | null {

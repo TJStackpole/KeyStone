@@ -27,6 +27,8 @@ gen() {
 # Aerial-ish: slow drifting fractal + desaturated grade / test pattern flyover feel.
 gen drone1  "mandelbrot=size=960x540:rate=24:end_scale=0.2,hue=s=0.25,eq=brightness=-0.05:contrast=1.1"
 gen drone2  "testsrc2=size=960x540:rate=24,hue=s=0.3:h=90,eq=brightness=-0.1"
+# Helicopter-ish: wide slow orbit feel (zoomed fractal drift, blue-grey grade).
+gen helo1   "mandelbrot=size=960x540:rate=24:end_scale=0.4:inner=convergence,hue=s=0.2:h=200,eq=brightness=-0.12:contrast=1.15"
 # Bodycam-ish: noisy, jittery, low-light look.
 gen bodycam1 "smptehdbars=size=960x540:rate=24,noise=alls=18:allf=t,eq=brightness=-0.25:saturation=0.5"
 gen bodycam2 "testsrc=size=960x540:rate=24,noise=alls=24:allf=t,hue=s=0.15,eq=brightness=-0.2"
@@ -34,16 +36,19 @@ gen bodycam2 "testsrc=size=960x540:rate=24,noise=alls=24:allf=t,hue=s=0.15,eq=br
 publish() {
   name="$1"
   while true; do
+    # TCP transport: large H264 frames fragment over UDP and drop (MediaMTX
+    # logs "invalid FU-A packet"), which breaks HLS/WebRTC conversion.
     ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 \
-      -i "$DIR/$name.mp4" -c copy -f rtsp "rtsp://mediamtx:8554/$name"
+      -i "$DIR/$name.mp4" -c copy -rtsp_transport tcp -f rtsp "rtsp://mediamtx:8554/$name"
     echo "[streams] $name publisher exited — retrying in 2s"
     sleep 2
   done
 }
 
-echo "[streams] publishing drone1 drone2 bodycam1 bodycam2 -> rtsp://mediamtx:8554"
+echo "[streams] publishing drone1 drone2 helo1 bodycam1 bodycam2 -> rtsp://mediamtx:8554"
 publish drone1 &
 publish drone2 &
+publish helo1 &
 publish bodycam1 &
 publish bodycam2 &
 wait

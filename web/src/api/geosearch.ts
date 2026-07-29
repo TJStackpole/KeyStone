@@ -8,6 +8,8 @@ interface GeoSearchFeature {
     label?: string
     name?: string
     borough?: string
+    neighbourhood?: string
+    postalcode?: string
     addendum?: { pad?: { bin?: string; bbl?: string } }
   }
 }
@@ -24,6 +26,7 @@ export async function autocompleteAddress(text: string, signal?: AbortSignal): P
       label: f.properties.label ?? f.properties.name ?? 'Unknown address',
       name: f.properties.name ?? '',
       borough: f.properties.borough,
+      neighbourhood: f.properties.neighbourhood,
       lon: f.geometry.coordinates[0],
       lat: f.geometry.coordinates[1],
       bin: f.properties.addendum?.pad?.bin,

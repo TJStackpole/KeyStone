@@ -113,6 +113,36 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     }
   }
 
+  // Operating envelope: NYC + the tri-state approaches (~30 mi past the city
+  // line for mutual-aid work). The camera can't wander outside it, and zoom is
+  // bounded so the operator can neither fly to space nor clip through streets.
+  const OPS_AREA = Cesium.Rectangle.fromDegrees(-75.5, 39.9, -72.4, 41.65)
+  const controller = scene.screenSpaceCameraController
+  controller.minimumZoomDistance = 40
+  controller.maximumZoomDistance = 450_000
+  viewer.camera.moveEnd.addEventListener(() => {
+    const pos = viewer.camera.positionCartographic
+    const lat = Cesium.Math.toDegrees(pos.latitude)
+    const lon = Cesium.Math.toDegrees(pos.longitude)
+    const west = Cesium.Math.toDegrees(OPS_AREA.west)
+    const east = Cesium.Math.toDegrees(OPS_AREA.east)
+    const south = Cesium.Math.toDegrees(OPS_AREA.south)
+    const north = Cesium.Math.toDegrees(OPS_AREA.north)
+    const clampedLat = Math.min(Math.max(lat, south), north)
+    const clampedLon = Math.min(Math.max(lon, west), east)
+    if (clampedLat !== lat || clampedLon !== lon) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(clampedLon, clampedLat, Math.min(pos.height, 450_000)),
+        orientation: {
+          heading: viewer.camera.heading,
+          pitch: viewer.camera.pitch,
+          roll: 0,
+        },
+        duration: 0.8,
+      })
+    }
+  })
+
   // Establishing shot: over the harbor looking north at Lower Manhattan.
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(-74.0085, 40.6875, 2800),

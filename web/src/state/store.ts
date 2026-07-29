@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
+import type { BuildingSafety, Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
   CommsChannel,
   CommsConfig,
@@ -9,6 +9,7 @@ import type {
   Incident,
   LayerStatus,
   ProviderMode,
+  TimelineEvent,
   ToggleLayerId,
   TranscriptLine,
   Unit,
@@ -19,6 +20,7 @@ export interface SiteIntel {
   pluto: PlutoAttributes | null
   hydrants: Hydrant[]
   firehouses: Firehouse[]
+  safety: BuildingSafety | null
 }
 
 export interface AppState {
@@ -46,15 +48,24 @@ export interface AppState {
   transcripts: Record<CommsChannel, TranscriptLine[]>
   commsConfig: CommsConfig | null
   replay: { active: boolean; playing: boolean; t: number; duration: number }
+  timeline: TimelineEvent[]
+  sitrepOpen: boolean
 }
 
 const initial: AppState = {
   sceneReady: false,
   providerMode: null,
   incident: null,
-  layers: { footprints: 'idle', pluto: 'idle', hydrants: 'idle', firehouses: 'idle', persistence: 'idle' },
-  intel: { pluto: null, hydrants: [], firehouses: [] },
-  layerToggles: { footprints: true, hydrants: true, firehouses: true },
+  layers: {
+    footprints: 'idle',
+    pluto: 'idle',
+    hydrants: 'idle',
+    firehouses: 'idle',
+    safety: 'idle',
+    persistence: 'idle',
+  },
+  intel: { pluto: null, hydrants: [], firehouses: [], safety: null },
+  layerToggles: { footprints: true, hydrants: true, firehouses: true, battalions: false, divisions: false },
   units: {},
   takConnected: null,
   unitToggles: {
@@ -81,6 +92,8 @@ const initial: AppState = {
   transcripts: { fdny: [], nypd: [], ems: [], oem: [] },
   commsConfig: null,
   replay: { active: false, playing: false, t: 0, duration: 0 },
+  timeline: [],
+  sitrepOpen: false,
 }
 
 let state: AppState = initial

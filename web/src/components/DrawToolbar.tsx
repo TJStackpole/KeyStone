@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { deleteSelectedShape, setDrawTool } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { useAppState } from '../state/store'
@@ -8,13 +9,25 @@ const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
 
 export function DrawToolbar() {
   const { drawTool, selectedShapeId, incident } = useAppState()
+  const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
   const zoneActive = drawTool && (ZONES as string[]).includes(drawTool)
 
+  if (collapsed) {
+    return (
+      <button className="draw-toolbar glass tools-collapsed" onClick={() => setCollapsed(false)} title="Expand ICS tools">
+        TOOLS ▸
+      </button>
+    )
+  }
+
   return (
     <>
       <div className="draw-toolbar glass">
+        <button className="tool-collapse" onClick={() => setCollapsed(true)} title="Minimize ICS tools">
+          ◂
+        </button>
         <div className="tool-section-label">ZONES</div>
         {ZONES.map((z) => (
           <button

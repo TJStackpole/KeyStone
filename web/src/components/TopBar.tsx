@@ -33,11 +33,12 @@ const LAYER_LABEL: Record<string, string> = {
   pluto: 'PLUTO',
   hydrants: 'HYDRANTS',
   firehouses: 'FIREHOUSES',
+  safety: 'DOB DATA',
   persistence: 'PERSISTENCE',
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected, bodycamOpen } = useAppState()
+  const { providerMode, layers, takConnected, bodycamOpen, sitrepOpen } = useAppState()
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
   return (
     <header className="topbar glass">
@@ -66,11 +67,18 @@ export function TopBar() {
           </span>
         )}
         <button
+          className={`chip chip-btn${sitrepOpen ? ' active' : ''}`}
+          onClick={() => setAppState((s) => ({ sitrepOpen: !s.sitrepOpen }))}
+          title="Live situation summary"
+        >
+          <span className="dot" /> SITREP
+        </button>
+        <button
           className={`chip chip-btn${bodycamOpen ? ' active' : ''}`}
           onClick={() => setAppState((s) => ({ bodycamOpen: !s.bodycamOpen }))}
-          title="Toggle body-cam wall"
+          title="Drone / helicopter / body-cam feeds"
         >
-          <span className="dot" /> BODYCAMS
+          <span className="dot" /> VIDEO
         </button>
         {providerMode && (
           <span className="chip">

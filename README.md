@@ -38,6 +38,8 @@ Copy `.env.example` to `.env` and fill in what you have. No code changes needed 
 | Parcel attributes | NYC Open Data PLUTO | none |
 | Hydrants | NYC Open Data Fire Hydrants | none |
 | Firehouses | NYC Open Data FDNY Firehouse Listing | none |
+| DOB violations / ECB / complaints / HPD | NYC Open Data (`3h2n-5cm9`, `6bgk-3dad`, `eabe-havv`, `wvxf-dwi5`) by BIN, with DOB BIS + ZoLa deep links | none |
+| FDNY battalion / division boundaries | NYC Open Data (`xzng-ft6f`, `68m2-uzcb`), toggleable overlay | none |
 
 Any Open Data failure degrades gracefully: logged, surfaced as a "layer unavailable" chip, never a crash.
 

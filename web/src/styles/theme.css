@@ -538,7 +538,7 @@ html, body {
 
 .draw-hint {
   position: absolute;
-  bottom: 18px;
+  bottom: 214px; /* above the comms dock */
   left: 50%;
   transform: translateX(-50%);
   padding: 8px 16px;
@@ -549,6 +549,29 @@ html, body {
   z-index: 25;
   white-space: nowrap;
 }
+
+.tools-collapsed {
+  width: auto;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--cyan);
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.tool-collapse {
+  align-self: flex-end;
+  width: 20px;
+  height: 16px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+.tool-collapse:hover { color: var(--cyan); }
 
 /* ---------- video: tiles, drone panel, bodycam wall ---------- */
 .chip-btn { cursor: pointer; background: rgba(7, 12, 20, 0.6); transition: all 120ms; }
@@ -825,6 +848,79 @@ html, body {
 .command-strip.replaying { border-color: rgba(245, 158, 11, 0.45); box-shadow: var(--glow-amber); }
 .replay-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber-bright); }
 .replay-scrub { width: 260px; accent-color: #f59e0b; }
+
+/* ---------- DOB & housing safety intel ---------- */
+.safety-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
+.safety-grid > div { display: flex; flex-direction: column; gap: 1px; }
+.safety-grid span { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.safety-grid b { font-family: var(--mono); font-size: 13px; font-weight: 600; color: #4ade80; }
+.safety-grid b.hot { color: var(--amber-bright); }
+.safety-grid b i { font-style: normal; font-size: 9.5px; font-weight: 400; color: var(--text-faint); }
+.safety-legend { font-family: var(--mono); font-size: 8px; letter-spacing: 0.12em; color: var(--text-faint); margin: 4px 0 6px; }
+.safety-row { display: flex; gap: 8px; padding: 2.5px 0; font-family: var(--mono); font-size: 10px; }
+.safety-date { color: var(--text-faint); flex: none; }
+.safety-desc { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intel-links { display: flex; gap: 6px; margin-top: 8px; }
+.link-chip {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  text-decoration: none;
+  transition: all 120ms;
+}
+.link-chip:hover { border-color: var(--border-strong); background: rgba(34, 211, 238, 0.08); }
+
+/* ---------- search (Google-style rows) ---------- */
+.intel-toggles { flex-wrap: wrap; }
+.intel-toggles .toggle-chip { flex: 1 1 30%; }
+.hit-pin { width: 14px; height: 14px; flex: none; color: var(--text-faint); }
+.search-hit.active .hit-pin { color: var(--cyan); }
+.hit-main { display: flex; flex-direction: column; min-width: 0; }
+.hit-main .addr b { color: var(--cyan); font-weight: 700; }
+.hit-sub { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; color: var(--text-faint); text-transform: uppercase; }
+.card-head.as-btn { background: none; border: none; width: 100%; cursor: pointer; color: inherit; font: inherit; text-align: left; padding: 0; }
+.incident-card.collapsed { padding: 10px 14px; }
+.head-toggle { display: flex; align-items: center; gap: 8px; background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+
+/* ---------- SITREP panel ---------- */
+.sitrep-panel {
+  position: absolute;
+  top: 122px;
+  right: 340px;
+  width: 400px;
+  max-height: calc(100vh - 340px);
+  display: flex;
+  flex-direction: column;
+  z-index: 27;
+}
+.sitrep-updated { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.14em; color: #4ade80; }
+.sitrep-body { overflow-y: auto; padding: 0 14px 14px; }
+.sitrep-body::-webkit-scrollbar { width: 8px; }
+.sitrep-body::-webkit-scrollbar-thumb { background: rgba(34, 211, 238, 0.18); border-radius: 4px; }
+.sitrep-lead { font-size: 12.5px; line-height: 1.5; margin: 4px 0 10px; color: var(--text); }
+.sitrep-lead b { color: var(--amber-bright); }
+.sitrep-section {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--text-faint);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.14);
+  padding-bottom: 4px;
+  margin: 10px 0 6px;
+}
+.sitrep-list { list-style: none; margin: 0; padding: 0; }
+.sitrep-list li { font-size: 11.5px; line-height: 1.55; color: var(--text-dim); }
+.sitrep-list li b { color: var(--text); }
+.sitrep-list.mono li { font-family: var(--mono); font-size: 10.5px; }
+.sitrep-t { color: var(--cyan-dim); font-family: var(--mono); font-size: 10px; margin-right: 6px; }
+
+/* ---------- video hub ---------- */
+.video-tabs { display: flex; gap: 4px; margin-left: 6px; }
+.bodycam-grid.single { grid-template-columns: 1fr; }
 
 /* ---------- scene loading veil ---------- */
 .scene-veil {

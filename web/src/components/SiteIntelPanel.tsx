@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { flyToFeature, toggleLayer } from '../actions'
+import { buildingLinks } from '../api/nyc'
 import { formatMeters } from '../lib/geo'
 import { useAppState } from '../state/store'
 import type { LayerStatus, ToggleLayerId } from '../types'
@@ -17,9 +18,11 @@ function StatusNote({ status, empty }: { status: LayerStatus; empty?: string }) 
 }
 
 const TOGGLES: { id: ToggleLayerId; label: string }[] = [
-  { id: 'footprints', label: 'Footprints' },
+  { id: 'footprints', label: 'Bldgs' },
   { id: 'hydrants', label: 'Hydrants' },
-  { id: 'firehouses', label: 'Firehouses' },
+  { id: 'firehouses', label: 'Houses' },
+  { id: 'battalions', label: 'Battalions' },
+  { id: 'divisions', label: 'Divisions' },
 ]
 
 export function SiteIntelPanel() {
@@ -81,6 +84,62 @@ export function SiteIntelPanel() {
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="intel-section">
+            <div className="intel-section-title">DOB &amp; Housing · Violations</div>
+            <StatusNote
+              status={layers.safety}
+              empty={intel.safety ? undefined : incident.bin ? 'NO RECORDS' : 'NO BIN FOR THIS LOCATION'}
+            />
+            {intel.safety && (
+              <>
+                <div className="safety-grid">
+                  <div>
+                    <span>DOB viol.</span>
+                    <b className={intel.safety.dobActive > 0 ? 'hot' : ''}>
+                      {intel.safety.dobActive}
+                      <i>/{intel.safety.dobTotal}</i>
+                    </b>
+                  </div>
+                  <div>
+                    <span>ECB/OATH</span>
+                    <b className={intel.safety.ecbActive > 0 ? 'hot' : ''}>
+                      {intel.safety.ecbActive}
+                      <i>/{intel.safety.ecbTotal}</i>
+                    </b>
+                  </div>
+                  <div>
+                    <span>Complaints</span>
+                    <b className={intel.safety.complaintsActive > 0 ? 'hot' : ''}>
+                      {intel.safety.complaintsActive}
+                      <i>/{intel.safety.complaintsTotal}</i>
+                    </b>
+                  </div>
+                  <div>
+                    <span>HPD viol.</span>
+                    <b className={intel.safety.hpdOpen > 0 ? 'hot' : ''}>
+                      {intel.safety.hpdOpen}
+                      <i>/{intel.safety.hpdTotal}</i>
+                    </b>
+                  </div>
+                </div>
+                <div className="safety-legend">ACTIVE / TOTAL · NYC OPEN DATA</div>
+                {intel.safety.recent.slice(0, 3).map((v, i) => (
+                  <div key={i} className="safety-row" title={v.description}>
+                    <span className="safety-date">{v.date}</span>
+                    <span className="safety-desc">{v.type || v.description || 'DOB violation'}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            <div className="intel-links">
+              {buildingLinks(incident.bin, incident.bbl).map((l) => (
+                <a key={l.label} href={l.url} target="_blank" rel="noreferrer" className="link-chip">
+                  {l.label} ↗
+                </a>
+              ))}
+            </div>
           </div>
 
           <div className="intel-section">

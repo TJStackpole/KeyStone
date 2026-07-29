@@ -1,8 +1,9 @@
 import * as Cesium from 'cesium'
-import { fetchFirehouses, fetchHydrants, fetchPluto } from './api/nyc'
+import { fetchBuildingSafety, fetchFirehouses, fetchHydrants, fetchPluto } from './api/nyc'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
 import {
+  getBoundaryLayer,
   getDrawController,
   getFootprintLayer,
   getIntelLayer,
@@ -129,6 +130,19 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
   setLayerStatus('pluto', 'loading')
   setLayerStatus('hydrants', 'loading')
   setLayerStatus('firehouses', 'loading')
+  setLayerStatus('safety', 'loading')
+
+  void (async () => {
+    try {
+      const safety = incident.bin ? await fetchBuildingSafety(incident.bin) : null
+      setAppState((s) => ({ intel: { ...s.intel, safety } }))
+      setLayerStatus('safety', 'ok')
+    } catch (err) {
+      console.error('[safety] layer unavailable:', err)
+      setAppState((s) => ({ intel: { ...s.intel, safety: null } }))
+      setLayerStatus('safety', 'unavailable')
+    }
+  })()
 
   void (async () => {
     try {
@@ -173,13 +187,21 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
   })()
 }
 
-/** Layer visibility chips (Footprints / Hydrants / Firehouses). */
+/** Layer visibility chips (Footprints / Hydrants / Firehouses / FDNY boundaries). */
 export function toggleLayer(layer: ToggleLayerId): void {
   const next = !getAppState().layerToggles[layer]
   setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: next } }))
   if (layer === 'footprints') getFootprintLayer()?.setVisible(next)
   if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next)
   if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next)
+  if (layer === 'battalions' || layer === 'divisions') {
+    getBoundaryLayer()
+      ?.setVisible(layer, next)
+      .catch((err) => {
+        console.error(`[boundaries] ${layer} unavailable:`, err)
+        setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: false } }))
+      })
+  }
 }
 
 /** Close-in look at a single intel feature (hydrant / firehouse row click). */

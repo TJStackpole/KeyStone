@@ -22,15 +22,16 @@ export type ProviderMode = 'keyless' | 'ion' | 'google'
 /** Runtime health of each real-data layer, surfaced as chips per the graceful-degradation rule. */
 export type LayerStatus = 'idle' | 'loading' | 'ok' | 'unavailable'
 
-export type DataLayerId = 'footprints' | 'pluto' | 'hydrants' | 'firehouses' | 'persistence'
+export type DataLayerId = 'footprints' | 'pluto' | 'hydrants' | 'firehouses' | 'safety' | 'persistence'
 
 /** Globe layers the operator can toggle from the Site Intel panel. */
-export type ToggleLayerId = 'footprints' | 'hydrants' | 'firehouses'
+export type ToggleLayerId = 'footprints' | 'hydrants' | 'firehouses' | 'battalions' | 'divisions'
 
 export interface GeoHit {
   label: string
   name: string
   borough?: string
+  neighbourhood?: string
   lon: number
   lat: number
   bin?: string
@@ -83,6 +84,12 @@ export interface TranscriptLine {
 export interface CommsConfig {
   live: boolean
   audioUrl: string
+}
+
+export interface TimelineEvent {
+  t: string
+  kind: string
+  payload?: unknown
 }
 
 // ------------------------------ units (Phase 3+) ----------------------------

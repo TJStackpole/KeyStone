@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { dispatchAssignment, flyToUnit, toggleUnitCategory } from '../actions'
 import { useAppState } from '../state/store'
 import type { Agency, Unit, UnitCategory } from '../types'
@@ -45,6 +45,7 @@ function callsignSortKey(cs: string): [string, number] {
 
 export function RosterPanel() {
   const { units, incident, takConnected, dispatching } = useAppState()
+  const [collapsed, setCollapsed] = useState(false)
 
   const grouped = useMemo(() => {
     const byAgency = new Map<Agency, Map<UnitCategory, Unit[]>>()
@@ -71,8 +72,11 @@ export function RosterPanel() {
   return (
     <section className="roster-panel glass">
       <div className="roster-head">
-        <span className="card-title">Units</span>
-        <span className="roster-count">{total}</span>
+        <button className="head-toggle" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expand' : 'Minimize'}>
+          <span className="card-title">Units</span>
+          <span className="roster-count">{total}</span>
+          <span className={`chev${collapsed ? ' closed' : ''}`}>▾</span>
+        </button>
         {incident && (
           <button
             className="dispatch-btn"
@@ -85,14 +89,14 @@ export function RosterPanel() {
         )}
       </div>
 
-      {total === 0 && (
+      {!collapsed && total === 0 && (
         <div className="roster-empty">
           NO UNITS ON THE PICTURE
           {incident ? ' — DISPATCH THE ASSIGNMENT' : ' — STAND UP AN INCIDENT FIRST'}
         </div>
       )}
 
-      <div className="roster-body">
+      <div className="roster-body" style={collapsed ? { display: 'none' } : undefined}>
         {AGENCY_ORDER.filter((a) => grouped.has(a)).map((agency) => {
           const byCat = grouped.get(agency)!
           const agencyUnits = [...byCat.values()].flat()

@@ -1,12 +1,13 @@
 import { getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
-import type { CommsChannel, IcsShape, Incident, TranscriptLine, Unit } from './types'
+import type { CommsChannel, IcsShape, Incident, TimelineEvent, TranscriptLine, Unit } from './types'
 
 interface SnapshotMsg {
   type: 'snapshot'
   incident: Incident | null
   units?: Unit[]
   shapes?: IcsShape[]
+  timeline?: TimelineEvent[]
   takConnected?: boolean
 }
 interface ShapeMsg {
@@ -35,7 +36,7 @@ interface TakStatusMsg {
 }
 interface TimelineMsg {
   type: 'timeline'
-  event: { t: string; kind: string; payload?: unknown }
+  event: TimelineEvent
 }
 interface TranscriptMsg {
   type: 'transcript'
@@ -104,7 +105,12 @@ function handle(msg: ServerMsg): void {
         shapes[s.id] = s
         getShapeLayer()?.upsert(s)
       }
-      setAppState({ units, shapes, takConnected: msg.takConnected ?? null })
+      setAppState({
+        units,
+        shapes,
+        timeline: (msg.timeline ?? []).slice(-600),
+        takConnected: msg.takConnected ?? null,
+      })
       break
     }
     case 'incident':
@@ -138,7 +144,8 @@ function handle(msg: ServerMsg): void {
       getShapeLayer()?.remove(msg.id)
       break
     case 'timeline':
-      break // consumed in Phase 8 (replay); nothing to do live yet
+      setAppState((s) => ({ timeline: [...s.timeline, msg.event].slice(-600) }))
+      break
     case 'transcript': {
       const MAX_LINES = 200
       setAppState((s) => ({

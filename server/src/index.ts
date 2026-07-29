@@ -22,8 +22,9 @@ import type { IcsShape, Incident } from './types.js'
 import { UnitRegistry } from './units.js'
 
 // Deliberately NOT process.env.PORT — dev harnesses inject PORT for the web app,
-// and picking it up here would collide with Vite on 5173.
-const PORT = Number(process.env.WATCHTOWER_SERVER_PORT ?? 4000)
+// and picking it up here would collide with Vite on 5173. (4010 rather than the
+// commonly-squatted 4000; override with WATCHTOWER_SERVER_PORT.)
+const PORT = Number(process.env.WATCHTOWER_SERVER_PORT ?? 4010)
 
 // TAK server CoT streaming endpoint (docker-compose publishes OTS TCP on host 8087).
 const TAK_HOST = env('TAK_HOST', '127.0.0.1')

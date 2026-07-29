@@ -3,6 +3,20 @@ import { autocompleteAddress } from '../api/geosearch'
 import { standUpIncident } from '../actions'
 import type { GeoHit } from '../types'
 
+/** Bold the query tokens inside a suggestion, Google-Maps-style. */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const tokens = query.trim().split(/\s+/).filter((t) => t.length >= 1)
+  if (!tokens.length) return <>{text}</>
+  const re = new RegExp(`(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
+  return (
+    <>
+      {text.split(re).map((seg, i) =>
+        re.test(seg) ? <b key={i}>{seg}</b> : <span key={i}>{seg}</span>,
+      )}
+    </>
+  )
+}
+
 export function SearchBar() {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<GeoHit[]>([])
@@ -25,7 +39,7 @@ export function SearchBar() {
     setQuery(value)
     setFailed(false)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (value.trim().length < 3) {
+    if (value.trim().length < 2) {
       setHits([])
       setOpen(false)
       return
@@ -101,8 +115,18 @@ export function SearchBar() {
                 select(h)
               }}
             >
-              <span className="addr">{h.label}</span>
-              <span className="boro">{h.borough ?? ''}</span>
+              <svg className="hit-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0Z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span className="hit-main">
+                <span className="addr">
+                  <Highlight text={h.name || h.label} query={query} />
+                </span>
+                <span className="hit-sub">
+                  {[h.neighbourhood, h.borough].filter(Boolean).join(' · ') || 'New York City'}
+                </span>
+              </span>
             </div>
           ))}
         </div>
