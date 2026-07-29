@@ -1,6 +1,14 @@
 import { useSyncExternalStore } from 'react'
 import type { Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
-import type { DataLayerId, Incident, LayerStatus, ProviderMode, ToggleLayerId, Unit } from '../types'
+import type {
+  DataLayerId,
+  Incident,
+  LayerStatus,
+  ProviderMode,
+  ToggleLayerId,
+  Unit,
+  UnitCategory,
+} from '../types'
 
 export interface SiteIntel {
   pluto: PlutoAttributes | null
@@ -18,6 +26,8 @@ export interface AppState {
   units: Record<string, Unit>
   /** null until the server reports TAK link state. */
   takConnected: boolean | null
+  unitToggles: Record<UnitCategory, boolean>
+  dispatching: boolean
 }
 
 const initial: AppState = {
@@ -29,6 +39,19 @@ const initial: AppState = {
   layerToggles: { footprints: true, hydrants: true, firehouses: true },
   units: {},
   takConnected: null,
+  unitToggles: {
+    engine: true,
+    ladder: true,
+    battalion: true,
+    rescue: true,
+    ems: true,
+    nypd: true,
+    esu: true,
+    oem: true,
+    drone: true,
+    unknown: true,
+  },
+  dispatching: false,
 }
 
 let state: AppState = initial

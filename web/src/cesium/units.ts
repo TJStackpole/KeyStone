@@ -57,7 +57,7 @@ export class UnitLayer {
     void viewer.dataSources.add(this.source)
   }
 
-  upsert(unit: Unit): void {
+  upsert(unit: Unit, show = true): void {
     const id = `unit:${unit.uid}`
     const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae)
     const now = Cesium.JulianDate.now()
@@ -93,6 +93,7 @@ export class UnitLayer {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
+      entity.show = show
     } else {
       ;(entity.position as Cesium.SampledPositionProperty).addSample(now, position)
       if (entity.label && entity.label.text?.getValue(now) !== unit.callsign) {

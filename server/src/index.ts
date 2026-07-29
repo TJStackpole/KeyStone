@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { WebSocketServer, WebSocket } from 'ws'
 import { env } from './env.js'
 import { appendTimeline, createIncident, getState, updateIncident } from './incidentStore.js'
+import { FirstAlarmSimulator } from './sim/simulator.js'
 import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
 import type { Incident } from './types.js'
@@ -53,9 +54,19 @@ wss.on('connection', (socket) => {
 const registry = new UnitRegistry()
 const tak = new TakClient(TAK_HOST, TAK_PORT)
 
+// The simulator publishes on its OWN TAK connection, exactly like a real fleet
+// of EUDs would — the TAK server then fans its traffic out to the dashboard's
+// subscriber connection above. (Publishing on the subscriber socket wouldn't
+// round-trip: TAK servers don't echo events back to their sender.)
+const simTak = new TakClient(TAK_HOST, TAK_PORT, { uid: 'WATCHTOWER-SIM', callsign: 'WT-SIM' })
+
+/** Internal EUD identities — never shown as units. */
+const INTERNAL_UIDS = new Set(['WATCHTOWER-COP', 'WATCHTOWER-SIM'])
+
 tak.on('status', (connected: boolean) => broadcast({ type: 'tak.status', connected }))
 
 tak.on('event', (ev) => {
+  if (INTERNAL_UIDS.has(ev.uid)) return
   // Proof-of-protocol: log genuine CoT XML as it arrives off the TAK server.
   console.log(`[cot] rx ${(ev.raw ?? '').replace(/\s+/g, ' ').slice(0, 240)}`)
   if (isUnitEvent(ev)) registry.upsertFromCot(ev)
@@ -65,11 +76,41 @@ registry.on('unit', (unit) => broadcast({ type: 'unit', unit }))
 registry.on('remove', (uid) => broadcast({ type: 'unit.remove', uid }))
 
 tak.start()
+simTak.start()
 
 /** Publish CoT XML into the TAK server (used by the simulator and shape tools). */
 export function publishCot(xml: string): boolean {
-  return tak.send(xml)
+  return simTak.send(xml)
 }
+
+// ---------------------------------------------------------------------------
+// First-alarm simulator (Phase 4)
+// ---------------------------------------------------------------------------
+const simulator = new FirstAlarmSimulator(
+  (xml) => publishCot(xml),
+  (kind, payload) => {
+    const ev = appendTimeline(kind, payload)
+    broadcast({ type: 'timeline', event: ev })
+  },
+)
+
+app.post('/api/dispatch', async (_req, res) => {
+  const state = getState()
+  if (!state.incident) return res.status(400).json({ error: 'no active incident to dispatch to' })
+  if (!tak.connected) return res.status(503).json({ error: 'TAK link down — cannot publish CoT' })
+  try {
+    const result = await simulator.dispatch(state.incident.lat, state.incident.lon)
+    res.status(201).json(result)
+  } catch (err) {
+    console.error('[sim] dispatch failed:', err)
+    res.status(500).json({ error: 'dispatch failed' })
+  }
+})
+
+app.post('/api/dispatch/stop', (_req, res) => {
+  simulator.stop()
+  res.json({ stopped: true })
+})
 
 // ---------------------------------------------------------------------------
 // Incident API
@@ -96,6 +137,8 @@ app.post('/api/incident', (req, res) => {
     type: b.type,
     createdAt: b.createdAt ?? new Date().toISOString(),
   }
+  // A new incident supersedes the old picture — stop any convergence in progress.
+  simulator.stop()
   const state = createIncident(incident)
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })

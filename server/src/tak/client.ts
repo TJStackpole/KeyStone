@@ -3,13 +3,17 @@ import net from 'node:net'
 import { buildCotXml, parseCotXml, type CotEvent } from './cot.js'
 
 /**
- * The dashboard's own EUD identity. TAK servers key per-client delivery off the
- * uid in a client's self-announcement — a silent socket receives no fan-out —
- * so WATCHTOWER announces itself exactly like an ATAK client would.
+ * Every WATCHTOWER TCP connection announces an EUD identity on connect — TAK
+ * servers key per-client delivery off the uid in a client's self-announcement,
+ * and a silent socket receives no fan-out. Identities prefixed WATCHTOWER- are
+ * internal and filtered out of the unit registry.
  */
-const SELF_UID = 'WATCHTOWER-COP'
-const SELF_CALLSIGN = 'WATCHTOWER'
-// NYC City Hall — inert anchor for the dashboard's own presence marker.
+export interface TakIdentity {
+  uid: string
+  callsign: string
+}
+
+// NYC City Hall — inert anchor for internal presence markers.
 const SELF_LAT = 40.7128
 const SELF_LON = -74.006
 
@@ -36,6 +40,7 @@ export class TakClient extends EventEmitter {
   constructor(
     private readonly host: string,
     private readonly port: number,
+    private readonly identity: TakIdentity = { uid: 'WATCHTOWER-COP', callsign: 'WATCHTOWER' },
   ) {
     super()
   }
@@ -66,11 +71,11 @@ export class TakClient extends EventEmitter {
     socket.on('connect', () => {
       this.connected = true
       this.backoff = 1000
-      console.log(`[tak] connected to ${this.host}:${this.port} (plain-TCP CoT)`)
+      console.log(`[tak] ${this.identity.callsign} connected to ${this.host}:${this.port} (plain-TCP CoT)`)
       socket.write(
         buildCotXml({
-          uid: SELF_UID,
-          callsign: SELF_CALLSIGN,
+          uid: this.identity.uid,
+          callsign: this.identity.callsign,
           type: 'a-f-G-U-C',
           lat: SELF_LAT,
           lon: SELF_LON,

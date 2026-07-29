@@ -7,6 +7,7 @@ import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { IncidentCard } from './components/IncidentCard'
+import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
 
 export default function App() {
@@ -47,7 +48,10 @@ export default function App() {
     <div className="app">
       <div ref={globeRef} className="globe" />
       <TopBar />
-      <IncidentCard />
+      <div className="left-dock">
+        <IncidentCard />
+        <RosterPanel />
+      </div>
       <SiteIntelPanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">WATCHTOWER</div>

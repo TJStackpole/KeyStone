@@ -2,9 +2,9 @@ import * as Cesium from 'cesium'
 import { fetchFirehouses, fetchHydrants, fetchPluto } from './api/nyc'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
-import { getFootprintLayer, getIntelLayer, getScene } from './cesium/scene'
+import { getFootprintLayer, getIntelLayer, getScene, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
-import type { GeoHit, Incident, IncidentType, ToggleLayerId } from './types'
+import type { GeoHit, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
 
 function newIncidentId(): string {
   return `INC-${Date.now().toString(36).toUpperCase()}`
@@ -180,4 +180,38 @@ export function flyToFeature(lat: number, lon: number): void {
     orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 },
     duration: 1.6,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Units (Phase 4): dispatch, roster interactions
+// ---------------------------------------------------------------------------
+
+/** Roster row click: chase the unit's live position. */
+export function flyToUnit(uid: string): void {
+  const unit = getAppState().units[uid]
+  if (unit) flyToFeature(unit.lat, unit.lon)
+}
+
+/** Per-category visibility toggle (roster group headers). */
+export function toggleUnitCategory(category: UnitCategory): void {
+  const state = getAppState()
+  const next = !state.unitToggles[category]
+  setAppState((s) => ({ unitToggles: { ...s.unitToggles, [category]: next } }))
+  getUnitLayer()?.setCategoryVisible(category, next, Object.values(state.units))
+}
+
+/** "Dispatch Assignment" — the server spawns the simulated first alarm. */
+export async function dispatchAssignment(): Promise<void> {
+  setAppState({ dispatching: true })
+  try {
+    const res = await fetch('/api/dispatch', { method: 'POST' })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null
+      throw new Error(body?.error ?? `dispatch ${res.status}`)
+    }
+  } catch (err) {
+    console.error('[dispatch] failed:', err)
+  } finally {
+    setAppState({ dispatching: false })
+  }
 }

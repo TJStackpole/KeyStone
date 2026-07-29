@@ -1,5 +1,5 @@
 import { getUnitLayer } from './cesium/scene'
-import { setAppState } from './state/store'
+import { getAppState, setAppState } from './state/store'
 import type { Incident, Unit } from './types'
 
 interface SnapshotMsg {
@@ -60,10 +60,13 @@ export function connectWs(): void {
 function handle(msg: ServerMsg): void {
   switch (msg.type) {
     case 'snapshot': {
+      // Authoritative rebuild — clears units that vanished while disconnected
+      // (e.g. server restart swept the registry).
+      getUnitLayer()?.clear()
       const units: Record<string, Unit> = {}
       for (const u of msg.units ?? []) {
         units[u.uid] = u
-        getUnitLayer()?.upsert(u)
+        getUnitLayer()?.upsert(u, getAppState().unitToggles[u.category] ?? true)
       }
       setAppState({ units, takConnected: msg.takConnected ?? null })
       break
@@ -73,7 +76,7 @@ function handle(msg: ServerMsg): void {
       break
     case 'unit':
       setAppState((s) => ({ units: { ...s.units, [msg.unit.uid]: msg.unit } }))
-      getUnitLayer()?.upsert(msg.unit)
+      getUnitLayer()?.upsert(msg.unit, getAppState().unitToggles[msg.unit.category] ?? true)
       break
     case 'unit.remove':
       setAppState((s) => {
