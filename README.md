@@ -39,6 +39,35 @@ Copy `.env.example` to `.env` and fill in what you have. No code changes needed 
 
 Any Open Data failure degrades gracefully: logged, surfaced as a "layer unavailable" chip, never a crash.
 
+## TAK server selection (Phase 3)
+
+WATCHTOWER's CoT spine runs through a **real open-source TAK server** in Docker
+([taky](https://github.com/tkuester/taky) v0.10) — the backend is a plain-TCP
+CoT client on port 8087, exactly like an ATAK phone. The CoT client is
+server-agnostic: `TAK_HOST` / `TAK_PORT` in `.env` point it anywhere, including
+a TAK Product Center TAK Server, with zero code change.
+
+CLAUDE.md prefers OpenTAKServer with FreeTAKServer as fallback. Both were
+deployed and tested empirically on 2026-07-29, and both shipped broken:
+
+| Server | Failure |
+|---|---|
+| OpenTAKServer `ghcr.io/brian7704/opentakserver:latest` | plain-TCP EUD path crashes per connection (`from opentakserver.eud_handler import EudHandler` binds the module, not the class); after patching, CoT router also crashes on pika's blocking API (`.is_closing` doesn't exist) and fan-out still never reaches subscribed EUDs |
+| OpenTAKServer official per-service images (`ots_eud_handler:master`, `ots_cot_parser:master`, full RabbitMQ MQTT/auth-http wiring mirrored from OpenTAKServer-Docker) | EUD handler's per-client AMQP connection aborts mid-handshake (pika `AMQPConnectionWorkflowAborted` assertion) — no per-EUD queue is ever bound, so no client receives fan-out |
+| FreeTAKServer 2.2.1 (PyPI; Docker Hub tags no longer exist) | DigitalPy component registry fails en masse (a shipped file has a tabs/spaces `SyntaxError`); startup dies on an OpenTelemetry `BatchSpanProcessor` AttributeError |
+| FreeTAKServer 1.9.9.6 (classic) | eventlet incompatible with Python ≥ 3.10 (`socket.timeout` immutability); pinned lxml 4.6.5 predates Python 3.11 |
+
+taky passed the same gate the others failed — two independent TCP clients,
+one publishes a CoT event, the other receives it verbatim — before adoption.
+The acceptance probe is reproducible:
+
+```bash
+docker compose up -d
+npm run publish-test-unit   # publishes CoT for "E-99" — appears on the globe in <2 s
+```
+
+How to connect a real ATAK/iTAK phone: [docs/connect-atak.md](docs/connect-atak.md).
+
 ## Repo layout
 
 ```
@@ -55,7 +84,7 @@ scripts/  operational scripts (CoT test publisher, etc.)
 |---|---|---|
 | 1 | Scaffold, keyless 3D globe, address → incident bootstrap | ✅ |
 | 2 | Site intel (PLUTO, hydrants, firehouses) | ✅ |
-| 3 | TAK spine (CoT in/out through real TAK server) | — |
+| 3 | TAK spine (CoT in/out through real TAK server) | ✅ |
 | 4 | First-alarm simulator + unit roster | — |
 | 5 | ICS perimeter + command post tools | — |
 | 6 | Video: drones + body-cam wall (MediaMTX) | — |

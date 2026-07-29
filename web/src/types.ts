@@ -33,3 +33,37 @@ export interface GeoHit {
   bin?: string
   bbl?: string
 }
+
+// ------------------------------ units (Phase 3+) ----------------------------
+
+export type UnitCategory =
+  | 'engine'
+  | 'ladder'
+  | 'battalion'
+  | 'rescue'
+  | 'ems'
+  | 'nypd'
+  | 'esu'
+  | 'oem'
+  | 'drone'
+  | 'unknown'
+
+export type Agency = 'FDNY' | 'EMS' | 'NYPD' | 'OEM' | 'TAK'
+
+export type UnitStatus = 'Enroute' | 'On Scene' | 'Staged' | 'Operating'
+
+export interface Unit {
+  uid: string
+  callsign: string
+  category: UnitCategory
+  agency: Agency
+  lat: number
+  lon: number
+  hae: number
+  course?: number
+  speed?: number
+  status?: string
+  cotType: string
+  updatedAt: string
+  staleAt: string
+}

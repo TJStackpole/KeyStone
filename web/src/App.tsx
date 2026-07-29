@@ -4,6 +4,7 @@ import { initScene } from './cesium/providers'
 import { registerScene, unregisterScene } from './cesium/scene'
 import { restoreIncident } from './actions'
 import { setAppState, useAppState } from './state/store'
+import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { IncidentCard } from './components/IncidentCard'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
@@ -27,6 +28,7 @@ export default function App() {
         viewer = handle.viewer
         registerScene(handle)
         setAppState({ sceneReady: true, providerMode: handle.mode })
+        connectWs()
         void restoreIncident()
       })
       .catch((err) => {

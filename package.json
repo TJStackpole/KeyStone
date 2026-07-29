@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w server && npm run build -w web",
-    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "publish-test-unit": "tsx scripts/publish-test-unit.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

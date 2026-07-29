@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
-import type { DataLayerId, Incident, LayerStatus, ProviderMode, ToggleLayerId } from '../types'
+import type { DataLayerId, Incident, LayerStatus, ProviderMode, ToggleLayerId, Unit } from '../types'
 
 export interface SiteIntel {
   pluto: PlutoAttributes | null
@@ -15,6 +15,9 @@ export interface AppState {
   layers: Record<DataLayerId, LayerStatus>
   intel: SiteIntel
   layerToggles: Record<ToggleLayerId, boolean>
+  units: Record<string, Unit>
+  /** null until the server reports TAK link state. */
+  takConnected: boolean | null
 }
 
 const initial: AppState = {
@@ -24,6 +27,8 @@ const initial: AppState = {
   layers: { footprints: 'idle', pluto: 'idle', hydrants: 'idle', firehouses: 'idle', persistence: 'idle' },
   intel: { pluto: null, hydrants: [], firehouses: [] },
   layerToggles: { footprints: true, hydrants: true, firehouses: true },
+  units: {},
+  takConnected: null,
 }
 
 let state: AppState = initial

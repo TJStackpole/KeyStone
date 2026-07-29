@@ -69,21 +69,27 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
   // frame has rendered since the last tick, drive a frame manually and pump the
   // request scheduler. When rAF runs normally this no-ops. Matters for wall
   // displays, embedded panes, and backgrounded tabs.
+  // frameState/RequestScheduler.update are runtime APIs missing from the typings.
+  const frameNumber = () =>
+    (viewer.scene as unknown as { frameState: { frameNumber: number } }).frameState.frameNumber
+  const pumpScheduler = () =>
+    (Cesium.RequestScheduler as unknown as { update?: () => void }).update?.()
+
   let lastFrame = -1
   const keepAlive = setInterval(() => {
     if (viewer.isDestroyed()) {
       clearInterval(keepAlive)
       return
     }
-    if (viewer.scene.frameState.frameNumber === lastFrame) {
+    if (frameNumber() === lastFrame) {
       try {
         viewer.render()
-        Cesium.RequestScheduler.update()
+        pumpScheduler()
       } catch (err) {
         console.error('[providers] watchdog render tick failed:', err)
       }
     }
-    lastFrame = viewer.scene.frameState.frameNumber
+    lastFrame = frameNumber()
   }, 400)
 
   if (mode === 'ion') {

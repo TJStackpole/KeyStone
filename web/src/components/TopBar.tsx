@@ -36,7 +36,7 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers } = useAppState()
+  const { providerMode, layers, takConnected } = useAppState()
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
   return (
     <header className="topbar glass">
@@ -51,6 +51,16 @@ export function TopBar() {
             <span className="dot" /> {LAYER_LABEL[k]} UNAVAILABLE
           </span>
         ))}
+        {takConnected === true && (
+          <span className="chip">
+            <span className="dot" /> TAK LINK
+          </span>
+        )}
+        {takConnected === false && (
+          <span className="chip warn">
+            <span className="dot" /> TAK OFFLINE
+          </span>
+        )}
         {providerMode && (
           <span className="chip">
             <span className="dot" /> {MODE_LABEL[providerMode]}
