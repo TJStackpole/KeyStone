@@ -66,8 +66,21 @@ const CYAN = Cesium.Color.fromCssColorString('#22d3ee')
  * Positions are SampledPositionProperties so movement between 2 s CoT updates
  * interpolates smoothly instead of teleporting.
  */
+const TRAIL_COLOR: Record<string, string> = {
+  FDNY: '#ef4444',
+  EMS: '#3b82f6',
+  NYPD: '#2563eb',
+  PAPD: '#16a34a',
+  OEM: '#ea580c',
+  TAK: '#22d3ee',
+}
+const TRAIL_MAX_POINTS = 40
+const VEHICLE_TRAIL_EXEMPT = new Set(['ff', 'officer', 'medic', 'drone'])
+
 export class UnitLayer {
   private source = new Cesium.CustomDataSource('units')
+  /** Recent enroute positions per vehicle — the live response trail. */
+  private trails = new Map<string, [number, number][]>()
   /** Callsign labels are hidden until the operator taps a unit (declutter). */
   private labeledUids = new Set<string>()
 
@@ -158,6 +171,50 @@ export class UnitLayer {
     }
 
     if (unit.category === 'drone') this.updateDroneExtras(unit, show)
+    this.updateTrail(unit, show)
+  }
+
+  /**
+   * Live response tracking: an agency-colored tail behind every vehicle that
+   * is still ENROUTE, so convergence on the scene reads at a glance. Cleared
+   * the moment the unit arrives (or GPS tracking hides it).
+   */
+  private updateTrail(unit: Unit, show: boolean): void {
+    const trailId = `unit:${unit.uid}:trail`
+    const enroute = !unit.status || unit.status === 'Enroute'
+    if (VEHICLE_TRAIL_EXEMPT.has(unit.category) || !enroute) {
+      this.trails.delete(unit.uid)
+      this.source.entities.removeById(trailId)
+      return
+    }
+    let buf = this.trails.get(unit.uid)
+    if (!buf) {
+      buf = []
+      this.trails.set(unit.uid, buf)
+    }
+    const last = buf[buf.length - 1]
+    if (!last || Math.abs(last[0] - unit.lon) > 1e-6 || Math.abs(last[1] - unit.lat) > 1e-6) {
+      buf.push([unit.lon, unit.lat])
+      if (buf.length > TRAIL_MAX_POINTS) buf.shift()
+    }
+    if (buf.length < 2) return
+    const color = Cesium.Color.fromCssColorString(TRAIL_COLOR[unit.agency] ?? '#22d3ee')
+    const positions = Cesium.Cartesian3.fromDegreesArray(buf.flat())
+    let trail = this.source.entities.getById(trailId)
+    if (!trail) {
+      trail = this.source.entities.add({
+        id: trailId,
+        polyline: {
+          positions,
+          width: 3.5,
+          material: new Cesium.PolylineGlowMaterialProperty({ color: color.withAlpha(0.85), glowPower: 0.25 }),
+          clampToGround: true,
+        },
+      })
+    } else if (trail.polyline) {
+      trail.polyline.positions = new Cesium.ConstantProperty(positions)
+    }
+    trail.show = show
   }
 
   /**
@@ -195,6 +252,8 @@ export class UnitLayer {
     this.source.entities.removeById(`unit:${uid}`)
     this.source.entities.removeById(`unit:${uid}:proj`)
     this.source.entities.removeById(`unit:${uid}:cone`)
+    this.source.entities.removeById(`unit:${uid}:trail`)
+    this.trails.delete(uid)
   }
 
   /** Transcript mention: pulse the unit's marker for ~3 s (F6/F7 spec). */
@@ -239,5 +298,6 @@ export class UnitLayer {
 
   clear(): void {
     this.source.entities.removeAll()
+    this.trails.clear()
   }
 }
