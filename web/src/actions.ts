@@ -145,17 +145,94 @@ export function toggleIsolateMode(): void {
   const current = getAppState().incident
   const cacheValid = !!lastFootprints?.targetBin && lastFootprints.incidentId === current?.id
   if (on && !cacheValid) {
-    console.warn('[isolate] no resolved target footprint for this incident yet — cannot isolate')
+    console.warn(
+      `[isolate] refused: footprint cache ${lastFootprints ? `is for ${lastFootprints.incidentId} (current ${current?.id})` : 'is empty'}`,
+    )
     return
   }
   setAppState({ isolateMode: on })
   applyIsolate(on)
+  if (on) frameIsolatedBuilding()
+}
+
+if (import.meta.env.DEV) {
+  // Debug handle: lets DevTools (and our own probes) see the isolate inputs.
+  ;(window as unknown as Record<string, unknown>).__wtIsolate = {
+    cache: () => lastFootprints,
+    toggle: toggleIsolateMode,
+  }
 }
 
 /** How high ISOLATE levitates the building above the flattened city. */
 function isolateLiftM(): number {
   const h = getAppState().targetHeightM ?? 30
   return Math.min(80, Math.max(35, h * 0.5))
+}
+
+/**
+ * Visual settings ISOLATE overrides for a size-up-quality facade: with one
+ * building on screen we can afford ultra tile refinement and native-resolution
+ * rendering that would be too heavy for the whole city. The OFF path restores
+ * to KNOWN defaults (not a saved snapshot — module state dies on dev reloads).
+ */
+function boostIsolateVisuals(on: boolean): void {
+  const scene = getScene()
+  if (!scene) return
+  const viewer = scene.viewer
+  const tileset = scene.buildingTileset
+  if (on) {
+    if (tileset) {
+      tileset.maximumScreenSpaceError = 2 // ultra refinement — one building only
+      tileset.dynamicScreenSpaceError = false // no distance falloff for a lone target
+      tileset.foveatedScreenSpaceError = false // sharpen screen edges too
+      tileset.cacheBytes = 1024 * 1024 * 1024
+    }
+    // Render at native device pixels (Cesium defaults to CSS pixels — soft on
+    // retina displays). Fine here: the clipped scene is one building.
+    viewer.useBrowserRecommendedResolution = false
+  } else {
+    if (tileset) {
+      tileset.foveatedScreenSpaceError = true // Cesium default
+      tileset.cacheBytes = 512 * 1024 * 1024 // Cesium default
+    }
+    viewer.useBrowserRecommendedResolution = true
+    // FocusLayer owns SSE outside isolate — reassert its current policy.
+    const s = getAppState()
+    getFocusLayer()?.apply(s.incident, s.activeIncidentMode)
+  }
+}
+
+/** Frame the isolated building at size-up distance, facade filling the view. */
+function frameIsolatedBuilding(): void {
+  const scene = getScene()
+  const inc = getAppState().incident
+  if (!scene || !inc) return
+  const h = getAppState().targetHeightM ?? 30
+  const lift = isolateLiftM()
+  const target = lastFootprints?.feats.find((f) => f.bin === lastFootprints?.targetBin)
+  // Horizontal extent from the footprint bbox (fallback: assume a rowhouse).
+  let extentM = 30
+  const outer = target?.polygons[0]?.[0]
+  if (outer?.length) {
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
+    for (const [lon, lat] of outer) {
+      minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon)
+      minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat)
+    }
+    extentM = Math.max(
+      (maxLat - minLat) * 111_320,
+      (maxLon - minLon) * 111_320 * Math.cos((inc.lat * Math.PI) / 180),
+      15,
+    )
+  }
+  const groundHae = scene.viewer.scene.sampleHeight?.(Cesium.Cartographic.fromDegrees(inc.lon, inc.lat))
+  const base = Number.isFinite(groundHae) ? (groundHae as number) : -30
+  const center = Cesium.Cartesian3.fromDegrees(inc.lon, inc.lat, base + lift + h / 2)
+  const radius = Math.max(extentM / 2, h / 2) + 12
+  scene.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, radius), {
+    offset: new Cesium.HeadingPitchRange(scene.viewer.camera.heading, Cesium.Math.toRadians(-18), radius * 3.4),
+    duration: 1.4,
+  })
 }
 
 function applyIsolate(on: boolean): void {
@@ -191,6 +268,9 @@ function applyIsolate(on: boolean): void {
       tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
     }
   }
+  // Size-up-quality imagery while isolated; restores itself (and the focus
+  // layer's SSE policy) on the way out.
+  boostIsolateVisuals(on)
   // Keyless: the neighbors are our own extrusions — just stop drawing them.
   if (lastFootprints && scene.extrudeFootprints) {
     void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, !on)

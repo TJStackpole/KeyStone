@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium'
 import type { Firehouse, Hydrant } from '../api/nyc'
+import { crispTextImage } from './streets'
 
 // Firehouse glyph: minimal house silhouette, FDNY red, thin light stroke.
 const FIREHOUSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
@@ -12,8 +13,6 @@ const FIREHOUSE_ICON = `data:image/svg+xml;base64,${btoa(FIREHOUSE_SVG)}`
 
 const HYDRANT_COLOR = Cesium.Color.fromCssColorString('#22d3ee')
 const HYDRANT_OUTLINE = Cesium.Color.fromCssColorString('#0a0e14')
-const LABEL_FILL = Cesium.Color.fromCssColorString('#dbe4f0')
-const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.72)
 
 /**
  * Site-intel globe markers: hydrants (cyan points) and firehouses (red house
@@ -60,17 +59,19 @@ export class IntelMarkerLayer {
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: {
-          text: f.name,
-          font: `600 11px 'JetBrains Mono', monospace`,
-          fillColor: LABEL_FILL,
-          showBackground: true,
-          backgroundColor: LABEL_BG,
-          backgroundPadding: new Cesium.Cartesian2(6, 3),
-          pixelOffset: new Cesium.Cartesian2(0, -30),
+      })
+      // Crisp 2x canvas text — Cesium's glyph labels blur on retina displays.
+      this.firehouseSource.entities.add({
+        id: `firehouse:${f.name}:label`,
+        position: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, 0),
+        billboard: {
+          image: crispTextImage(f.name, '#eef4fb', 24),
+          scale: 0.5,
+          pixelOffset: new Cesium.Cartesian2(0, -34),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(600, 1, 6000, 0.6),
         },
       })
     }

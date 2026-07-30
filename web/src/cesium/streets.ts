@@ -14,27 +14,35 @@ const TEXT_HALO = 'rgba(6, 10, 16, 0.92)'
 
 const imageCache = new Map<string, HTMLCanvasElement>()
 
-function textImage(text: string): HTMLCanvasElement {
-  const cached = imageCache.get(text)
+/**
+ * Crisp text-as-image for billboards: drawn at 2x and rendered at scale 0.5,
+ * so it stays sharp on retina displays where Cesium's glyph labels go soft.
+ * Shared by street captions and firehouse/marker labels.
+ */
+export function crispTextImage(text: string, fill = TEXT_FILL, sizePx = 22): HTMLCanvasElement {
+  const key = `${fill}|${sizePx}|${text}`
+  const cached = imageCache.get(key)
   if (cached) return cached
-  const font = `600 22px 'JetBrains Mono', monospace` // 2x, downscaled for crispness
+  const font = `600 ${sizePx}px 'JetBrains Mono', monospace` // 2x, downscaled for crispness
   const canvas = document.createElement('canvas')
   const measure = canvas.getContext('2d')!
   measure.font = font
   canvas.width = Math.ceil(measure.measureText(text).width) + 18
-  canvas.height = 32
+  canvas.height = Math.ceil(sizePx * 1.5)
   const ctx = canvas.getContext('2d')!
   ctx.font = font
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
   ctx.lineWidth = 6
   ctx.strokeStyle = TEXT_HALO
-  ctx.strokeText(text, 9, 17)
-  ctx.fillStyle = TEXT_FILL
-  ctx.fillText(text, 9, 17)
-  imageCache.set(text, canvas)
+  ctx.strokeText(text, 9, canvas.height / 2 + 1)
+  ctx.fillStyle = fill
+  ctx.fillText(text, 9, canvas.height / 2 + 1)
+  imageCache.set(key, canvas)
   return canvas
 }
+
+const textImage = (text: string) => crispTextImage(text)
 
 /** Billboard rotation (CCW from screen-east with map-north up) for a street bearing. */
 function rotationFor(bearingDeg: number): number {
