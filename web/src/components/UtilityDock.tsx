@@ -16,6 +16,7 @@ const TABS = [
   { id: 'sitrep', label: 'SITREP' },
   { id: 'video', label: 'VIDEO' },
   { id: 'bio', label: 'BIO' },
+  { id: 'floors', label: 'FLOORS' },
 ] as const
 
 export function UtilityDock() {
@@ -43,7 +44,101 @@ export function UtilityDock() {
       {utilityTab === 'sitrep' && <SitrepContent />}
       {utilityTab === 'video' && <VideoContent />}
       {utilityTab === 'bio' && <BioContent />}
+      {utilityTab === 'floors' && <FloorsContent />}
     </aside>
+  )
+}
+
+// ------------------------------- FLOORS tab ---------------------------------
+// Fireground accountability: exactly which members are on which floor of the
+// incident building, top floor down, fire floor flagged.
+
+function FloorsContent() {
+  const { units, timeline } = useAppState()
+
+  const { fireFloor, buildingFloors } = useMemo(() => {
+    for (let i = timeline.length - 1; i >= 0; i--) {
+      const ev = timeline[i]
+      if (ev.kind === 'sim.dispatched') {
+        const p = (ev.payload ?? {}) as { fireFloor?: number; floors?: number }
+        return { fireFloor: p.fireFloor ?? null, buildingFloors: p.floors ?? null }
+      }
+    }
+    return { fireFloor: null, buildingFloors: null }
+  }, [timeline])
+
+  const members = useMemo(
+    () => Object.values(units).filter((u) => u.category === 'ff' || u.category === 'officer' || u.category === 'medic'),
+    [units],
+  )
+  const interior = members.filter((m) => (m.floor ?? 0) > 0)
+  const exterior = members.filter((m) => !m.floor || m.floor === 0)
+
+  const byFloor = useMemo(() => {
+    const map = new Map<number, Unit[]>()
+    for (const m of interior) {
+      const f = m.floor ?? 0
+      if (!map.has(f)) map.set(f, [])
+      map.get(f)!.push(m)
+    }
+    return [...map.entries()].sort((a, b) => b[0] - a[0])
+  }, [interior])
+
+  const bioTone = (m: Unit) =>
+    m.status === 'Rehab' ? 'staged' : m.bio ? { ok: 'onscene', caution: 'enroute', rotate: 'operating' }[bioStatusOf(m.bio)] : 'unknown'
+
+  return (
+    <div className="dock-scroll">
+      <div className="floors-summary">
+        <span className="count-chip">
+          INTERIOR <b>{interior.length}</b>
+        </span>
+        <span className="count-chip">
+          EXTERIOR <b>{exterior.length}</b>
+        </span>
+        {buildingFloors && (
+          <span className="count-chip">
+            BUILDING <b>{buildingFloors}</b> FL
+          </span>
+        )}
+        {fireFloor && <span className="count-chip fire">FIRE FL {fireFloor}</span>}
+      </div>
+      {interior.length === 0 && (
+        <div className="roster-empty">NO MEMBERS INTERIOR — CREWS ENTER AFTER APPARATUS ARRIVE</div>
+      )}
+      {byFloor.map(([floor, list]) => (
+        <div key={floor} className={`floor-row${floor === fireFloor ? ' fire' : ''}`}>
+          <span className="floor-label">
+            FL {floor}
+            {floor === fireFloor && <i>FIRE</i>}
+          </span>
+          <span className="floor-members">
+            {list.map((m) => (
+              <button key={m.uid} className={`member-chip ${bioTone(m)}`} onClick={() => flyToUnit(m.uid)} title="Fly to member">
+                {m.callsign}
+              </button>
+            ))}
+          </span>
+          <span className="floor-count">{list.length}</span>
+        </div>
+      ))}
+      {exterior.length > 0 && (
+        <div className="floor-row exterior">
+          <span className="floor-label">EXT</span>
+          <span className="floor-members">
+            {exterior.map((m) => (
+              <button key={m.uid} className={`member-chip ${bioTone(m)}`} onClick={() => flyToUnit(m.uid)} title="Fly to member">
+                {m.callsign}
+              </button>
+            ))}
+          </span>
+          <span className="floor-count">{exterior.length}</span>
+        </div>
+      )}
+      <div className="bio-footnote">
+        SIMULATED FLOOR TELEMETRY — production source: barometric/beacon fireground accountability
+      </div>
+    </div>
   )
 }
 

@@ -951,6 +951,63 @@ html, body {
 .bio-bar.rotate i { background: #f87171; }
 .bio-row .status-chip { margin-left: auto; }
 .bio-footnote { font-family: var(--mono); font-size: 8px; letter-spacing: 0.08em; color: var(--text-faint); padding: 8px 0 2px; }
+
+/* ---------- floor accountability (FLOORS tab) ---------- */
+.floors-summary { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 0 10px; }
+.count-chip.fire { border-color: rgba(248, 113, 113, 0.65); color: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.2); }
+.floor-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 8px;
+  margin: 3px 0;
+  border: 1px solid rgba(91, 107, 128, 0.25);
+  border-radius: 3px;
+  background: rgba(7, 12, 20, 0.45);
+}
+.floor-row.fire { border-color: rgba(248, 113, 113, 0.55); background: rgba(248, 113, 113, 0.07); }
+.floor-row.exterior { opacity: 0.85; }
+.floor-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  width: 64px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+.floor-row.fire .floor-label { color: #f87171; }
+.floor-label i {
+  font-style: normal;
+  font-size: 7.5px;
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  color: #f87171;
+  padding: 1px 4px;
+  border-radius: 2px;
+  animation: pulse 1.6s infinite;
+}
+.floor-members { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+.member-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid;
+  background: rgba(10, 14, 20, 0.6);
+  color: var(--text);
+  cursor: pointer;
+}
+.member-chip.onscene { border-color: rgba(74, 222, 128, 0.5); }
+.member-chip.enroute { border-color: rgba(245, 158, 11, 0.55); color: var(--amber-bright); }
+.member-chip.operating { border-color: rgba(248, 113, 113, 0.6); color: #f87171; }
+.member-chip.staged { border-color: rgba(34, 211, 238, 0.5); color: var(--cyan); }
+.member-chip.unknown { border-color: rgba(91, 107, 128, 0.4); color: var(--text-dim); }
+.floor-count { font-family: var(--mono); font-size: 11px; color: var(--text-faint); flex: none; padding-top: 2px; }
 .sitrep-lead { font-size: 12.5px; line-height: 1.5; margin: 4px 0 10px; color: var(--text); }
 .sitrep-lead b { color: var(--amber-bright); }
 .sitrep-section {

@@ -337,7 +337,13 @@ export async function runDemoScenario(): Promise<void> {
 export async function dispatchAssignment(): Promise<void> {
   setAppState({ dispatching: true })
   try {
-    const res = await fetch('/api/dispatch', { method: 'POST' })
+    // Give the simulator the building profile so interior crews work real floors.
+    const floors = getAppState().intel.pluto?.numFloors
+    const res = await fetch('/api/dispatch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ floors }),
+    })
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null
       throw new Error(body?.error ?? `dispatch ${res.status}`)

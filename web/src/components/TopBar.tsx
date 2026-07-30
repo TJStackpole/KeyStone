@@ -39,7 +39,7 @@ const LAYER_LABEL: Record<string, string> = {
 
 export function TopBar() {
   const { providerMode, layers, takConnected, utilityTab } = useAppState()
-  const toggleTab = (tab: 'sitrep' | 'video' | 'bio') =>
+  const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
   return (
@@ -88,6 +88,13 @@ export function TopBar() {
           title="Member biometrics + rotation advisories"
         >
           <span className="dot" /> BIO
+        </button>
+        <button
+          className={`chip chip-btn${utilityTab === 'floors' ? ' active' : ''}`}
+          onClick={() => toggleTab('floors')}
+          title="Floor-by-floor member accountability"
+        >
+          <span className="dot" /> FLOORS
         </button>
         {providerMode && (
           <span className="chip">

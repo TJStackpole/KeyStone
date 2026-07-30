@@ -19,6 +19,8 @@ export interface Unit {
   course?: number
   speed?: number
   status?: string
+  /** Building floor (1-based; 0/undefined = exterior). */
+  floor?: number
   bio?: BioTelemetry
   cotType: string
   updatedAt: string
@@ -66,6 +68,7 @@ export class UnitRegistry extends EventEmitter {
       course: ev.course ?? existing?.course,
       speed: ev.speed ?? existing?.speed,
       status: ev.status ?? existing?.status,
+      floor: ev.floor ?? existing?.floor,
       bio: ev.bio ?? existing?.bio,
       cotType: ev.type,
       updatedAt: new Date().toISOString(),

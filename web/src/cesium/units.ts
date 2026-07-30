@@ -114,7 +114,7 @@ export class UnitLayer {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: unit.callsign,
+          text: unit.floor && unit.floor > 0 ? `${unit.callsign} · FL ${unit.floor}` : unit.callsign,
           font: `600 11px 'JetBrains Mono', monospace`,
           fillColor: LABEL_FILL,
           showBackground: true,
@@ -128,8 +128,10 @@ export class UnitLayer {
       entity.show = show
     } else {
       ;(entity.position as Cesium.SampledPositionProperty).addSample(now, position)
-      if (entity.label && entity.label.text?.getValue(now) !== unit.callsign) {
-        entity.label.text = new Cesium.ConstantProperty(unit.callsign)
+      // Interior members carry their floor in the label ("E-6/1 · FL 4").
+      const labelText = unit.floor && unit.floor > 0 ? `${unit.callsign} · FL ${unit.floor}` : unit.callsign
+      if (entity.label && entity.label.text?.getValue(now) !== labelText) {
+        entity.label.text = new Cesium.ConstantProperty(labelText)
       }
       if (entity.billboard) {
         entity.billboard.image = new Cesium.ConstantProperty(ICONS[unit.category] ?? ICONS.unknown)

@@ -107,6 +107,7 @@ registry.on('unit', (unit) => {
       lat: unit.lat,
       lon: unit.lon,
       hae: unit.hae,
+      floor: unit.floor,
       status: unit.status,
     })
   }
@@ -132,12 +133,15 @@ const simulator = new FirstAlarmSimulator(
   },
 )
 
-app.post('/api/dispatch', async (_req, res) => {
+app.post('/api/dispatch', async (req, res) => {
   const state = getState()
   if (!state.incident) return res.status(400).json({ error: 'no active incident to dispatch to' })
   if (!tak.connected) return res.status(503).json({ error: 'TAK link down — cannot publish CoT' })
   try {
-    const result = await simulator.dispatch(state.incident.lat, state.incident.lon)
+    const body = (req.body ?? {}) as { floors?: number }
+    const result = await simulator.dispatch(state.incident.lat, state.incident.lon, {
+      floors: typeof body.floors === 'number' ? body.floors : undefined,
+    })
     res.status(201).json(result)
   } catch (err) {
     console.error('[sim] dispatch failed:', err)

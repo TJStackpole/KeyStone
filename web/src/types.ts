@@ -144,6 +144,8 @@ export interface Unit {
   course?: number
   speed?: number
   status?: string
+  /** Building floor for interior members (1-based; 0/undefined = exterior). */
+  floor?: number
   bio?: BioTelemetry
   cotType: string
   updatedAt: string

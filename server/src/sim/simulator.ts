@@ -29,7 +29,18 @@ interface SimPerson {
   bio: BioTelemetry
   /** Members flagged ROTATE walk back to their rig and go Rehab. */
   rotating: boolean
+  /** Interior members operate on building floors (floor 0 = exterior). */
+  interior: boolean
+  floor: number
+  targetFloor: number
+  /** Ticks remaining on the current stairwell climb/descent leg. */
+  climbTicks: number
 }
+
+/** Storey height used to convert floors to rendered altitude. */
+const FLOOR_M = 3.2
+/** Ticks to climb one storey in gear (~24-36 s per floor). */
+const CLIMB_TICKS_PER_FLOOR = 12
 
 const CREW_SIZE: Partial<Record<string, number>> = {
   engine: 2,
@@ -90,6 +101,8 @@ export class FirstAlarmSimulator {
   private personnel: SimPerson[] = []
   private timer: ReturnType<typeof setInterval> | null = null
   private incident: { lat: number; lon: number } | null = null
+  /** Incident building profile (from PLUTO/footprints via dispatch). */
+  private building: { floors: number; fireFloor: number } = { floors: 6, fireFloor: 3 }
 
   constructor(
     private readonly publish: (xml: string) => boolean,
@@ -104,9 +117,19 @@ export class FirstAlarmSimulator {
     return this.units.length
   }
 
-  async dispatch(lat: number, lon: number): Promise<{ callsigns: string[] }> {
+  async dispatch(
+    lat: number,
+    lon: number,
+    building?: { floors?: number },
+  ): Promise<{ callsigns: string[] }> {
     this.stop()
     this.incident = { lat, lon }
+    const floors = Math.max(1, Math.min(120, Math.round(building?.floors ?? 6)))
+    // Scenario fire floor ~40% of building height (10-story 100 Gold -> floor 4,
+    // matching the bundled dispatch audio).
+    const fireFloor = Math.max(1, Math.min(floors, Math.ceil(floors * 0.4)))
+    this.building = { floors, fireFloor }
+
     const specs = await buildFirstAlarm(lat, lon)
     this.units = await Promise.all(specs.map((spec) => this.buildSimUnit(spec, lat, lon)))
 
@@ -114,8 +137,8 @@ export class FirstAlarmSimulator {
     this.tick() // first positions immediately
 
     const callsigns = this.units.map((u) => u.spec.callsign)
-    console.log(`[sim] dispatched first alarm: ${callsigns.join(', ')}`)
-    this.onEvent?.('sim.dispatched', { callsigns })
+    console.log(`[sim] dispatched first alarm: ${callsigns.join(', ')} (bldg ${floors} fl, fire fl ${fireFloor})`)
+    this.onEvent?.('sim.dispatched', { callsigns, floors, fireFloor })
     return { callsigns }
   }
 
@@ -201,27 +224,53 @@ export class FirstAlarmSimulator {
             ? u.holdPoint
             : destination(u.holdPoint.lat, u.holdPoint.lon, Math.random() * 360, 15)
       const start = { lat: u.holdPoint.lat, lon: u.holdPoint.lon }
+      // Engine/ladder/rescue members go interior to the fire area; the BC's
+      // aide runs the command post; officers/medics stay exterior.
+      const interior = role === 'ff' && u.spec.category !== 'battalion'
+      const targetFloor = interior
+        ? Math.min(this.building.floors, this.building.fireFloor + Math.floor(Math.random() * 2))
+        : 0
       this.personnel.push({
         uid: `WT-SIM-${u.spec.callsign}-M${i + 1}`,
         callsign: `${u.spec.callsign}/${i + 1}`,
         role,
         parentCallsign: u.spec.callsign,
-        anchor,
+        anchor: interior ? { lat: this.incident.lat, lon: this.incident.lon } : anchor,
         pos: start,
-        target: anchor,
+        target: interior ? { lat: this.incident.lat, lon: this.incident.lon } : anchor,
         walkSpeed: 1.1 + Math.random() * 0.5,
         pauseTicks: 0,
         startedAt: Date.now(),
         bio: freshBio(role),
         rotating: false,
+        interior,
+        floor: 0,
+        targetFloor,
+        climbTicks: 0,
       })
     }
   }
 
-  /** Walk personnel between wander waypoints and evolve their vitals. */
+  /** Walk personnel between wander waypoints, work floors, evolve vitals. */
   private tickPersonnel(): void {
     for (const p of this.personnel) {
-      // movement: walk toward target, pause, pick a new waypoint near anchor
+      // --- vertical movement (interior members on the stairs) ---------------
+      if (p.interior && p.floor !== p.targetFloor) {
+        if (p.climbTicks > 0) {
+          p.climbTicks--
+        } else {
+          p.floor += p.floor < p.targetFloor ? 1 : -1
+          p.climbTicks = CLIMB_TICKS_PER_FLOOR
+          if (p.floor === p.targetFloor) p.climbTicks = 0
+        }
+      } else if (p.interior && !p.rotating && p.pauseTicks === 0 && Math.random() < 0.04) {
+        // occasionally re-task one floor up/down within the fire area
+        const lo = Math.max(1, this.building.fireFloor - 1)
+        const hi = Math.min(this.building.floors, this.building.fireFloor + 2)
+        p.targetFloor = Math.max(lo, Math.min(hi, p.floor + (Math.random() < 0.5 ? -1 : 1)))
+      }
+
+      // --- horizontal movement ----------------------------------------------
       const stepM = p.walkSpeed * (TICK_MS / 1000)
       const distToTarget = Math.hypot(
         (p.target.lat - p.pos.lat) * 111_320,
@@ -229,7 +278,10 @@ export class FirstAlarmSimulator {
       )
       let speed = 0
       let course = 0
-      if (p.pauseTicks > 0) {
+      const climbing = p.interior && p.floor !== p.targetFloor
+      if (climbing) {
+        // in the stairwell — hold plan position while ascending/descending
+      } else if (p.pauseTicks > 0) {
         p.pauseTicks--
       } else if (distToTarget > stepM) {
         course = bearingDeg(p.pos.lat, p.pos.lon, p.target.lat, p.target.lon)
@@ -243,7 +295,9 @@ export class FirstAlarmSimulator {
           p.bio.tempC = Math.max(37.0, p.bio.tempC - 0.05)
         } else {
           p.pauseTicks = 2 + Math.floor(Math.random() * 5)
-          p.target = destination(p.anchor.lat, p.anchor.lon, Math.random() * 360, 4 + Math.random() * 28)
+          // interior: tight search pattern on the floor; exterior: wander anchor
+          const radius = p.interior ? 4 + Math.random() * 14 : 4 + Math.random() * 28
+          p.target = destination(p.anchor.lat, p.anchor.lon, Math.random() * 360, radius)
         }
       }
 
@@ -256,6 +310,8 @@ export class FirstAlarmSimulator {
         if (p.bio.airPsi >= 0) p.bio.airPsi = Math.max(180, p.bio.airPsi - (26 + Math.random() * 22))
         if (bioStatus(p.bio) === 'rotate') {
           p.rotating = true
+          // interior members make their way down the stairs first, then exit
+          p.targetFloor = 0
           const rig = this.units.find((u) => u.spec.callsign === p.parentCallsign)
           p.target = rig ? { ...rig.holdPoint } : { ...p.anchor }
           this.onEvent?.('sim.rotation', { callsign: p.callsign, reason: rotationReason(p.bio) })
@@ -271,11 +327,13 @@ export class FirstAlarmSimulator {
           type: CATEGORY_COT_TYPE[p.role],
           lat: p.pos.lat,
           lon: p.pos.lon,
-          hae: 0,
+          // Interior members render at true storey height on the 3D building.
+          hae: p.floor > 0 ? (p.floor - 1) * FLOOR_M + 1.7 : 0,
           course,
           speed,
           status,
           role: p.role,
+          floor: p.interior || p.floor > 0 ? p.floor : 0,
           bio: p.bio,
           staleSeconds: 120,
         }),

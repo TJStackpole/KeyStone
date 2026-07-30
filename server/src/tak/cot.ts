@@ -40,6 +40,8 @@ export interface CotEvent {
   status?: string
   /** WATCHTOWER extension: personnel role (ff | officer | medic). */
   role?: string
+  /** WATCHTOWER extension: building floor (1-based; 0/absent = exterior). */
+  floor?: number
   /** WATCHTOWER extension: personnel biometrics. */
   bio?: BioTelemetry
   /** Original XML as received (proof-of-protocol logging, replay). */
@@ -161,6 +163,7 @@ export interface BuildCotOptions {
   speed?: number
   status?: string
   role?: string
+  floor?: number
   bio?: BioTelemetry
   group?: string
   staleSeconds?: number
@@ -184,6 +187,7 @@ export function buildCotXml(o: BuildCotOptions): string {
     let ext = '<watchtower'
     if (o.status) ext += ` status="${esc(o.status)}"`
     if (o.role) ext += ` role="${esc(o.role)}"`
+    if (o.floor !== undefined) ext += ` floor="${Math.round(o.floor)}"`
     if (o.bio) {
       ext += ` hr="${Math.round(o.bio.hr)}" air="${Math.round(o.bio.airPsi)}"`
       ext += ` temp="${o.bio.tempC.toFixed(1)}" toa="${o.bio.toaMin.toFixed(1)}"`
@@ -277,6 +281,7 @@ export function parseCotXml(xml: string): CotEvent | null {
     speed: Number.isFinite(speed) ? speed : undefined,
     status: watchtower ? attr(watchtower, 'status') : undefined,
     role: watchtower ? attr(watchtower, 'role') : undefined,
+    floor: watchtower && attr(watchtower, 'floor') !== undefined ? Number(attr(watchtower, 'floor')) : undefined,
     bio,
     raw: xml,
   }

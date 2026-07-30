@@ -38,8 +38,8 @@ export interface AppState {
   shapes: Record<string, IcsShape>
   drawTool: DrawTool
   selectedShapeId: string | null
-  /** Right utility dock: one panel, three tabs, no overlaps. */
-  utilityTab: 'sitrep' | 'video' | 'bio' | null
+  /** Right utility dock: one panel, tabbed, no overlaps. */
+  utilityTab: 'sitrep' | 'video' | 'bio' | 'floors' | null
   /** Video wall <-> globe highlight sync. */
   selectedUnitUid: string | null
   commsOpen: boolean
