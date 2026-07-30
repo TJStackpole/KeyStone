@@ -164,7 +164,11 @@ function handle(msg: ServerMsg): void {
         for (const kw of msg.line.keywords) {
           if (kw.kind !== 'unit' || !kw.callsign) continue
           const unit = units.find((u) => u.callsign.toUpperCase() === kw.callsign)
-          if (unit) getUnitLayer()?.flash(unit.uid)
+          if (unit) {
+            // reveal the label so the flash is identifiable, then pulse it
+            getUnitLayer()?.showLabel(unit.uid)
+            getUnitLayer()?.flash(unit.uid)
+          }
         }
       }
       break

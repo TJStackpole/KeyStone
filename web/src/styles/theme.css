@@ -852,6 +852,18 @@ html, body {
 .strip-btn:hover { border-color: var(--border-strong); }
 .strip-btn.exit { color: var(--amber-bright); border-color: rgba(245, 158, 11, 0.5); }
 .command-strip.replaying { border-color: rgba(245, 158, 11, 0.45); box-shadow: var(--glow-amber); }
+.command-strip.collapsed { cursor: pointer; gap: 8px; padding: 0 12px; }
+.strip-collapse {
+  width: 18px;
+  height: 18px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+.strip-collapse:hover { color: var(--cyan); }
 .replay-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber-bright); }
 .replay-scrub { width: 260px; accent-color: #f59e0b; }
 

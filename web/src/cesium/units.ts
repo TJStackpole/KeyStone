@@ -29,8 +29,8 @@ const ICONS: Record<UnitCategory, string> = {
     `<rect x="4" y="4" width="18" height="18" rx="2" fill="#1d4ed8" ${STROKE}/>` +
       `<path d="M11 7 h4 v4 h4 v4 h-4 v4 h-4 v-4 h-4 v-4 h4 Z" fill="#ffffff"/>`,
   ),
-  nypd: svgIcon(`<circle cx="13" cy="13" r="10" fill="#1e3a8a" ${STROKE}/>`),
-  esu: svgIcon(`<path d="M13 2 L24 13 L13 24 L2 13 Z" fill="#1e3a8a" ${STROKE}/>`),
+  nypd: svgIcon(`<circle cx="13" cy="13" r="10" fill="#2563eb" ${STROKE}/>`),
+  esu: svgIcon(`<path d="M13 2 L24 13 L13 24 L2 13 Z" fill="#2563eb" ${STROKE}/>`),
   oem: svgIcon(`<path d="M13 2.5 L23.5 10.2 L19.5 22.5 L6.5 22.5 L2.5 10.2 Z" fill="#ea580c" ${STROKE}/>`),
   drone: svgIcon(
     `<circle cx="7" cy="7" r="4.4" fill="none" stroke="#22d3ee" stroke-width="1.6"/>` +
@@ -39,9 +39,9 @@ const ICONS: Record<UnitCategory, string> = {
       `<circle cx="19" cy="19" r="4.4" fill="none" stroke="#22d3ee" stroke-width="1.6"/>` +
       `<rect x="10.5" y="10.5" width="5" height="5" rx="1" fill="#22d3ee"/>`,
   ),
-  ff: personIcon('#dc2626'),
-  officer: personIcon('#1e3a8a'),
-  medic: personIcon('#1d4ed8'),
+  ff: personIcon('#ef4444'),
+  officer: personIcon('#3b82f6'),
+  medic: personIcon('#60a5fa'),
   unknown: svgIcon(`<circle cx="13" cy="13" r="9" fill="#475569" ${STROKE}/><circle cx="13" cy="13" r="3" fill="#e2e8f0"/>`),
 }
 
@@ -84,9 +84,28 @@ function quaternionAlong(dir: Cesium.Cartesian3): Cesium.Quaternion {
  */
 export class UnitLayer {
   private source = new Cesium.CustomDataSource('units')
+  /** Callsign labels are hidden until the operator taps a unit (declutter). */
+  private labeledUids = new Set<string>()
 
   constructor(viewer: Cesium.Viewer) {
     void viewer.dataSources.add(this.source)
+  }
+
+  /** Tap-to-toggle a unit's callsign label. Returns the new visibility. */
+  toggleLabel(uid: string): boolean {
+    const next = !this.labeledUids.has(uid)
+    if (next) this.labeledUids.add(uid)
+    else this.labeledUids.delete(uid)
+    const entity = this.source.entities.getById(`unit:${uid}`)
+    if (entity?.label) entity.label.show = new Cesium.ConstantProperty(next)
+    return next
+  }
+
+  /** Reveal a unit's label (roster click-to-fly, transcript flash, etc.). */
+  showLabel(uid: string): void {
+    this.labeledUids.add(uid)
+    const entity = this.source.entities.getById(`unit:${uid}`)
+    if (entity?.label) entity.label.show = new Cesium.ConstantProperty(true)
   }
 
   upsert(unit: Unit, show = true): void {
@@ -115,6 +134,7 @@ export class UnitLayer {
         },
         label: {
           text: unit.floor && unit.floor > 0 ? `${unit.callsign} · FL ${unit.floor}` : unit.callsign,
+          show: this.labeledUids.has(unit.uid), // hidden until tapped
           font: `600 11px 'JetBrains Mono', monospace`,
           fillColor: LABEL_FILL,
           showBackground: true,

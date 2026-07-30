@@ -117,16 +117,17 @@ export class DrawController {
     if (typeof entityId === 'string' && entityId.startsWith('unit:')) {
       const uid = entityId.replace(/^unit:/, '').replace(/:(proj|cone)$/, '')
       const unit = getAppState().units[uid]
-      if (unit?.category === 'drone') {
-        setAppState({ utilityTab: 'video' })
-        return
-      }
-      if (unit && unit.agency === 'FDNY' && getAppState().utilityTab === 'video') {
-        setAppState({ selectedUnitUid: uid })
-        // dynamic import: scene.ts owns this controller, so a static import would cycle
-        void import('../cesium/scene').then((m) => m.getUnitLayer()?.setSelected(uid))
-        return
-      }
+      // Tap a unit to toggle its callsign label (labels are hidden by default).
+      // dynamic import: scene.ts owns this controller, so a static import would cycle
+      void import('../cesium/scene').then((m) => {
+        m.getUnitLayer()?.toggleLabel(uid)
+        if (unit && unit.agency === 'FDNY' && getAppState().utilityTab === 'video') {
+          setAppState({ selectedUnitUid: uid })
+          m.getUnitLayer()?.setSelected(uid)
+        }
+      })
+      if (unit?.category === 'drone') setAppState({ utilityTab: 'video' })
+      return
     }
     if (typeof entityId !== 'string' || !entityId.startsWith('handle:')) {
       setAppState({ selectedShapeId: null })

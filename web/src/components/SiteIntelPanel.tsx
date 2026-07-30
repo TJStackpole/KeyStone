@@ -143,8 +143,8 @@ export function SiteIntelPanel() {
           </div>
 
           <div className="intel-section">
-            <div className="intel-section-title">Hydrants · nearest 3 (≤300 m)</div>
-            <StatusNote status={layers.hydrants} empty={hydrants.length ? undefined : 'NONE WITHIN 300 M'} />
+            <div className="intel-section-title">Hydrants · nearest 3 (≤2 blocks)</div>
+            <StatusNote status={layers.hydrants} empty={hydrants.length ? undefined : 'NONE WITHIN 2 BLOCKS'} />
             {hydrants.map((h) => (
               <button key={h.id} className="intel-row" onClick={() => flyToFeature(h.lat, h.lon)}>
                 <span className="marker hydrant" />

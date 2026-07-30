@@ -163,7 +163,8 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
 
   void (async () => {
     try {
-      const hydrants = await fetchHydrants(incident.lat, incident.lon, 300)
+      // Hydrant picture stays tight to the fire — a couple of Manhattan blocks.
+      const hydrants = await fetchHydrants(incident.lat, incident.lon, 180)
       setAppState((s) => ({ intel: { ...s.intel, hydrants } }))
       intel?.setHydrants(hydrants)
       setLayerStatus('hydrants', 'ok')
@@ -226,10 +227,12 @@ export function flyToFeature(lat: number, lon: number): void {
 // Units (Phase 4): dispatch, roster interactions
 // ---------------------------------------------------------------------------
 
-/** Roster row click: chase the unit's live position. */
+/** Roster row click: chase the unit's live position (and reveal its label). */
 export function flyToUnit(uid: string): void {
   const unit = getAppState().units[uid]
-  if (unit) flyToFeature(unit.lat, unit.lon)
+  if (!unit) return
+  getUnitLayer()?.showLabel(uid)
+  flyToFeature(unit.lat, unit.lon)
 }
 
 /** Per-category visibility toggle (roster group headers). */

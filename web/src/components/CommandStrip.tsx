@@ -37,6 +37,7 @@ async function setAlarm(level: AlarmLevel): Promise<void> {
 /** Phase 8 command header: elapsed clock, on-scene counts, alarm level, replay. */
 export function CommandStrip() {
   const { incident, units, replay } = useAppState()
+  const [collapsed, setCollapsed] = useState(false)
   const [, forceTick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => forceTick((n) => n + 1), 1000)
@@ -88,8 +89,20 @@ export function CommandStrip() {
     )
   }
 
+  if (collapsed) {
+    return (
+      <button className="command-strip glass collapsed" onClick={() => setCollapsed(false)} title="Expand command strip">
+        <span className="strip-mono elapsed">T+{fmtElapsed(elapsed)}</span>
+        <span className="chev closed">▾</span>
+      </button>
+    )
+  }
+
   return (
     <div className="command-strip glass">
+      <button className="strip-collapse" onClick={() => setCollapsed(true)} title="Minimize command strip">
+        ▴
+      </button>
       <span className="strip-mono elapsed">T+{fmtElapsed(elapsed)}</span>
       <span className="strip-counts">
         {AGENCIES.filter((a) => counts[a].total > 0).map((a) => (

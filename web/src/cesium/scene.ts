@@ -28,9 +28,10 @@ export function registerScene(h: SceneHandle): void {
   drawController = new DrawController(h.viewer, shapeLayer)
   boundaryLayer = new BoundaryLayer(h.viewer)
   if (import.meta.env.DEV) {
-    // Debug handle for DevTools poking — dev builds only.
+    // Debug handles for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
     ;(window as unknown as Record<string, unknown>).__cesium = Cesium
+    ;(window as unknown as Record<string, unknown>).__wtUnitLayer = unitLayer
   }
 }
 

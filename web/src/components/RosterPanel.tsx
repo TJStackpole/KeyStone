@@ -27,13 +27,13 @@ const CATEGORY_COLOR: Record<UnitCategory, string> = {
   battalion: '#dc2626',
   rescue: '#7f1d1d',
   ems: '#1d4ed8',
-  nypd: '#1e3a8a',
-  esu: '#1e3a8a',
+  nypd: '#2563eb',
+  esu: '#2563eb',
   oem: '#ea580c',
   drone: '#22d3ee',
-  ff: '#f87171',
-  officer: '#60a5fa',
-  medic: '#93c5fd',
+  ff: '#ef4444',
+  officer: '#3b82f6',
+  medic: '#60a5fa',
   unknown: '#475569',
 }
 
