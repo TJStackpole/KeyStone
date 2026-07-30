@@ -46,7 +46,9 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
 
   // Fresh incident, fresh overlay: clear local shapes and suggest the initial
   // 75 m hot zone (server-side shape list was reset by the incident POST).
-  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null })
+  // targetHeightM resets too — a stale height would mis-size the collapse tool
+  // until the new footprints load.
+  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null, targetHeightM: null })
   getShapeLayer()?.clear()
   suggestHotZone(incident)
 }

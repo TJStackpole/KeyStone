@@ -22,10 +22,12 @@ function HighlightedText({ line }: { line: TranscriptLine }) {
   const kindOf = (text: string) =>
     line.keywords.find((k) => k.text.toLowerCase() === text.toLowerCase())?.kind ?? 'code'
   const segments = line.text.split(re)
+  // (Matched segments equal one of the keyword literals — never re.test() a
+  // /g regex per segment; its stateful lastIndex skips alternating matches.)
   return (
     <>
       {segments.map((seg, i) =>
-        re.test(seg) && parts.some((p) => p.toLowerCase() === seg.toLowerCase()) ? (
+        parts.some((p) => p.toLowerCase() === seg.toLowerCase()) ? (
           <mark key={i} className={`kw-${kindOf(seg)}`}>
             {seg}
           </mark>

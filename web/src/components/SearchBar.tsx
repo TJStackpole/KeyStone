@@ -8,10 +8,14 @@ function Highlight({ text, query }: { text: string; query: string }) {
   const tokens = query.trim().split(/\s+/).filter((t) => t.length >= 1)
   if (!tokens.length) return <>{text}</>
   const re = new RegExp(`(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
+  const lower = tokens.map((t) => t.toLowerCase())
+  // NOTE: split(re) keeps the captured matches as segments; a segment is a
+  // match iff it equals one of the tokens. (Never re.test() a /g regex per
+  // segment — its stateful lastIndex silently skips alternating matches.)
   return (
     <>
       {text.split(re).map((seg, i) =>
-        re.test(seg) ? <b key={i}>{seg}</b> : <span key={i}>{seg}</span>,
+        lower.includes(seg.toLowerCase()) ? <b key={i}>{seg}</b> : <span key={i}>{seg}</span>,
       )}
     </>
   )

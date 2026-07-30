@@ -24,23 +24,40 @@ function load(): IncidentFile {
   }
 }
 
+// Personnel tracks arrive several times a second; rewriting the file on every
+// append would thrash the disk. Coalesce writes on a short trailing debounce.
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
 function flush(): void {
-  try {
-    mkdirSync(dirname(DATA_PATH), { recursive: true })
-    writeFileSync(DATA_PATH, JSON.stringify(state, null, 2))
-  } catch (err) {
-    // Persistence failure must never take the incident down — state stays in memory.
-    console.error('[incidentStore] failed to write incident.json:', err)
-  }
+  if (flushTimer) return
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    try {
+      mkdirSync(dirname(DATA_PATH), { recursive: true })
+      writeFileSync(DATA_PATH, JSON.stringify(state, null, 2))
+    } catch (err) {
+      // Persistence failure must never take the incident down — state stays in memory.
+      console.error('[incidentStore] failed to write incident.json:', err)
+    }
+  }, 400)
+  flushTimer.unref?.()
 }
 
 export function getState(): IncidentFile {
   return state
 }
 
+/** Bound the timeline so multi-hour incidents can't balloon incident.json. */
+const MAX_TIMELINE_EVENTS = 12_000
+
 export function appendTimeline(kind: string, payload?: unknown): TimelineEvent {
   const ev: TimelineEvent = { t: new Date().toISOString(), kind, payload }
   state.timeline.push(ev)
+  if (state.timeline.length > MAX_TIMELINE_EVENTS) {
+    // Drop the oldest unit.track samples first — milestones stay forever.
+    const firstTrack = state.timeline.findIndex((e) => e.kind === 'unit.track')
+    state.timeline.splice(firstTrack === -1 ? 0 : firstTrack, 1)
+  }
   flush()
   return ev
 }

@@ -49,10 +49,15 @@ export function broadcast(message: unknown): void {
 }
 
 wss.on('connection', (socket) => {
+  const state = getState()
   socket.send(
     JSON.stringify({
       type: 'snapshot',
-      ...getState(), // includes shapes
+      incident: state.incident,
+      shapes: state.shapes,
+      // Dashboards only need milestones (SITREP) — the unit.track flood stays
+      // out of the snapshot (replay pulls the full timeline via REST).
+      timeline: state.timeline.filter((e) => e.kind !== 'unit.track').slice(-400),
       units: registry.all(),
       takConnected: tak.connected,
     }),

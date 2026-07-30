@@ -136,8 +136,10 @@ function BioContent() {
     )
   }, [units])
 
-  const rotate = members.filter((m) => bioStatusOf(m.bio) === 'rotate')
-  const caution = members.filter((m) => bioStatusOf(m.bio) === 'caution')
+  // Members already relieved (Rehab) shouldn't keep tripping the advisory.
+  const inRehab = (m: Unit) => m.status === 'Rehab'
+  const rotate = members.filter((m) => bioStatusOf(m.bio) === 'rotate' && !inRehab(m))
+  const caution = members.filter((m) => bioStatusOf(m.bio) === 'caution' && !inRehab(m))
 
   return (
     <div className="dock-scroll">
@@ -155,7 +157,8 @@ function BioContent() {
         <div className="roster-empty">NO MEMBER TELEMETRY — PERSONNEL DISMOUNT WHEN APPARATUS ARRIVES</div>
       )}
       {members.map((m) => {
-        const s = bioStatusOf(m.bio)
+        const s = inRehab(m) ? 'ok' : bioStatusOf(m.bio)
+        const chipLabel = inRehab(m) ? 'REHAB' : s.toUpperCase()
         return (
           <button key={m.uid} className={`bio-row ${s}`} onClick={() => flyToUnit(m.uid)} title="Fly to member">
             <span className="bio-callsign">{m.callsign}</span>
@@ -177,8 +180,12 @@ function BioContent() {
               <label>T-OPS</label>
               <b>{Math.round(m.bio.toaMin)}m</b>
             </span>
-            <span className={`status-chip ${s === 'rotate' ? 'operating' : s === 'caution' ? 'enroute' : 'onscene'}`}>
-              {s.toUpperCase()}
+            <span
+              className={`status-chip ${
+                inRehab(m) ? 'staged' : s === 'rotate' ? 'operating' : s === 'caution' ? 'enroute' : 'onscene'
+              }`}
+            >
+              {chipLabel}
             </span>
           </button>
         )

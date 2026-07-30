@@ -144,7 +144,11 @@ function handle(msg: ServerMsg): void {
       getShapeLayer()?.remove(msg.id)
       break
     case 'timeline':
-      setAppState((s) => ({ timeline: [...s.timeline, msg.event].slice(-600) }))
+      // unit.track samples exist for replay (read via REST) — storing them here
+      // would flood the 600-event window and evict SITREP's milestones.
+      if (msg.event.kind !== 'unit.track') {
+        setAppState((s) => ({ timeline: [...s.timeline, msg.event].slice(-600) }))
+      }
       break
     case 'transcript': {
       const MAX_LINES = 200
