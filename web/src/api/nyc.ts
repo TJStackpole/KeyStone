@@ -214,6 +214,10 @@ export function buildingLinks(bin?: string, bbl?: string): { label: string; url:
       label: 'DOB BIS PROFILE',
       url: `https://a810-bisweb.nyc.gov/bisweb/PropertyProfileOverviewServlet?bin=${encodeURIComponent(bin)}`,
     })
+    links.push({
+      label: 'C OF O PDFs',
+      url: `https://a810-bisweb.nyc.gov/bisweb/COsByLocationServlet?allbin=${encodeURIComponent(bin)}`,
+    })
   }
   if (bbl && bbl.length >= 10) {
     const boro = bbl.slice(0, 1)
@@ -303,4 +307,48 @@ export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500)
     .sort((a, b) => b[1].len - a[1].len)
     .slice(0, 30)
     .map(([name, v]) => ({ name, lat: v.lat, lon: v.lon }))
+}
+
+// --------------------- Certificates of Occupancy (by BIN) -------------------
+// The closest public record to "blueprints": floor-by-floor legal use and
+// occupancy. Full architectural drawings are NOT published by NYC (security);
+// C of O records + the BIS PDF list are what a chief can legally pull up.
+
+export interface CofoRecord {
+  date: string
+  jobNumber: string
+  jobType: string
+  issueType: string
+  status: string
+}
+
+interface CofoRow {
+  c_o_issue_date?: string
+  job_number?: string
+  job_type?: string
+  issue_type?: string
+  application_status_raw?: string
+}
+
+const COFO = 'https://data.cityofnewyork.us/resource/bs8b-p36w.json'
+
+/** Most recent DOB Certificates of Occupancy for a BIN (newest first). */
+export async function fetchCertificatesOfOccupancy(bin: string, signal?: AbortSignal): Promise<CofoRecord[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'c_o_issue_date,job_number,job_type,issue_type,application_status_raw',
+    $where: `bin='${bin.replace(/'/g, '')}'`,
+    $order: 'c_o_issue_date DESC',
+    $limit: '6',
+  })
+  const res = await fetch(`${COFO}?${params}`, { signal })
+  if (!res.ok) throw new Error(`C of O SODA ${res.status}`)
+  const rows = (await res.json()) as CofoRow[]
+  return rows.map((r) => ({
+    date: (r.c_o_issue_date ?? '').slice(0, 10) || '—',
+    jobNumber: r.job_number ?? '—',
+    jobType: r.job_type ?? '',
+    issueType: r.issue_type ?? '',
+    status: r.application_status_raw ?? '',
+  }))
 }

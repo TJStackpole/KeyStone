@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react'
-import type { BuildingSafety, Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
+import type { BuildingSafety, CofoRecord, Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
   CommsChannel,
   CommsConfig,
   DataLayerId,
   DrawTool,
+  GeoHit,
   IcsShape,
   Incident,
   LayerStatus,
@@ -21,6 +22,17 @@ export interface SiteIntel {
   hydrants: Hydrant[]
   firehouses: Firehouse[]
   safety: BuildingSafety | null
+  /** Certificates of Occupancy — the public floor-by-floor record. */
+  cofo: CofoRecord[]
+}
+
+/** Any building the operator tapped on the map (not the incident building). */
+export interface InspectedBuilding {
+  hit: GeoHit
+  loading: boolean
+  pluto: PlutoAttributes | null
+  safety: BuildingSafety | null
+  cofo: CofoRecord[]
 }
 
 export interface AppState {
@@ -29,6 +41,7 @@ export interface AppState {
   incident: Incident | null
   layers: Record<DataLayerId, LayerStatus>
   intel: SiteIntel
+  inspected: InspectedBuilding | null
   layerToggles: Record<ToggleLayerId, boolean>
   units: Record<string, Unit>
   /** null until the server reports TAK link state. */
@@ -70,7 +83,8 @@ const initial: AppState = {
     safety: 'idle',
     persistence: 'idle',
   },
-  intel: { pluto: null, hydrants: [], firehouses: [], safety: null },
+  intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
+  inspected: null,
   layerToggles: { footprints: true, hydrants: true, firehouses: true, streets: true, battalions: false, divisions: false },
   units: {},
   takConnected: null,

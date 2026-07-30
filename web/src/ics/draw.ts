@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium'
-import { deleteShape, exitGround, saveShape } from '../actions'
+import { deleteShape, exitGround, inspectBuildingAt, saveShape } from '../actions'
 import { ShapeLayer, ZONE_STYLE } from '../cesium/shapes'
 import { enterGroundView } from '../cesium/viewmode'
 import { haversineMeters } from '../lib/geo'
@@ -149,6 +149,9 @@ export class DrawController {
     if (typeof entityId !== 'string' || !entityId.startsWith('handle:')) {
       setAppState({ selectedShapeId: null })
       this.renderHandles()
+      // Tap-a-building: pull the public record (PLUTO, violations, C of O)
+      // for whatever address sits under the click.
+      if (getAppState().incident) void inspectBuildingAt(pos.lat, pos.lon)
     }
   }
 

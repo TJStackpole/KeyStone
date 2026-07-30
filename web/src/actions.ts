@@ -1,5 +1,13 @@
 import * as Cesium from 'cesium'
-import { fetchBuildingSafety, fetchFirehouses, fetchHydrants, fetchPluto, fetchStreetLabels } from './api/nyc'
+import {
+  fetchBuildingSafety,
+  fetchCertificatesOfOccupancy,
+  fetchFirehouses,
+  fetchHydrants,
+  fetchPluto,
+  fetchStreetLabels,
+} from './api/nyc'
+import { reverseGeocode } from './api/geosearch'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
 import { exitGroundView, setTopDown } from './cesium/viewmode'
@@ -61,7 +69,7 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // reset by the incident POST). Zones are drawn manually by the chief — no
   // auto-suggested perimeter. targetHeightM resets too — a stale height would
   // mis-size the collapse tool until the new footprints load.
-  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null, targetHeightM: null })
+  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null, targetHeightM: null, inspected: null })
   getShapeLayer()?.clear()
 }
 
@@ -192,6 +200,16 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
 
   void (async () => {
     try {
+      const cofo = incident.bin ? await fetchCertificatesOfOccupancy(incident.bin) : []
+      setAppState((s) => ({ intel: { ...s.intel, cofo } }))
+    } catch (err) {
+      console.error('[cofo] records unavailable:', err)
+      setAppState((s) => ({ intel: { ...s.intel, cofo: [] } }))
+    }
+  })()
+
+  void (async () => {
+    try {
       const safety = incident.bin ? await fetchBuildingSafety(incident.bin) : null
       setAppState((s) => ({ intel: { ...s.intel, safety } }))
       setLayerStatus('safety', 'ok')
@@ -262,6 +280,48 @@ export function toggleLayer(layer: ToggleLayerId): void {
         setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: false } }))
       })
   }
+}
+
+// ---------------------------------------------------------------------------
+// Tap-a-building intel: reverse-geocode a map click to the nearest address
+// (BIN/BBL) and pull that building's public record — PLUTO, violations, and
+// Certificates of Occupancy. Full blueprints are not public in NYC; C of O
+// is the floor-by-floor legal record a chief can actually get.
+// ---------------------------------------------------------------------------
+
+let inspectSeq = 0
+
+export async function inspectBuildingAt(lat: number, lon: number): Promise<void> {
+  const seq = ++inspectSeq
+  let hit: GeoHit | null = null
+  try {
+    hit = await reverseGeocode(lat, lon)
+  } catch (err) {
+    console.error('[inspect] reverse geocode unavailable:', err)
+    return
+  }
+  if (!hit || seq !== inspectSeq) return
+  const incident = getAppState().incident
+  // Tapping the incident building itself just returns the panel to it.
+  if (incident?.bin && hit.bin && incident.bin === hit.bin) {
+    setAppState({ inspected: null })
+    return
+  }
+  setAppState({ inspected: { hit, loading: true, pluto: null, safety: null, cofo: [] } })
+  const [pluto, safety, cofo] = await Promise.all([
+    hit.bbl ? fetchPluto(hit.bbl).catch(() => null) : Promise.resolve(null),
+    hit.bin ? fetchBuildingSafety(hit.bin).catch(() => null) : Promise.resolve(null),
+    hit.bin ? fetchCertificatesOfOccupancy(hit.bin).catch(() => []) : Promise.resolve([]),
+  ])
+  if (seq !== inspectSeq) return
+  const current = getAppState().inspected
+  if (!current || current.hit !== hit) return
+  setAppState({ inspected: { hit, loading: false, pluto, safety, cofo } })
+}
+
+export function clearInspected(): void {
+  inspectSeq++
+  setAppState({ inspected: null })
 }
 
 /** Close-in look at a single intel feature (hydrant / firehouse row click). */

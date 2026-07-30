@@ -560,6 +560,24 @@ html, body {
   white-space: nowrap;
 }
 
+.intel-section.inspected {
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: rgba(34, 211, 238, 0.05);
+}
+.inspected-address {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--cyan);
+  margin: 2px 0 8px;
+}
+.panel-close.inline {
+  float: right;
+  margin: -2px -2px 0 0;
+}
+
 .ground-exit {
   position: absolute;
   bottom: 214px;
