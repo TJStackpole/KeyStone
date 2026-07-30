@@ -222,7 +222,11 @@ app.get('/api/audio/live', async (req, res) => {
     }
     res.setHeader('content-type', proxied.headers.get('content-type') ?? 'audio/mpeg')
     res.setHeader('cache-control', 'no-store')
-    Readable.fromWeb(proxied.body as unknown as import('node:stream/web').ReadableStream).pipe(res)
+    const stream = Readable.fromWeb(proxied.body as unknown as import('node:stream/web').ReadableStream)
+    // The abort on client disconnect surfaces as a stream 'error' — without a
+    // listener that's an unhandled 'error' event and it takes the process down.
+    stream.on('error', () => res.end())
+    stream.pipe(res)
   } catch (err) {
     if (!controller.signal.aborted) {
       console.error('[comms] live audio proxy failed:', err)

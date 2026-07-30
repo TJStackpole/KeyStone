@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { setAppState, useAppState } from '../state/store'
+import { useAppState } from '../state/store'
 import type { Agency } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -19,8 +19,8 @@ function hhmm(iso?: string): string {
   return iso ? new Date(iso).toTimeString().slice(0, 5) : '—'
 }
 
-export function SitrepPanel() {
-  const { sitrepOpen, incident, units, timeline, transcripts, shapes } = useAppState()
+export function SitrepContent() {
+  const { incident, units, timeline, transcripts, shapes } = useAppState()
   const [, tick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 5000)
@@ -77,19 +77,13 @@ export function SitrepPanel() {
     [transcripts.fdny],
   )
 
-  if (!sitrepOpen || !incident) return null
+  if (!incident) return <div className="roster-empty">NO ACTIVE INCIDENT — STAND ONE UP FIRST</div>
 
   const elapsedMin = Math.floor((Date.now() - Date.parse(incident.createdAt)) / 60000)
 
   return (
-    <aside className="sitrep-panel glass">
-      <div className="panel-head">
-        <span className="card-title">SITREP</span>
-        <span className="sitrep-updated">LIVE · AUTO-UPDATING</span>
-        <button className="panel-close" onClick={() => setAppState({ sitrepOpen: false })}>
-          ✕
-        </button>
-      </div>
+    <div className="dock-scroll">
+      <div className="sitrep-updated">LIVE · AUTO-UPDATING</div>
       <div className="sitrep-body">
         <p className="sitrep-lead">
           <b>{incident.type}</b> at <b>{incident.address}</b> — {ALARM_LABEL[incident.alarmLevel ?? '10-75']},
@@ -136,6 +130,6 @@ export function SitrepPanel() {
           </>
         )}
       </div>
-    </aside>
+    </div>
   )
 }

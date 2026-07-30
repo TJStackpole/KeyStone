@@ -15,6 +15,9 @@ const CATEGORY_LABEL: Record<UnitCategory, string> = {
   esu: 'ESU',
   oem: 'OEM',
   drone: 'Drones',
+  ff: 'Members',
+  officer: 'Officers',
+  medic: 'Medics',
   unknown: 'TAK Clients',
 }
 
@@ -28,6 +31,9 @@ const CATEGORY_COLOR: Record<UnitCategory, string> = {
   esu: '#1e3a8a',
   oem: '#ea580c',
   drone: '#22d3ee',
+  ff: '#f87171',
+  officer: '#60a5fa',
+  medic: '#93c5fd',
   unknown: '#475569',
 }
 

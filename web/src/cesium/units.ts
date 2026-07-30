@@ -39,7 +39,20 @@ const ICONS: Record<UnitCategory, string> = {
       `<circle cx="19" cy="19" r="4.4" fill="none" stroke="#22d3ee" stroke-width="1.6"/>` +
       `<rect x="10.5" y="10.5" width="5" height="5" rx="1" fill="#22d3ee"/>`,
   ),
+  ff: personIcon('#dc2626'),
+  officer: personIcon('#1e3a8a'),
+  medic: personIcon('#1d4ed8'),
   unknown: svgIcon(`<circle cx="13" cy="13" r="9" fill="#475569" ${STROKE}/><circle cx="13" cy="13" r="3" fill="#e2e8f0"/>`),
+}
+
+/** Dismounted-member glyph: smaller than apparatus, agency-colored. */
+function personIcon(color: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">` +
+    `<circle cx="8" cy="4.4" r="2.7" fill="${color}" stroke="#e2e8f0" stroke-width="1"/>` +
+    `<path d="M3.5 14.6 a4.5 4.5 0 0 1 9 0 Z" fill="${color}" stroke="#e2e8f0" stroke-width="1"/>` +
+    `</svg>`
+  return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
 const LABEL_FILL = Cesium.Color.fromCssColorString('#dbe4f0')

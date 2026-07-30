@@ -77,6 +77,9 @@ async function loadFootprints(incident: Incident): Promise<void> {
         ? incident.bin
         : footprintContaining(incident.lon, incident.lat, feats)?.bin
     layer.render(feats, targetBin, scene.extrudeFootprints)
+    // Remember the target's height — it drives the collapse-zone tool (1.5x rule).
+    const target = feats.find((f) => f.bin === targetBin)
+    setAppState({ targetHeightM: target?.heightM ?? null })
     setLayerStatus('footprints', 'ok')
     console.log(`[footprints] ${feats.length} footprints, target BIN ${targetBin ?? 'not resolved'}`)
   } catch (err) {

@@ -1,11 +1,51 @@
 import { bearingDeg, destination, Polyline, type PathPoint } from '../lib/geo.js'
-import { buildCotXml, CATEGORY_COT_TYPE } from '../tak/cot.js'
+import { buildCotXml, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
 import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
 
 const TICK_MS = 2000
 const OSRM = 'https://router.project-osrm.org/route/v1/driving'
 
 type Phase = 'enroute' | 'onscene' | 'operating'
+
+// ---------------------------------------------------------------------------
+// Personnel: dismounted members spawned when their apparatus arrives, tracked
+// individually (GPS wander on foot) with simulated biometric telemetry that
+// drives rotation advisories on the dashboard. SIMULATED data end to end.
+// ---------------------------------------------------------------------------
+type PersonnelRole = 'ff' | 'officer' | 'medic'
+
+interface SimPerson {
+  uid: string
+  callsign: string
+  role: PersonnelRole
+  parentCallsign: string
+  /** Anchor they operate around (building face / perimeter post / triage). */
+  anchor: PathPoint
+  pos: PathPoint
+  target: PathPoint
+  walkSpeed: number
+  pauseTicks: number
+  startedAt: number
+  bio: BioTelemetry
+  /** Members flagged ROTATE walk back to their rig and go Rehab. */
+  rotating: boolean
+}
+
+const CREW_SIZE: Partial<Record<string, number>> = {
+  engine: 2,
+  ladder: 2,
+  rescue: 2,
+  battalion: 1,
+  nypd: 1,
+  ems: 1,
+}
+
+function roleFor(category: string): PersonnelRole | null {
+  if (category === 'engine' || category === 'ladder' || category === 'rescue' || category === 'battalion') return 'ff'
+  if (category === 'nypd') return 'officer'
+  if (category === 'ems') return 'medic'
+  return null
+}
 
 interface SimUnit {
   spec: UnitSpec
@@ -47,6 +87,7 @@ const STATUS_LABEL: Record<Phase, string> = {
  */
 export class FirstAlarmSimulator {
   private units: SimUnit[] = []
+  private personnel: SimPerson[] = []
   private timer: ReturnType<typeof setInterval> | null = null
   private incident: { lat: number; lon: number } | null = null
 
@@ -99,6 +140,7 @@ export class FirstAlarmSimulator {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     this.units = []
+    this.personnel = []
   }
 
   private async buildSimUnit(spec: UnitSpec, incLat: number, incLon: number): Promise<SimUnit> {
@@ -143,6 +185,104 @@ export class FirstAlarmSimulator {
     return unit
   }
 
+  /** Dismount the crew when an apparatus arrives (tracked individually). */
+  private spawnCrew(u: SimUnit): void {
+    if (!this.incident) return
+    const count = CREW_SIZE[u.spec.category] ?? 0
+    const role = roleFor(u.spec.category)
+    if (!count || !role) return
+    for (let i = 0; i < count; i++) {
+      // FDNY members work the building face; officers hold their perimeter
+      // post; medics run between the rigs and the patient side.
+      const anchor =
+        role === 'ff'
+          ? destination(this.incident.lat, this.incident.lon, Math.random() * 360, 12 + Math.random() * 25)
+          : role === 'officer'
+            ? u.holdPoint
+            : destination(u.holdPoint.lat, u.holdPoint.lon, Math.random() * 360, 15)
+      const start = { lat: u.holdPoint.lat, lon: u.holdPoint.lon }
+      this.personnel.push({
+        uid: `WT-SIM-${u.spec.callsign}-M${i + 1}`,
+        callsign: `${u.spec.callsign}/${i + 1}`,
+        role,
+        parentCallsign: u.spec.callsign,
+        anchor,
+        pos: start,
+        target: anchor,
+        walkSpeed: 1.1 + Math.random() * 0.5,
+        pauseTicks: 0,
+        startedAt: Date.now(),
+        bio: freshBio(role),
+        rotating: false,
+      })
+    }
+  }
+
+  /** Walk personnel between wander waypoints and evolve their vitals. */
+  private tickPersonnel(): void {
+    for (const p of this.personnel) {
+      // movement: walk toward target, pause, pick a new waypoint near anchor
+      const stepM = p.walkSpeed * (TICK_MS / 1000)
+      const distToTarget = Math.hypot(
+        (p.target.lat - p.pos.lat) * 111_320,
+        (p.target.lon - p.pos.lon) * 111_320 * Math.cos((p.pos.lat * Math.PI) / 180),
+      )
+      let speed = 0
+      let course = 0
+      if (p.pauseTicks > 0) {
+        p.pauseTicks--
+      } else if (distToTarget > stepM) {
+        course = bearingDeg(p.pos.lat, p.pos.lon, p.target.lat, p.target.lon)
+        p.pos = destination(p.pos.lat, p.pos.lon, course, stepM)
+        speed = p.walkSpeed
+      } else {
+        p.pos = { ...p.target }
+        if (p.rotating) {
+          // reached rehab — vitals recover slowly, member holds there
+          p.bio.hr = Math.max(96, p.bio.hr - 4)
+          p.bio.tempC = Math.max(37.0, p.bio.tempC - 0.05)
+        } else {
+          p.pauseTicks = 2 + Math.floor(Math.random() * 5)
+          p.target = destination(p.anchor.lat, p.anchor.lon, Math.random() * 360, 4 + Math.random() * 28)
+        }
+      }
+
+      // biometrics: working members trend up; SCBA burns down while working
+      if (!p.rotating) {
+        const exertion = p.role === 'ff' ? 1 : 0.55
+        p.bio.toaMin += TICK_MS / 60000
+        p.bio.hr = Math.min(196, p.bio.hr + (Math.random() * 3.2 - 0.7) * exertion + p.bio.toaMin * 0.045)
+        p.bio.tempC = Math.min(39.6, p.bio.tempC + 0.006 * exertion + Math.random() * 0.004)
+        if (p.bio.airPsi >= 0) p.bio.airPsi = Math.max(180, p.bio.airPsi - (26 + Math.random() * 22))
+        if (bioStatus(p.bio) === 'rotate') {
+          p.rotating = true
+          const rig = this.units.find((u) => u.spec.callsign === p.parentCallsign)
+          p.target = rig ? { ...rig.holdPoint } : { ...p.anchor }
+          this.onEvent?.('sim.rotation', { callsign: p.callsign, reason: rotationReason(p.bio) })
+          console.log(`[sim] ROTATE ${p.callsign} (${rotationReason(p.bio)})`)
+        }
+      }
+
+      const status = p.rotating ? 'Rehab' : 'Operating'
+      this.publish(
+        buildCotXml({
+          uid: p.uid,
+          callsign: p.callsign,
+          type: CATEGORY_COT_TYPE[p.role],
+          lat: p.pos.lat,
+          lon: p.pos.lon,
+          hae: 0,
+          course,
+          speed,
+          status,
+          role: p.role,
+          bio: p.bio,
+          staleSeconds: 120,
+        }),
+      )
+    }
+  }
+
   /** OSRM public demo router when reachable; grid-plausible L-path fallback. */
   private async routeFor(origin: PathPoint, dest: PathPoint): Promise<Polyline> {
     try {
@@ -167,6 +307,7 @@ export class FirstAlarmSimulator {
 
   private tick(): void {
     const now = Date.now()
+    this.tickPersonnel()
     for (const u of this.units) {
       let lat: number
       let lon: number
@@ -185,6 +326,7 @@ export class FirstAlarmSimulator {
           u.arrivedAt = now
           this.onEvent?.('sim.arrived', { callsign: u.spec.callsign })
           console.log(`[sim] ${u.spec.callsign} on scene`)
+          this.spawnCrew(u)
         }
       } else if (u.orbit) {
         // Drones: orbit the incident at altitude.
@@ -238,4 +380,32 @@ function climbProfile(u: SimUnit): number {
   const cruise = u.spec.hae ?? 90
   const progress = u.path.totalM > 0 ? Math.min(1, u.traveledM / u.path.totalM) : 1
   return Math.max(15, cruise * progress)
+}
+
+function rotationReason(bio: BioTelemetry): string {
+  if (bio.airPsi >= 0 && bio.airPsi <= 1100) return 'SCBA low air'
+  if (bio.hr >= 178) return 'sustained high heart rate'
+  if (bio.tempC >= 38.5) return 'core temperature'
+  return 'time on air'
+}
+
+/** Fresh member baseline vitals. */
+function freshBio(role: PersonnelRole): BioTelemetry {
+  return {
+    hr: 88 + Math.random() * 14,
+    airPsi: role === 'ff' ? 4400 + Math.random() * 100 : -1,
+    tempC: 36.9 + Math.random() * 0.3,
+    toaMin: 0,
+  }
+}
+
+/** Rotation thresholds (decision-support; tuned for a readable demo arc). */
+export function bioStatus(bio: BioTelemetry): 'ok' | 'caution' | 'rotate' {
+  if (bio.hr >= 178 || (bio.airPsi >= 0 && bio.airPsi <= 1100) || bio.tempC >= 38.5 || bio.toaMin >= 22) {
+    return 'rotate'
+  }
+  if (bio.hr >= 160 || (bio.airPsi >= 0 && bio.airPsi <= 1800) || bio.tempC >= 38.0 || bio.toaMin >= 16) {
+    return 'caution'
+  }
+  return 'ok'
 }

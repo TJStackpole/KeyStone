@@ -54,6 +54,25 @@ export function DrawToolbar() {
             {POST_META[p].glyph}
           </button>
         ))}
+        <div className="tool-section-label">CHIEF</div>
+        <button
+          className={`tool-btn${drawTool === 'measure' ? ' on' : ''}`}
+          style={{ ['--tool-color' as string]: '#22d3ee' }}
+          onClick={() => setDrawTool('measure')}
+          title="Measure distance (two clicks)"
+        >
+          <span className="tool-swatch post" />
+          MEAS
+        </button>
+        <button
+          className={`tool-btn${drawTool === 'collapse' ? ' on' : ''}`}
+          style={{ ['--tool-color' as string]: '#ef4444' }}
+          onClick={() => setDrawTool('collapse')}
+          title="Collapse zone: 1.5× building height around the incident building (one click)"
+        >
+          <span className="tool-swatch zone" />
+          CLPS
+        </button>
         <div className="tool-divider" />
         <button
           className="tool-btn danger"
@@ -68,7 +87,11 @@ export function DrawToolbar() {
         <div className="draw-hint glass">
           {zoneActive
             ? 'CLICK VERTICES · ENTER OR DOUBLE-CLICK TO CLOSE · ESC TO CANCEL'
-            : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
+            : drawTool === 'measure'
+              ? 'CLICK TWO POINTS TO MEASURE · ESC CLEARS'
+              : drawTool === 'collapse'
+                ? 'CLICK ANYWHERE — COLLAPSE ZONE DRAWS AT 1.5× BUILDING HEIGHT'
+                : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
         </div>
       )}
       {!drawTool && selectedShapeId && (

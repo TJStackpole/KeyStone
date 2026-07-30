@@ -8,10 +8,8 @@ import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { CommandStrip } from './components/CommandStrip'
 import { CommsPanel } from './components/CommsPanel'
-import { SitrepPanel } from './components/SitrepPanel'
-import { VideoHub } from './components/VideoHub'
+import { UtilityDock } from './components/UtilityDock'
 import { DrawToolbar } from './components/DrawToolbar'
-import { DronePanel } from './components/DronePanel'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
@@ -61,9 +59,7 @@ export default function App() {
       </div>
       <DrawToolbar />
       <SiteIntelPanel />
-      <VideoHub />
-      <DronePanel />
-      <SitrepPanel />
+      <UtilityDock />
       <CommsPanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">WATCHTOWER</div>

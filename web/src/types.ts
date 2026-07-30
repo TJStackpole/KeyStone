@@ -62,7 +62,7 @@ export interface PostShape {
 
 export type IcsShape = ZoneShape | PostShape
 
-export type DrawTool = ZoneKind | PostKind | null
+export type DrawTool = ZoneKind | PostKind | 'measure' | 'collapse' | null
 
 // ------------------------------ comms (Phase 7) -----------------------------
 
@@ -104,7 +104,30 @@ export type UnitCategory =
   | 'esu'
   | 'oem'
   | 'drone'
+  | 'ff'
+  | 'officer'
+  | 'medic'
   | 'unknown'
+
+/** Personnel biometric telemetry (SIMULATED; carried in CoT detail). */
+export interface BioTelemetry {
+  hr: number
+  airPsi: number
+  tempC: number
+  toaMin: number
+}
+
+export type BioStatus = 'ok' | 'caution' | 'rotate'
+
+export function bioStatusOf(bio: BioTelemetry): BioStatus {
+  if (bio.hr >= 178 || (bio.airPsi >= 0 && bio.airPsi <= 1100) || bio.tempC >= 38.5 || bio.toaMin >= 22) {
+    return 'rotate'
+  }
+  if (bio.hr >= 160 || (bio.airPsi >= 0 && bio.airPsi <= 1800) || bio.tempC >= 38.0 || bio.toaMin >= 16) {
+    return 'caution'
+  }
+  return 'ok'
+}
 
 export type Agency = 'FDNY' | 'EMS' | 'NYPD' | 'OEM' | 'TAK'
 
@@ -121,6 +144,7 @@ export interface Unit {
   course?: number
   speed?: number
   status?: string
+  bio?: BioTelemetry
   cotType: string
   updatedAt: string
   staleAt: string

@@ -38,10 +38,9 @@ export interface AppState {
   shapes: Record<string, IcsShape>
   drawTool: DrawTool
   selectedShapeId: string | null
-  /** Drone whose video panel is open. */
-  dronePanelUid: string | null
-  bodycamOpen: boolean
-  /** Bodycam wall <-> globe highlight sync. */
+  /** Right utility dock: one panel, three tabs, no overlaps. */
+  utilityTab: 'sitrep' | 'video' | 'bio' | null
+  /** Video wall <-> globe highlight sync. */
   selectedUnitUid: string | null
   commsOpen: boolean
   commsChannel: CommsChannel
@@ -49,7 +48,8 @@ export interface AppState {
   commsConfig: CommsConfig | null
   replay: { active: boolean; playing: boolean; t: number; duration: number }
   timeline: TimelineEvent[]
-  sitrepOpen: boolean
+  /** Height of the incident building's footprint (drives the collapse-zone tool). */
+  targetHeightM: number | null
 }
 
 const initial: AppState = {
@@ -78,14 +78,16 @@ const initial: AppState = {
     esu: true,
     oem: true,
     drone: true,
+    ff: true,
+    officer: true,
+    medic: true,
     unknown: true,
   },
   dispatching: false,
   shapes: {},
   drawTool: null,
   selectedShapeId: null,
-  dronePanelUid: null,
-  bodycamOpen: false,
+  utilityTab: null,
   selectedUnitUid: null,
   commsOpen: true,
   commsChannel: 'fdny',
@@ -93,7 +95,7 @@ const initial: AppState = {
   commsConfig: null,
   replay: { active: false, playing: false, t: 0, duration: 0 },
   timeline: [],
-  sitrepOpen: false,
+  targetHeightM: null,
 }
 
 let state: AppState = initial

@@ -38,7 +38,9 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected, bodycamOpen, sitrepOpen } = useAppState()
+  const { providerMode, layers, takConnected, utilityTab } = useAppState()
+  const toggleTab = (tab: 'sitrep' | 'video' | 'bio') =>
+    setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
   return (
     <header className="topbar glass">
@@ -67,18 +69,25 @@ export function TopBar() {
           </span>
         )}
         <button
-          className={`chip chip-btn${sitrepOpen ? ' active' : ''}`}
-          onClick={() => setAppState((s) => ({ sitrepOpen: !s.sitrepOpen }))}
+          className={`chip chip-btn${utilityTab === 'sitrep' ? ' active' : ''}`}
+          onClick={() => toggleTab('sitrep')}
           title="Live situation summary"
         >
           <span className="dot" /> SITREP
         </button>
         <button
-          className={`chip chip-btn${bodycamOpen ? ' active' : ''}`}
-          onClick={() => setAppState((s) => ({ bodycamOpen: !s.bodycamOpen }))}
+          className={`chip chip-btn${utilityTab === 'video' ? ' active' : ''}`}
+          onClick={() => toggleTab('video')}
           title="Drone / helicopter / body-cam feeds"
         >
           <span className="dot" /> VIDEO
+        </button>
+        <button
+          className={`chip chip-btn${utilityTab === 'bio' ? ' active' : ''}`}
+          onClick={() => toggleTab('bio')}
+          title="Member biometrics + rotation advisories"
+        >
+          <span className="dot" /> BIO
         </button>
         {providerMode && (
           <span className="chip">

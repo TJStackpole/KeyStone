@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium'
 import { deleteShape, saveShape } from '../actions'
 import { ShapeLayer, ZONE_STYLE } from '../cesium/shapes'
+import { haversineMeters } from '../lib/geo'
 import { getAppState, setAppState } from '../state/store'
 import type { IcsShape, PostKind, ZoneKind } from '../types'
 
@@ -19,6 +20,8 @@ function newShapeId(prefix: string): string {
 export class DrawController {
   private handler: Cesium.ScreenSpaceEventHandler
   private draft: { lat: number; lon: number }[] = []
+  private measurePoints: { lat: number; lon: number }[] = []
+  private measureSource = new Cesium.CustomDataSource('measure')
   private draftSource = new Cesium.CustomDataSource('draw-draft')
   private handleSource = new Cesium.CustomDataSource('draw-handles')
   private dragIndex: number | null = null
@@ -27,6 +30,7 @@ export class DrawController {
   constructor(private viewer: Cesium.Viewer, private shapes: ShapeLayer) {
     void viewer.dataSources.add(this.draftSource)
     void viewer.dataSources.add(this.handleSource)
+    void viewer.dataSources.add(this.measureSource)
     this.handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
     this.handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => this.onLeftClick(e), Cesium.ScreenSpaceEventType.LEFT_CLICK)
     this.handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => this.onDoubleClick(e), Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
@@ -66,6 +70,20 @@ export class DrawController {
     const pos = this.groundPosition(e.position)
     if (!pos) return
 
+    if (tool === 'measure') {
+      this.measurePoints.push(pos)
+      if (this.measurePoints.length === 2) {
+        this.renderMeasure()
+        this.measurePoints = []
+        setAppState({ drawTool: null })
+      }
+      return
+    }
+    if (tool === 'collapse') {
+      this.createCollapseZone()
+      setAppState({ drawTool: null })
+      return
+    }
     if (tool && ZONES.includes(tool as ZoneKind)) {
       this.draft.push(pos)
       this.renderDraft(tool as ZoneKind)
@@ -100,10 +118,10 @@ export class DrawController {
       const uid = entityId.replace(/^unit:/, '').replace(/:(proj|cone)$/, '')
       const unit = getAppState().units[uid]
       if (unit?.category === 'drone') {
-        setAppState({ dronePanelUid: uid })
+        setAppState({ utilityTab: 'video' })
         return
       }
-      if (unit && unit.agency === 'FDNY' && getAppState().bodycamOpen) {
+      if (unit && unit.agency === 'FDNY' && getAppState().utilityTab === 'video') {
         setAppState({ selectedUnitUid: uid })
         // dynamic import: scene.ts owns this controller, so a static import would cycle
         void import('../cesium/scene').then((m) => m.getUnitLayer()?.setSelected(uid))
@@ -156,7 +174,72 @@ export class DrawController {
 
   cancelDraft(): void {
     this.draft = []
+    this.measurePoints = []
+    this.measureSource.entities.removeAll()
     this.draftSource.entities.removeAll()
+  }
+
+  // ------------------------- chief tools (Phase 8+) --------------------------
+
+  /** Two-point measure: glowing line + distance label (m + ft). Esc clears. */
+  private renderMeasure(): void {
+    const [a, b] = this.measurePoints
+    this.measureSource.entities.removeAll()
+    const meters = haversineMeters(a.lat, a.lon, b.lat, b.lon)
+    const feet = meters * 3.28084
+    const mid = { lat: (a.lat + b.lat) / 2, lon: (a.lon + b.lon) / 2 }
+    this.measureSource.entities.add({
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArray([a.lon, a.lat, b.lon, b.lat]),
+        width: 4,
+        material: new Cesium.PolylineDashMaterialProperty({
+          color: Cesium.Color.fromCssColorString('#22d3ee'),
+          dashLength: 14,
+        }),
+        clampToGround: true,
+      },
+    })
+    this.measureSource.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(mid.lon, mid.lat, 2),
+      label: {
+        text: `${Math.round(meters)} m · ${Math.round(feet)} ft`,
+        font: `700 12px 'JetBrains Mono', monospace`,
+        fillColor: Cesium.Color.fromCssColorString('#22d3ee'),
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.8),
+        backgroundPadding: new Cesium.Cartesian2(7, 4),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+  }
+
+  /**
+   * One-click collapse zone: FDNY rule-of-thumb radius of 1.5x building height
+   * around the incident building, published like any hand-drawn hot zone.
+   */
+  private createCollapseZone(): void {
+    const { incident, targetHeightM } = getAppState()
+    if (!incident) return
+    const radius = Math.max(20, (targetHeightM ?? 20) * 1.5)
+    const R = 6371008.8
+    const positions: { lat: number; lon: number }[] = []
+    for (let i = 0; i < 24; i++) {
+      const t = (i / 24) * 2 * Math.PI
+      positions.push({
+        lat: incident.lat + ((radius * Math.cos(t)) / R) * (180 / Math.PI),
+        lon:
+          incident.lon +
+          ((radius * Math.sin(t)) / (R * Math.cos((incident.lat * Math.PI) / 180))) * (180 / Math.PI),
+      })
+    }
+    void saveShape({
+      id: `WT-ICS-ZONE-COLLAPSE-${Date.now().toString(36).toUpperCase()}`,
+      kind: 'zone',
+      zone: 'hot',
+      positions,
+      createdAt: new Date().toISOString(),
+    })
+    console.log(`[tools] collapse zone: r=${Math.round(radius)} m (building ${Math.round(targetHeightM ?? 0)} m × 1.5)`)
   }
 
   // ---------------------------- vertex editing ------------------------------

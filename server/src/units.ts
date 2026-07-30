@@ -1,5 +1,12 @@
 import { EventEmitter } from 'node:events'
-import { agencyFor, categorize, type Agency, type CotEvent, type UnitCategory } from './tak/cot.js'
+import {
+  agencyFor,
+  categorize,
+  type Agency,
+  type BioTelemetry,
+  type CotEvent,
+  type UnitCategory,
+} from './tak/cot.js'
 
 export interface Unit {
   uid: string
@@ -12,6 +19,7 @@ export interface Unit {
   course?: number
   speed?: number
   status?: string
+  bio?: BioTelemetry
   cotType: string
   updatedAt: string
   staleAt: string
@@ -41,7 +49,7 @@ export class UnitRegistry extends EventEmitter {
   upsertFromCot(ev: CotEvent): Unit {
     const existing = this.units.get(ev.uid)
     const callsign = ev.callsign ?? existing?.callsign ?? ev.uid
-    const category = categorize(callsign, ev.type)
+    const category = categorize(callsign, ev.type, ev.role)
     const staleAt =
       ev.stale && !Number.isNaN(Date.parse(ev.stale))
         ? ev.stale
@@ -58,6 +66,7 @@ export class UnitRegistry extends EventEmitter {
       course: ev.course ?? existing?.course,
       speed: ev.speed ?? existing?.speed,
       status: ev.status ?? existing?.status,
+      bio: ev.bio ?? existing?.bio,
       cotType: ev.type,
       updatedAt: new Date().toISOString(),
       staleAt,
