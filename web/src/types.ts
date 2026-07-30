@@ -80,7 +80,9 @@ export type DrawTool = ZoneKind | PostKind | 'measure' | 'collapse' | 'apparatus
 
 // ------------------------------ comms (Phase 7) -----------------------------
 
-export type CommsChannel = 'fdny' | 'nypd' | 'ems' | 'oem'
+export type LiveChannel = 'fdny' | 'nypd' | 'ems' | 'oem'
+export type ScenarioChannel = 'fdny-tac' | 'fdny-cmd' | 'ems-cw' | 'nypd-sod' | 'papd' | 'interagency'
+export type CommsChannel = LiveChannel | ScenarioChannel
 
 export interface TranscriptKeyword {
   kind: 'unit' | 'code' | 'urgent' | 'address'
@@ -116,6 +118,7 @@ export type UnitCategory =
   | 'ems'
   | 'nypd'
   | 'esu'
+  | 'papd'
   | 'oem'
   | 'drone'
   | 'ff'
@@ -143,7 +146,42 @@ export function bioStatusOf(bio: BioTelemetry): BioStatus {
   return 'ok'
 }
 
-export type Agency = 'FDNY' | 'EMS' | 'NYPD' | 'OEM' | 'TAK'
+export type Agency = 'FDNY' | 'EMS' | 'NYPD' | 'PAPD' | 'OEM' | 'TAK'
+
+// ------------------------------ scenario (8A) -------------------------------
+
+export interface ScenarioChapter {
+  id: string
+  t: number
+  title: string
+}
+
+export interface ScenarioStatus {
+  loaded: boolean
+  name: string | null
+  drill: boolean
+  playing: boolean
+  speed: number
+  clock: number
+  duration: number
+  chapters: ScenarioChapter[]
+}
+
+export interface MapAlert {
+  kind: string
+  callsign?: string
+  uid?: string
+  lat?: number
+  lon?: number
+  text?: string
+  at?: string
+}
+
+export interface ExposureLabel {
+  text: string
+  lat: number
+  lon: number
+}
 
 export type UnitStatus = 'Enroute' | 'On Scene' | 'Staged' | 'Operating'
 

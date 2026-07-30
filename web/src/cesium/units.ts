@@ -31,6 +31,8 @@ const ICONS: Record<UnitCategory, string> = {
   ),
   nypd: svgIcon(`<circle cx="13" cy="13" r="10" fill="#2563eb" ${STROKE}/>`),
   esu: svgIcon(`<path d="M13 2 L24 13 L13 24 L2 13 Z" fill="#2563eb" ${STROKE}/>`),
+  // PAPD shield — facility jurisdiction (green per multi-agency taxonomy)
+  papd: svgIcon(`<path d="M13 2.5 L22.5 6 V13 C22.5 18.6 18.6 22.6 13 24 C7.4 22.6 3.5 18.6 3.5 13 V6 Z" fill="#16a34a" ${STROKE}/>`),
   oem: svgIcon(`<path d="M13 2.5 L23.5 10.2 L19.5 22.5 L6.5 22.5 L2.5 10.2 Z" fill="#ea580c" ${STROKE}/>`),
   drone: svgIcon(
     `<circle cx="7" cy="7" r="4.4" fill="none" stroke="#22d3ee" stroke-width="1.6"/>` +

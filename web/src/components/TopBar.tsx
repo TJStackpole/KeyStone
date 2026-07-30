@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { runDemoScenario, toggleActiveIncidentMode, toggleTopDownView } from '../actions'
+import { loadScenario, runDemoScenario, toggleActiveIncidentMode, toggleTopDownView } from '../actions'
 import { setAppState, useAppState } from '../state/store'
 import { SearchBar } from './SearchBar'
 
@@ -38,7 +38,8 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected, utilityTab, incident, activeIncidentMode, viewMode } = useAppState()
+  const { providerMode, layers, takConnected, utilityTab, incident, activeIncidentMode, viewMode, nycemView } =
+    useAppState()
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
@@ -51,6 +52,13 @@ export function TopBar() {
       <SearchBar />
       <button className="demo-btn" onClick={() => void runDemoScenario()} title="Demo scenario: structural fire, 100 Gold St — full flow unattended">
         ▶ DEMO
+      </button>
+      <button
+        className="demo-btn drill"
+        onClick={() => void loadScenario('pabt-drill')}
+        title="Scripted multi-agency drill: bus fire w/ MCI at the Port Authority Bus Terminal — plays itself"
+      >
+        ▶ DRILL
       </button>
       <div className="topbar-right">
         {down.map((k) => (
@@ -75,6 +83,15 @@ export function TopBar() {
             title="Refine the fire building; de-emphasize beyond ~4 blocks"
           >
             <span className="dot" /> ACTIVE INCIDENT
+          </button>
+        )}
+        {incident && (
+          <button
+            className={`chip chip-btn${nycemView ? ' active' : ''}`}
+            onClick={() => setAppState((s) => ({ nycemView: !s.nycemView }))}
+            title="Toggle IC tactical view ↔ NYCEM Watch Command coordination view"
+          >
+            <span className="dot" /> NYCEM
           </button>
         )}
         <button

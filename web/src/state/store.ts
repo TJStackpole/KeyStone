@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { BuildingSafety, CofoRecord, Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
+  Agency,
   CommsChannel,
   CommsConfig,
   DataLayerId,
@@ -9,7 +10,9 @@ import type {
   IcsShape,
   Incident,
   LayerStatus,
+  MapAlert,
   ProviderMode,
+  ScenarioStatus,
   TimelineEvent,
   ToggleLayerId,
   TranscriptLine,
@@ -47,6 +50,8 @@ export interface AppState {
   /** null until the server reports TAK link state. */
   takConnected: boolean | null
   unitToggles: Record<UnitCategory, boolean>
+  /** Agency-level map filters (NYCEM view) — ANDed with unitToggles. */
+  agencyToggles: Record<Agency, boolean>
   dispatching: boolean
   shapes: Record<string, IcsShape>
   drawTool: DrawTool
@@ -58,6 +63,16 @@ export interface AppState {
   commsOpen: boolean
   commsChannel: CommsChannel
   transcripts: Record<CommsChannel, TranscriptLine[]>
+  /** Merged multi-channel command view in the comms panel. */
+  commsAll: boolean
+  /** Scenario playback (Prompt 8A) — null until a scenario is loaded. */
+  scenario: ScenarioStatus | null
+  /** Active full-screen alert (mayday etc.) — null when clear. */
+  alert: MapAlert | null
+  /** IC view <-> NYCEM Watch Command coordination view. */
+  nycemView: boolean
+  /** After-action report overlay (auto-opens at scenario end). */
+  aarOpen: boolean
   commsConfig: CommsConfig | null
   replay: { active: boolean; playing: boolean; t: number; duration: number }
   timeline: TimelineEvent[]
@@ -98,6 +113,7 @@ const initial: AppState = {
     ems: true,
     nypd: true,
     esu: true,
+    papd: true,
     oem: true,
     drone: true,
     ff: true,
@@ -105,6 +121,7 @@ const initial: AppState = {
     medic: true,
     unknown: true,
   },
+  agencyToggles: { FDNY: true, EMS: true, NYPD: true, PAPD: true, OEM: true, TAK: true },
   dispatching: false,
   shapes: {},
   drawTool: null,
@@ -113,7 +130,23 @@ const initial: AppState = {
   selectedUnitUid: null,
   commsOpen: true,
   commsChannel: 'fdny',
-  transcripts: { fdny: [], nypd: [], ems: [], oem: [] },
+  transcripts: {
+    fdny: [],
+    nypd: [],
+    ems: [],
+    oem: [],
+    'fdny-tac': [],
+    'fdny-cmd': [],
+    'ems-cw': [],
+    'nypd-sod': [],
+    papd: [],
+    interagency: [],
+  },
+  commsAll: false,
+  scenario: null,
+  alert: null,
+  nycemView: false,
+  aarOpen: false,
   commsConfig: null,
   replay: { active: false, playing: false, t: 0, duration: 0 },
   timeline: [],

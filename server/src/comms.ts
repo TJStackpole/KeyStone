@@ -17,7 +17,11 @@ import WebSocket from 'ws'
 // radio-over-IP feed instead. (See README "Comms & legal posture".)
 // ---------------------------------------------------------------------------
 
-export type CommsChannel = 'fdny' | 'nypd' | 'ems' | 'oem'
+/** Live-mode channels (Phase 7). */
+export type LiveChannel = 'fdny' | 'nypd' | 'ems' | 'oem'
+/** Scenario multi-channel radio (Prompt 8A). */
+export type ScenarioChannel = 'fdny-tac' | 'fdny-cmd' | 'ems-cw' | 'nypd-sod' | 'papd' | 'interagency'
+export type CommsChannel = LiveChannel | ScenarioChannel
 
 export interface TranscriptKeyword {
   kind: 'unit' | 'code' | 'urgent' | 'address'
@@ -49,8 +53,9 @@ const UNIT_PREFIX: Record<string, string> = {
 }
 
 const UNIT_RE = /\b(engine|ladder|battalion|rescue|squad|ems|pd|e|l|bc|sq|r)[- ]?(\d+)\b/gi
-const CODE_RE = /\b(10[- ]?75|10[- ]?60|all hands|second alarm|2nd alarm|third alarm|3rd alarm|mayday)\b/gi
-const URGENT_RE = /\b(urgent|mayday|evacuate|collapse)\b/gi
+const CODE_RE =
+  /\b(10[- ]?75|10[- ]?60|10[- ]?45|all hands|second alarm|2nd alarm|third alarm|3rd alarm|mayday|MCI|PAR|exposure [1-4])\b/gi
+const URGENT_RE = /\b(urgent|mayday|evacuate|collapse|CNG)\b/gi
 const ADDRESS_RE = /\b\d{1,4} [A-Z][a-zA-Z]+ (Street|Avenue|Place|Road|Boulevard|Broadway|Plaza|Lane)\b/g
 
 export function extractKeywords(text: string): TranscriptKeyword[] {
@@ -115,7 +120,7 @@ interface SimScriptLine {
 }
 
 /** Scenario-consistent scripted traffic. SIMULATED — watermarked in the UI. */
-const SIM_SCRIPTS: Record<Exclude<CommsChannel, 'fdny'>, SimScriptLine[]> = {
+const SIM_SCRIPTS: Record<Exclude<LiveChannel, 'fdny'>, SimScriptLine[]> = {
   nypd: [
     { offset: 4, text: 'Central to units on the Gold Street detail, fire department operating, hold traffic at Fulton and Gold.' },
     { offset: 18, text: 'PD-1 on scene, establishing the frozen zone at Frankfort and Gold.' },

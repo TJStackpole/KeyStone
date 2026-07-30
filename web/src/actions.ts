@@ -17,13 +17,14 @@ import {
   getFocusLayer,
   getFootprintLayer,
   getIntelLayer,
+  getExposureLayer,
   getScene,
   getShapeLayer,
   getStreetLayer,
   getUnitLayer,
 } from './cesium/scene'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
-import type { GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
+import type { Agency, GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
 
 function newIncidentId(): string {
   return `INC-${Date.now().toString(36).toUpperCase()}`
@@ -287,6 +288,78 @@ export function toggleLayer(layer: ToggleLayerId): void {
         console.error(`[boundaries] ${layer} unavailable:`, err)
         setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: false } }))
       })
+  }
+}
+
+/**
+ * Stand up an incident that arrived from the SERVER (scenario load) — same
+ * local treatment as an operator search: fly-in, footprints, intel, focus.
+ */
+export function adoptIncident(incident: Incident): void {
+  setAppState({
+    incident,
+    shapes: {},
+    selectedShapeId: null,
+    drawTool: null,
+    targetHeightM: null,
+    inspected: null,
+  })
+  getShapeLayer()?.clear()
+  const scene = getScene()
+  if (getAppState().groundViewActive) exitGround()
+  if (getAppState().viewMode === 'topdown' && scene) {
+    setAppState({ viewMode: '3d' })
+    void setTopDown(scene, false)
+  }
+  if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
+  void loadFootprints(incident)
+  void loadSiteIntel(incident)
+  getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
+}
+
+// ---------------------------------------------------------------------------
+// Scenario playback controls (Prompt 8A)
+// ---------------------------------------------------------------------------
+
+async function scenarioPost(path: string, body?: Record<string, unknown>): Promise<void> {
+  try {
+    const res = await fetch(`/api/scenario/${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    })
+    if (!res.ok) throw new Error(`scenario ${path} ${res.status}`)
+  } catch (err) {
+    console.error('[scenario] control failed:', err)
+  }
+}
+
+export async function loadScenario(name: string): Promise<void> {
+  // Merged command view is the right default for multi-channel drill traffic.
+  setAppState({ aarOpen: false, alert: null, nycemView: false, commsAll: true, commsOpen: true })
+  await scenarioPost('load', { name })
+  await scenarioPost('play')
+}
+
+export const playScenario = (): Promise<void> => scenarioPost('play')
+export const pauseScenario = (): Promise<void> => scenarioPost('pause')
+export const setScenarioSpeed = (x: number): Promise<void> => scenarioPost('speed', { x })
+export const jumpScenarioChapter = (id: string): Promise<void> => scenarioPost('chapter', { id })
+
+export async function stopScenario(): Promise<void> {
+  await scenarioPost('stop')
+  getExposureLayer()?.clear()
+  setAppState({ scenario: null, alert: null, aarOpen: false })
+}
+
+/** NYCEM view: agency-level unit filters, ANDed with the category toggles. */
+export function toggleAgency(agency: Agency): void {
+  const next = !getAppState().agencyToggles[agency]
+  setAppState((s) => ({ agencyToggles: { ...s.agencyToggles, [agency]: next } }))
+  const layer = getUnitLayer()
+  const st = getAppState()
+  for (const u of Object.values(st.units)) {
+    if (u.agency === agency) layer?.upsert(u, (st.unitToggles[u.category] ?? true) && next)
   }
 }
 

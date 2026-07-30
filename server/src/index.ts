@@ -14,6 +14,7 @@ import {
   updateIncident,
   upsertShape,
 } from './incidentStore.js'
+import { ScenarioEngine } from './scenario/engine.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
@@ -370,6 +371,76 @@ app.post('/api/timeline', (req, res) => {
   const ev = appendTimeline(kind, payload)
   broadcast({ type: 'timeline', event: ev })
   res.status(201).json(ev)
+})
+
+// ---------------------------------------------------------------------------
+// Scenario playback (Prompt 8A): scripted incidents replayed through the SAME
+// pipelines as live data — CoT via the sim TAK connection, transcripts on the
+// comms bus, shapes through the store + CoT publisher.
+// ---------------------------------------------------------------------------
+const scenario = new ScenarioEngine({
+  publishCot,
+  broadcast,
+  emitTimeline: (kind, payload) => {
+    const ev = appendTimeline(kind, payload)
+    broadcast({ type: 'timeline', event: ev })
+  },
+  createIncident: (incident) => {
+    simulator.stop()
+    issuedStaging.clear()
+    stagingFlip = 0
+    const state = createIncident(incident)
+    console.log(`[scenario] incident ${incident.id} — ${incident.address}`)
+    broadcast({ type: 'incident', incident: state.incident })
+  },
+  upsertShape,
+  removeShape,
+  removeUnit: (uid) => registry.remove(uid),
+  setAlarm: (level) => {
+    const updated = updateIncident({ alarmLevel: level })
+    broadcast({ type: 'incident', incident: updated.incident })
+  },
+})
+
+app.get('/api/scenario', (_req, res) => res.json(scenario.status()))
+
+app.post('/api/scenario/load', async (req, res) => {
+  const { name } = req.body as { name?: string }
+  if (!name) return res.status(400).json({ error: 'name required' })
+  try {
+    await scenario.load(name)
+    res.json(scenario.status())
+  } catch (err) {
+    console.error('[scenario] load failed:', err)
+    res.status(404).json({ error: `scenario '${name}' not found or invalid` })
+  }
+})
+
+app.post('/api/scenario/play', (_req, res) => {
+  scenario.play()
+  res.json(scenario.status())
+})
+
+app.post('/api/scenario/pause', (_req, res) => {
+  scenario.pause()
+  res.json(scenario.status())
+})
+
+app.post('/api/scenario/speed', (req, res) => {
+  scenario.setSpeed(Number((req.body as { x?: number }).x))
+  res.json(scenario.status())
+})
+
+app.post('/api/scenario/chapter', async (req, res) => {
+  const { id } = req.body as { id?: string }
+  if (!id) return res.status(400).json({ error: 'id required' })
+  await scenario.seekChapter(id)
+  res.json(scenario.status())
+})
+
+app.post('/api/scenario/stop', (_req, res) => {
+  scenario.stop()
+  res.json(scenario.status())
 })
 
 httpServer.listen(PORT, () => {

@@ -4,6 +4,7 @@ import { DrawController } from '../ics/draw'
 import { BoundaryLayer } from './boundaries'
 import { FocusLayer } from './focus'
 import { FootprintLayer } from './footprints'
+import { ExposureLayer } from './exposures'
 import { IntelMarkerLayer } from './intelMarkers'
 import { ShapeLayer } from './shapes'
 import { StreetLabelLayer } from './streets'
@@ -22,6 +23,7 @@ let drawController: DrawController | null = null
 let boundaryLayer: BoundaryLayer | null = null
 let focusLayer: FocusLayer | null = null
 let streetLayer: StreetLabelLayer | null = null
+let exposureLayer: ExposureLayer | null = null
 
 export function registerScene(h: SceneHandle): void {
   handle = h
@@ -33,6 +35,7 @@ export function registerScene(h: SceneHandle): void {
   boundaryLayer = new BoundaryLayer(h.viewer)
   focusLayer = new FocusLayer(h)
   streetLayer = new StreetLabelLayer(h.viewer)
+  exposureLayer = new ExposureLayer(h.viewer)
   if (import.meta.env.DEV) {
     // Debug handles for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
@@ -52,10 +55,15 @@ export function unregisterScene(): void {
   boundaryLayer = null
   focusLayer = null
   streetLayer = null
+  exposureLayer = null
 }
 
 export function getStreetLayer(): StreetLabelLayer | null {
   return streetLayer
+}
+
+export function getExposureLayer(): ExposureLayer | null {
+  return exposureLayer
 }
 
 export function getShapeLayer(): ShapeLayer | null {

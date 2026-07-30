@@ -58,6 +58,7 @@ export type UnitCategory =
   | 'ems'
   | 'nypd'
   | 'esu'
+  | 'papd' // Port Authority PD (facility jurisdiction at PA sites)
   | 'oem'
   | 'drone'
   | 'ff' // FDNY member on foot
@@ -65,10 +66,11 @@ export type UnitCategory =
   | 'medic' // EMS member on foot
   | 'unknown'
 
-export type Agency = 'FDNY' | 'EMS' | 'NYPD' | 'OEM' | 'TAK'
+export type Agency = 'FDNY' | 'EMS' | 'NYPD' | 'PAPD' | 'OEM' | 'TAK'
 
 /** Callsign-prefix convention (primary signal — survives generic ATAK type atoms). */
 const CALLSIGN_RULES: [RegExp, UnitCategory][] = [
+  [/^(PAPD)[- ]?\d/i, 'papd'],
   [/^(ESU)[- ]?\d/i, 'esu'],
   [/^(EMS|MED|M)[- ]?\d/i, 'ems'],
   [/^(E|ENG|ENGINE)[- ]?\d/i, 'engine'],
@@ -89,6 +91,7 @@ export const CATEGORY_COT_TYPE: Record<UnitCategory, string> = {
   ems: 'a-f-G-E-V-m',
   nypd: 'a-f-G-E-V-p',
   esu: 'a-f-G-E-V-p',
+  papd: 'a-f-G-E-V-p',
   oem: 'a-f-G-U-C',
   drone: 'a-f-A-M-F-Q',
   ff: 'a-f-G-U-C-I', // dismounted individual
@@ -135,6 +138,8 @@ export function agencyFor(category: UnitCategory): Agency {
     case 'esu':
     case 'officer':
       return 'NYPD'
+    case 'papd':
+      return 'PAPD'
     case 'oem':
       return 'OEM'
     default:

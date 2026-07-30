@@ -48,6 +48,11 @@ export class UnitRegistry extends EventEmitter {
     return [...this.units.values()]
   }
 
+  /** Explicit removal (scenario resets) — emits 'remove' like a stale sweep. */
+  remove(uid: string): void {
+    if (this.units.delete(uid)) this.emit('remove', uid)
+  }
+
   upsertFromCot(ev: CotEvent): Unit {
     const existing = this.units.get(ev.uid)
     const callsign = ev.callsign ?? existing?.callsign ?? ev.uid

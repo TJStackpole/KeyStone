@@ -3,7 +3,7 @@ import { dispatchAssignment, flyToUnit, toggleUnitCategory } from '../actions'
 import { useAppState } from '../state/store'
 import type { Agency, Unit, UnitCategory } from '../types'
 
-const AGENCY_ORDER: Agency[] = ['FDNY', 'EMS', 'NYPD', 'OEM', 'TAK']
+const AGENCY_ORDER: Agency[] = ['FDNY', 'EMS', 'NYPD', 'PAPD', 'OEM', 'TAK']
 
 const CATEGORY_LABEL: Record<UnitCategory, string> = {
   engine: 'Engines',
@@ -13,6 +13,7 @@ const CATEGORY_LABEL: Record<UnitCategory, string> = {
   ems: 'EMS',
   nypd: 'Patrol',
   esu: 'ESU',
+  papd: 'PAPD',
   oem: 'OEM',
   drone: 'Drones',
   ff: 'Members',
@@ -29,6 +30,7 @@ const CATEGORY_COLOR: Record<UnitCategory, string> = {
   ems: '#1d4ed8',
   nypd: '#2563eb',
   esu: '#2563eb',
+  papd: '#16a34a',
   oem: '#ea580c',
   drone: '#22d3ee',
   ff: '#ef4444',

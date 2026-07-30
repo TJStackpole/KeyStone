@@ -1,6 +1,17 @@
-import { getShapeLayer, getUnitLayer } from './cesium/scene'
+import { adoptIncident, flyToUnit } from './actions'
+import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
-import type { CommsChannel, IcsShape, Incident, TimelineEvent, TranscriptLine, Unit } from './types'
+import type {
+  CommsChannel,
+  ExposureLabel,
+  IcsShape,
+  Incident,
+  MapAlert,
+  ScenarioStatus,
+  TimelineEvent,
+  TranscriptLine,
+  Unit,
+} from './types'
 
 interface SnapshotMsg {
   type: 'snapshot'
@@ -43,6 +54,21 @@ interface TranscriptMsg {
   channel: CommsChannel
   line: TranscriptLine
 }
+interface ScenarioStatusMsg {
+  type: 'scenario.status'
+  scenario: ScenarioStatus
+}
+interface AlertMsg {
+  type: 'alert'
+  alert: MapAlert
+}
+interface ExposureMsg {
+  type: 'exposure'
+  labels: ExposureLabel[]
+}
+interface AarMsg {
+  type: 'scenario.aar'
+}
 type ServerMsg =
   | SnapshotMsg
   | IncidentMsg
@@ -53,6 +79,10 @@ type ServerMsg =
   | ShapeRemoveMsg
   | TimelineMsg
   | TranscriptMsg
+  | ScenarioStatusMsg
+  | AlertMsg
+  | ExposureMsg
+  | AarMsg
 
 let started = false
 
@@ -113,12 +143,42 @@ function handle(msg: ServerMsg): void {
       })
       break
     }
-    case 'incident':
-      setAppState({ incident: msg.incident })
+    case 'incident': {
+      const prev = getAppState().incident
+      if (msg.incident && msg.incident.id !== prev?.id) {
+        // Server-initiated incident (scenario load) — full local stand-up.
+        adoptIncident(msg.incident)
+      } else {
+        setAppState({ incident: msg.incident })
+      }
       break
-    case 'unit':
+    }
+    case 'unit': {
       setAppState((s) => ({ units: { ...s.units, [msg.unit.uid]: msg.unit } }))
-      getUnitLayer()?.upsert(msg.unit, getAppState().unitToggles[msg.unit.category] ?? true)
+      const st = getAppState()
+      const show =
+        (st.unitToggles[msg.unit.category] ?? true) && (st.agencyToggles[msg.unit.agency] ?? true)
+      getUnitLayer()?.upsert(msg.unit, show)
+      break
+    }
+    case 'scenario.status':
+      setAppState({ scenario: msg.scenario.loaded ? msg.scenario : null })
+      break
+    case 'alert': {
+      if (msg.alert.kind === 'clear') {
+        setAppState({ alert: null })
+      } else {
+        setAppState({ alert: msg.alert })
+        // Map snaps to the member in trouble; label revealed and pulsing.
+        if (msg.alert.uid) flyToUnit(msg.alert.uid)
+      }
+      break
+    }
+    case 'exposure':
+      getExposureLayer()?.set(msg.labels ?? [])
+      break
+    case 'scenario.aar':
+      setAppState({ aarOpen: true })
       break
     case 'unit.remove':
       setAppState((s) => {
@@ -152,12 +212,19 @@ function handle(msg: ServerMsg): void {
       break
     case 'transcript': {
       const MAX_LINES = 200
-      setAppState((s) => ({
-        transcripts: {
-          ...s.transcripts,
-          [msg.channel]: [...s.transcripts[msg.channel], msg.line].slice(-MAX_LINES),
-        },
-      }))
+      setAppState((s) => {
+        const existing = s.transcripts[msg.channel]
+        const last = existing[existing.length - 1]
+        // Identical ts+text can only be transport duplication (e.g. a stacked
+        // dev-reload socket) — a real repeat transmission gets a fresh stamp.
+        if (last && last.ts === msg.line.ts && last.text === msg.line.text) return {}
+        return {
+          transcripts: {
+            ...s.transcripts,
+            [msg.channel]: [...existing, msg.line].slice(-MAX_LINES),
+          },
+        }
+      })
       // FDNY designator mentions flash the matching roster unit on the globe.
       if (msg.channel === 'fdny') {
         const units = Object.values(getAppState().units)

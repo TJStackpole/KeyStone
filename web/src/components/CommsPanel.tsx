@@ -9,6 +9,16 @@ const CHANNELS: { id: CommsChannel; label: string }[] = [
   { id: 'oem', label: 'OEM' },
 ]
 
+/** Multi-channel radio while a scenario is loaded (Prompt 8A §3). */
+const SCENARIO_CHANNELS: { id: CommsChannel; label: string }[] = [
+  { id: 'fdny-tac', label: 'FD TAC' },
+  { id: 'fdny-cmd', label: 'FD CMD' },
+  { id: 'ems-cw', label: 'EMS CW' },
+  { id: 'nypd-sod', label: 'NYPD SOD' },
+  { id: 'papd', label: 'PAPD' },
+  { id: 'interagency', label: 'IA' },
+]
+
 function hhmmss(iso: string): string {
   return new Date(iso).toTimeString().slice(0, 8)
 }
@@ -40,8 +50,16 @@ function HighlightedText({ line }: { line: TranscriptLine }) {
 }
 
 export function CommsPanel() {
-  const { commsOpen, commsChannel, transcripts, commsConfig, incident } = useAppState()
+  const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario } = useAppState()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scenarioMode = !!scenario
+
+  // Merged "command view": every scenario channel interleaved by timestamp.
+  const merged: TranscriptLine[] = scenarioMode
+    ? SCENARIO_CHANNELS.flatMap((c) => transcripts[c.id].map((l) => ({ ...l, text: `[${c.label}] ${l.text}` })))
+        .sort((a, b) => a.ts.localeCompare(b.ts))
+        .slice(-200)
+    : []
 
   useEffect(() => {
     // fetch channel config once
@@ -53,7 +71,8 @@ export function CommsPanel() {
     }
   }, [commsConfig])
 
-  const lines = transcripts[commsChannel]
+  const { commsAll } = useAppState()
+  const lines = scenarioMode && commsAll ? merged : transcripts[commsChannel]
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -79,14 +98,16 @@ export function CommsPanel() {
   return (
     <section className="comms-panel glass">
       <div className="comms-tabs">
-        {CHANNELS.map((c) => (
+        {(scenarioMode ? SCENARIO_CHANNELS : CHANNELS).map((c) => (
           <button
             key={c.id}
-            className={`comms-tab${commsChannel === c.id ? ' on' : ''}`}
-            onClick={() => setAppState({ commsChannel: c.id })}
+            className={`comms-tab${!commsAll && commsChannel === c.id ? ' on' : ''}`}
+            onClick={() => setAppState({ commsChannel: c.id, commsAll: false })}
           >
             {c.label}
-            {c.id === 'fdny' ? (
+            {scenarioMode ? (
+              <i className="tab-badge sim">DRILL</i>
+            ) : c.id === 'fdny' ? (
               <i className={`tab-badge${fdnyActuallyLive ? ' live' : ''}`}>
                 {fdnyActuallyLive ? 'LIVE' : 'AS-LIVE'}
               </i>
@@ -95,6 +116,15 @@ export function CommsPanel() {
             )}
           </button>
         ))}
+        {scenarioMode && (
+          <button
+            className={`comms-tab${commsAll ? ' on' : ''}`}
+            onClick={() => setAppState({ commsAll: true })}
+            title="Merged command view — every channel interleaved"
+          >
+            ALL
+          </button>
+        )}
         {commsChannel === 'fdny' && commsConfig && (
           <audio
             className="comms-audio"

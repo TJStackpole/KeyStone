@@ -11,7 +11,7 @@ const ALARMS: { id: AlarmLevel; label: string }[] = [
 ]
 
 const ALARM_ORDER: AlarmLevel[] = ['10-75', 'all-hands', '2nd', '3rd']
-const AGENCIES: Agency[] = ['FDNY', 'EMS', 'NYPD', 'OEM']
+const AGENCIES: Agency[] = ['FDNY', 'EMS', 'NYPD', 'PAPD', 'OEM']
 
 function fmtElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -49,6 +49,7 @@ export function CommandStrip() {
       FDNY: { onScene: 0, total: 0 },
       EMS: { onScene: 0, total: 0 },
       NYPD: { onScene: 0, total: 0 },
+      PAPD: { onScene: 0, total: 0 },
       OEM: { onScene: 0, total: 0 },
       TAK: { onScene: 0, total: 0 },
     }

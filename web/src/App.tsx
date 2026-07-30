@@ -13,6 +13,10 @@ import { DrawToolbar } from './components/DrawToolbar'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
+import { ScenarioBar } from './components/ScenarioBar'
+import { NycemPanel } from './components/NycemPanel'
+import { MaydayAlert } from './components/MaydayAlert'
+import { AarPanel } from './components/AarPanel'
 
 /** Floating escape hatch while the camera is at street level. */
 function GroundViewExit() {
@@ -99,6 +103,10 @@ export default function App() {
       <CommsPanel />
       <GroundViewExit />
       <GroundHeightControl />
+      <ScenarioBar />
+      <NycemPanel />
+      <MaydayAlert />
+      <AarPanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">KEYSTONE</div>
         <div className="status">{bootMsg}</div>
