@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { runDemoScenario, toggleActiveIncidentMode } from '../actions'
+import { runDemoScenario, toggleActiveIncidentMode, toggleTopDownView } from '../actions'
 import { setAppState, useAppState } from '../state/store'
 import { SearchBar } from './SearchBar'
 
@@ -38,7 +38,7 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected, utilityTab, incident, activeIncidentMode } = useAppState()
+  const { providerMode, layers, takConnected, utilityTab, incident, activeIncidentMode, viewMode } = useAppState()
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
@@ -106,9 +106,13 @@ export function TopBar() {
           <span className="dot" /> FLOORS
         </button>
         {providerMode && (
-          <span className="chip">
-            <span className="dot" /> {MODE_LABEL[providerMode]}
-          </span>
+          <button
+            className={`chip chip-btn${viewMode === 'topdown' ? ' active' : ''}`}
+            onClick={() => void toggleTopDownView()}
+            title="Toggle the camera between the tactical 3D view and a straight-down satellite view"
+          >
+            <span className="dot" /> {viewMode === 'topdown' ? 'TOP-DOWN' : MODE_LABEL[providerMode]}
+          </button>
         )}
         <Clock />
       </div>

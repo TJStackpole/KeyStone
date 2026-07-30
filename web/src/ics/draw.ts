@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium'
-import { deleteShape, saveShape } from '../actions'
+import { deleteShape, exitGround, saveShape } from '../actions'
 import { ShapeLayer, ZONE_STYLE } from '../cesium/shapes'
+import { enterGroundView } from '../cesium/viewmode'
 import { haversineMeters } from '../lib/geo'
 import { getAppState, setAppState } from '../state/store'
 import type { IcsShape, PostKind, ZoneKind } from '../types'
@@ -93,6 +94,13 @@ export class DrawController {
       void this.placeApparatus(pos)
       return
     }
+    if (tool === 'ground') {
+      // Drop to eye height at the clicked spot, facing the incident.
+      const inc = getAppState().incident
+      enterGroundView(this.viewer, pos, inc ? { lat: inc.lat, lon: inc.lon } : undefined)
+      setAppState({ drawTool: null, groundViewActive: true })
+      return
+    }
     if (tool && ZONES.includes(tool as ZoneKind)) {
       this.draft.push({ lat: pos.lat, lon: pos.lon })
       this.renderDraft(tool as ZoneKind)
@@ -153,6 +161,7 @@ export class DrawController {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
     if (e.key === 'Enter') this.finishZone()
     if (e.key === 'Escape') {
+      if (getAppState().groundViewActive) exitGround()
       this.cancelDraft()
       setAppState({ drawTool: null, selectedShapeId: null })
       this.renderHandles()

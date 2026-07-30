@@ -2,6 +2,7 @@ import * as Cesium from 'cesium'
 import { fetchBuildingSafety, fetchFirehouses, fetchHydrants, fetchPluto } from './api/nyc'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
+import { exitGroundView, setTopDown } from './cesium/viewmode'
 import {
   getBoundaryLayer,
   getDrawController,
@@ -38,6 +39,13 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   setAppState({ incident })
 
   const scene = getScene()
+  // A stale top-down/ground camera would fight the tactical fly-in; the
+  // exits restore controller settings, then the tactical flight wins.
+  if (getAppState().groundViewActive) exitGround()
+  if (getAppState().viewMode === 'topdown' && scene) {
+    setAppState({ viewMode: '3d' })
+    void setTopDown(scene, false)
+  }
   if (scene) flyToTactical(scene.viewer, hit.lat, hit.lon)
 
   // These run concurrently; each degrades independently per the CLAUDE.md rule.
@@ -134,6 +142,26 @@ export function toggleActiveIncidentMode(): void {
   const next = !getAppState().activeIncidentMode
   setAppState({ activeIncidentMode: next })
   getFocusLayer()?.apply(getAppState().incident, next)
+}
+
+/** Provider chip: cycle the camera between tactical 3D and top-down satellite. */
+export async function toggleTopDownView(): Promise<void> {
+  const scene = getScene()
+  if (!scene) return
+  // Street-level and top-down don't stack — leave the ground camera first
+  // (restores zoom/collision settings), then the top-down flight wins.
+  if (getAppState().groundViewActive) exitGround()
+  const next = getAppState().viewMode === 'topdown' ? '3d' : 'topdown'
+  setAppState({ viewMode: next })
+  const inc = getAppState().incident
+  await setTopDown(scene, next === 'topdown', inc ? { lat: inc.lat, lon: inc.lon } : undefined)
+}
+
+/** Leave the street-level camera and restore the view it replaced. */
+export function exitGround(): void {
+  const scene = getScene()
+  if (scene) exitGroundView(scene.viewer)
+  setAppState({ groundViewActive: false })
 }
 
 // ---------------------------------------------------------------------------

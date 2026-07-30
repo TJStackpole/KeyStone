@@ -560,6 +560,28 @@ html, body {
   white-space: nowrap;
 }
 
+.ground-exit {
+  position: absolute;
+  bottom: 214px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 22px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 40;
+  white-space: nowrap;
+}
+.ground-exit:hover {
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+
 .tools-collapsed {
   width: auto;
   padding: 8px 10px;

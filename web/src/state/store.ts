@@ -52,6 +52,10 @@ export interface AppState {
   targetHeightM: number | null
   /** ACTIVE INCIDENT focus: refine the fire building, de-emphasize >4 blocks. */
   activeIncidentMode: boolean
+  /** Camera mode: tactical 3D or straight-down satellite-style view. */
+  viewMode: '3d' | 'topdown'
+  /** Street-level camera dropped by the GND tool. */
+  groundViewActive: boolean
 }
 
 const initial: AppState = {
@@ -99,6 +103,8 @@ const initial: AppState = {
   timeline: [],
   targetHeightM: null,
   activeIncidentMode: true,
+  viewMode: '3d',
+  groundViewActive: false,
 }
 
 let state: AppState = initial

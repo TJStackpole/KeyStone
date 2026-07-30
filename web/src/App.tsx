@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import { initScene } from './cesium/providers'
 import { registerScene, unregisterScene } from './cesium/scene'
-import { restoreIncident } from './actions'
+import { exitGround, restoreIncident } from './actions'
 import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
@@ -13,6 +13,17 @@ import { DrawToolbar } from './components/DrawToolbar'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
+
+/** Floating escape hatch while the camera is at street level. */
+function GroundViewExit() {
+  const { groundViewActive } = useAppState()
+  if (!groundViewActive) return null
+  return (
+    <button className="ground-exit glass" onClick={exitGround} title="Return to the tactical camera (Esc)">
+      ⏏ EXIT GROUND VIEW
+    </button>
+  )
+}
 
 export default function App() {
   const globeRef = useRef<HTMLDivElement>(null)
@@ -61,6 +72,7 @@ export default function App() {
       <SiteIntelPanel />
       <UtilityDock />
       <CommsPanel />
+      <GroundViewExit />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">KEYSTONE</div>
         <div className="status">{bootMsg}</div>

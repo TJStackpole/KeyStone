@@ -84,6 +84,16 @@ export function DrawToolbar() {
           <span className="tool-swatch zone" />
           STGE
         </button>
+        <div className="tool-section-label">VIEW</div>
+        <button
+          className={`tool-btn${drawTool === 'ground' ? ' on' : ''}`}
+          style={{ ['--tool-color' as string]: '#22d3ee' }}
+          onClick={() => setDrawTool('ground')}
+          title="Ground view: click anywhere to see the scene from eye height at that spot (Esc returns)"
+        >
+          <span className="tool-swatch post" />
+          GND
+        </button>
         <div className="tool-divider" />
         <button
           className="tool-btn danger"
@@ -104,7 +114,9 @@ export function DrawToolbar() {
                 ? 'CLICK ANYWHERE — COLLAPSE ZONE DRAWS AT 1.5× BUILDING HEIGHT'
                 : drawTool === 'apparatus'
                   ? 'CLICK TO RESERVE TRUCK-SIZE STAGING SPOTS (AUTO-LABELED NEXT-DUE UNITS) · ESC TO STOP'
-                  : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
+                  : drawTool === 'ground'
+                    ? 'CLICK ANY SPOT TO DROP TO STREET-LEVEL VIEW · ESC RETURNS TO TACTICAL'
+                    : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
         </div>
       )}
       {!drawTool && selectedShapeId && (

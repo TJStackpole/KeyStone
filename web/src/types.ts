@@ -76,7 +76,7 @@ export interface ApparatusShape {
 
 export type IcsShape = ZoneShape | PostShape | ApparatusShape
 
-export type DrawTool = ZoneKind | PostKind | 'measure' | 'collapse' | 'apparatus' | null
+export type DrawTool = ZoneKind | PostKind | 'measure' | 'collapse' | 'apparatus' | 'ground' | null
 
 // ------------------------------ comms (Phase 7) -----------------------------
 
