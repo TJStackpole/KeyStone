@@ -1,7 +1,30 @@
-import { useState } from 'react'
-import { changeIncidentType } from '../actions'
+import { useEffect, useState } from 'react'
+import { changeIncidentType, endIncident } from '../actions'
 import { useAppState } from '../state/store'
 import { INCIDENT_TYPES } from '../types'
+
+/** Two-click END control: first click arms CONFIRM, second tears the board down. */
+function EndIncidentButton() {
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const t = setTimeout(() => setArmed(false), 3500)
+    return () => clearTimeout(t)
+  }, [armed])
+  return (
+    <button
+      className={`end-incident${armed ? ' armed' : ''}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (armed) void endIncident()
+        else setArmed(true)
+      }}
+      title="Cancel any drill, demo, or live incident and clear the board"
+    >
+      {armed ? 'CONFIRM END?' : '✕ END'}
+    </button>
+  )
+}
 
 export function IncidentCard() {
   const { incident } = useAppState()
@@ -32,6 +55,7 @@ export function IncidentCard() {
         <span className="pulse" title="Active incident" />
         <span className="chev">▾</span>
       </button>
+      <EndIncidentButton />
       <div className="addr">{incident.address}</div>
       <div className="meta">
         {incident.bin && (

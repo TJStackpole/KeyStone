@@ -80,6 +80,8 @@ export interface AppState {
   targetHeightM: number | null
   /** ACTIVE INCIDENT focus: refine the fire building, de-emphasize >4 blocks. */
   activeIncidentMode: boolean
+  /** ISOLATE: clip away every building/tree except the incident building. */
+  isolateMode: boolean
   /** Camera mode: tactical 3D or straight-down satellite-style view. */
   viewMode: '3d' | 'topdown'
   /** Street-level camera dropped by the GND tool. */
@@ -102,7 +104,16 @@ const initial: AppState = {
   },
   intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
   inspected: null,
-  layerToggles: { footprints: true, hydrants: true, firehouses: true, streets: true, battalions: false, divisions: false },
+  layerToggles: {
+    footprints: true,
+    targetbox: true,
+    hydrants: true,
+    firehouses: true,
+    streets: true,
+    traffic: false,
+    battalions: false,
+    divisions: false,
+  },
   units: {},
   takConnected: null,
   unitToggles: {
@@ -152,6 +163,7 @@ const initial: AppState = {
   timeline: [],
   targetHeightM: null,
   activeIncidentMode: true,
+  isolateMode: false,
   viewMode: '3d',
   groundViewActive: false,
   groundViewFt: 6,

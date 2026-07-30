@@ -8,6 +8,7 @@ import { SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from '.
 import { env } from './env.js'
 import {
   appendTimeline,
+  clearIncident,
   createIncident,
   getState,
   removeShape,
@@ -347,7 +348,9 @@ app.post('/api/incident', (req, res) => {
     type: b.type,
     createdAt: b.createdAt ?? new Date().toISOString(),
   }
-  // A new incident supersedes the old picture — stop any convergence in progress.
+  // A new incident supersedes the old picture — stop any convergence in
+  // progress, including a running scenario drill.
+  scenario.stop()
   simulator.stop()
   issuedStaging.clear()
   stagingFlip = 0
@@ -355,6 +358,23 @@ app.post('/api/incident', (req, res) => {
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
   res.status(201).json(state)
+})
+
+// Cancel everything: drill, demo dispatch, shapes, incident. The registry is
+// emptied too — live ATAK clients re-announce within seconds, so the picture
+// rebuilds from genuinely live traffic only.
+app.delete('/api/incident', (_req, res) => {
+  scenario.stop()
+  simulator.stop()
+  issuedStaging.clear()
+  stagingFlip = 0
+  for (const u of registry.all()) registry.remove(u.uid)
+  const state = clearIncident()
+  broadcast({ type: 'incident', incident: null })
+  broadcast({ type: 'exposure', labels: [] })
+  broadcast({ type: 'alert', alert: { kind: 'clear' } })
+  console.log('[incident] cleared — board reset')
+  res.json(state)
 })
 
 app.patch('/api/incident', (req, res) => {

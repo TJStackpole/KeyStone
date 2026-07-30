@@ -43,9 +43,11 @@ function StatusNote({ status, empty }: { status: LayerStatus; empty?: string }) 
 
 const TOGGLES: { id: ToggleLayerId; label: string }[] = [
   { id: 'footprints', label: 'Bldgs' },
+  { id: 'targetbox', label: 'Fire Bldg' },
   { id: 'hydrants', label: 'Hydrants' },
   { id: 'firehouses', label: 'Houses' },
   { id: 'streets', label: 'Streets' },
+  { id: 'traffic', label: 'Traffic' },
   { id: 'battalions', label: 'Battalions' },
   { id: 'divisions', label: 'Divisions' },
 ]

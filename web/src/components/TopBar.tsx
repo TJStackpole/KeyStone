@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { loadScenario, runDemoScenario, toggleActiveIncidentMode, toggleTopDownView } from '../actions'
+import {
+  loadScenario,
+  runDemoScenario,
+  toggleActiveIncidentMode,
+  toggleIsolateMode,
+  toggleTopDownView,
+} from '../actions'
 import { setAppState, useAppState } from '../state/store'
 import { SearchBar } from './SearchBar'
 
@@ -38,8 +44,17 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected, utilityTab, incident, activeIncidentMode, viewMode, nycemView } =
-    useAppState()
+  const {
+    providerMode,
+    layers,
+    takConnected,
+    utilityTab,
+    incident,
+    activeIncidentMode,
+    isolateMode,
+    viewMode,
+    nycemView,
+  } = useAppState()
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
@@ -83,6 +98,15 @@ export function TopBar() {
             title="Refine the fire building; de-emphasize beyond ~4 blocks"
           >
             <span className="dot" /> ACTIVE INCIDENT
+          </button>
+        )}
+        {incident && activeIncidentMode && (
+          <button
+            className={`chip chip-btn amber${isolateMode ? ' active' : ''}`}
+            onClick={toggleIsolateMode}
+            title="Strip every building, tree, and obstruction except the incident building"
+          >
+            <span className="dot" /> ISOLATE
           </button>
         )}
         {incident && (

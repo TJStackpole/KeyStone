@@ -6,9 +6,10 @@ import {
   fetchHydrants,
   fetchPluto,
   fetchStreetLabels,
+  fetchTrafficLinks,
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
-import { fetchFootprints, footprintContaining } from './cesium/footprints'
+import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
 import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
 import {
@@ -21,8 +22,10 @@ import {
   getScene,
   getShapeLayer,
   getStreetLayer,
+  getTrafficLayer,
   getUnitLayer,
 } from './cesium/scene'
+import { replayEngine } from './replay'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
 import type { Agency, GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
 
@@ -51,6 +54,9 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   const scene = getScene()
   // A stale top-down/ground camera would fight the tactical fly-in; the
   // exits restore controller settings, then the tactical flight wins.
+  resetIsolate()
+  lastFootprints = null
+  getTrafficLayer()?.clear() // stale polylines from the previous location
   if (getAppState().groundViewActive) exitGround()
   if (getAppState().viewMode === 'topdown' && scene) {
     setAppState({ viewMode: '3d' })
@@ -87,6 +93,9 @@ export async function changeIncidentType(type: IncidentType): Promise<void> {
   }
 }
 
+/** Last rendered footprint set — ISOLATE mode clips the tileset to the target. */
+let lastFootprints: { incidentId: string; feats: Footprint[]; targetBin?: string } | null = null
+
 async function loadFootprints(incident: Incident): Promise<void> {
   const scene = getScene()
   const layer = getFootprintLayer()
@@ -94,22 +103,105 @@ async function loadFootprints(incident: Incident): Promise<void> {
   setLayerStatus('footprints', 'loading')
   try {
     const feats = await fetchFootprints(incident.lat, incident.lon, 250)
+    // Stale-guard: the incident may have changed (or been ended) mid-fetch.
+    if (getAppState().incident?.id !== incident.id) return
     // Prefer the PAD BIN from geocoding; fall back to point-in-polygon.
     const targetBin =
       incident.bin && feats.some((f) => f.bin === incident.bin)
         ? incident.bin
         : footprintContaining(incident.lon, incident.lat, feats)?.bin
-    layer.render(feats, targetBin, scene.extrudeFootprints)
+    lastFootprints = { incidentId: incident.id, feats, targetBin }
+    void layer.render(feats, targetBin, scene.extrudeFootprints && !getAppState().isolateMode)
     // Remember the target's height — it drives the collapse-zone tool (1.5x rule).
     const target = feats.find((f) => f.bin === targetBin)
     setAppState({ targetHeightM: target?.heightM ?? null })
     setLayerStatus('footprints', 'ok')
+    // Self-heal ISOLATE: if the operator toggled it while footprints were in
+    // flight, re-apply the clip against the freshly resolved target.
+    if (getAppState().isolateMode) applyIsolate(true)
     console.log(`[footprints] ${feats.length} footprints, target BIN ${targetBin ?? 'not resolved'}`)
   } catch (err) {
     console.error('[footprints] layer unavailable:', err)
+    if (getAppState().incident?.id !== incident.id) return
+    lastFootprints = null
+    resetIsolate() // a clip against vanished data is worse than no clip
     layer.clear()
     setLayerStatus('footprints', 'unavailable')
   }
+}
+
+// ---------------------------------------------------------------------------
+// ISOLATE mode: strip every building, tree, and obstruction except the
+// incident building. On photorealistic/OSM tilesets this uses inverse
+// clipping polygons (the tileset renders ONLY inside the target footprint,
+// so the REAL building stands alone); keyless mode simply stops extruding
+// the neighbors. Available while ACTIVE INCIDENT focus is on.
+// ---------------------------------------------------------------------------
+
+export function toggleIsolateMode(): void {
+  const scene = getScene()
+  const on = !getAppState().isolateMode
+  if (!scene) return
+  const current = getAppState().incident
+  const cacheValid = !!lastFootprints?.targetBin && lastFootprints.incidentId === current?.id
+  if (on && !cacheValid) {
+    console.warn('[isolate] no resolved target footprint for this incident yet — cannot isolate')
+    return
+  }
+  setAppState({ isolateMode: on })
+  applyIsolate(on)
+}
+
+/** How high ISOLATE levitates the building above the flattened city. */
+function isolateLiftM(): number {
+  const h = getAppState().targetHeightM ?? 30
+  return Math.min(80, Math.max(35, h * 0.5))
+}
+
+function applyIsolate(on: boolean): void {
+  const scene = getScene()
+  if (!scene) return
+  const tileset = scene.buildingTileset
+  if (tileset) {
+    if (on && lastFootprints?.targetBin) {
+      const target = lastFootprints.feats.find((f) => f.bin === lastFootprints?.targetBin)
+      const polygons = (target?.polygons ?? []).map(
+        (poly) =>
+          new Cesium.ClippingPolygon({
+            positions: Cesium.Cartesian3.fromDegreesArray(poly[0].flat()),
+          }),
+      )
+      if (polygons.length) {
+        tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons, inverse: true })
+        // Raise the lone building above the flattened city: translate the
+        // (fully clipped) tileset along the local up vector. Only the target
+        // survives the clip, so only it visibly lifts.
+        const inc = getAppState().incident
+        if (inc) {
+          const up = Cesium.Cartesian3.normalize(
+            Cesium.Cartesian3.fromDegrees(inc.lon, inc.lat),
+            new Cesium.Cartesian3(),
+          )
+          const lift = Cesium.Cartesian3.multiplyByScalar(up, isolateLiftM(), new Cesium.Cartesian3())
+          tileset.modelMatrix = Cesium.Matrix4.fromTranslation(lift)
+        }
+      }
+    } else {
+      tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
+      tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
+    }
+  }
+  // Keyless: the neighbors are our own extrusions — just stop drawing them.
+  if (lastFootprints && scene.extrudeFootprints) {
+    void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, !on)
+  }
+}
+
+/** Shared teardown: ACTIVE INCIDENT off, new incident, or END all clear isolate. */
+export function resetIsolate(): void {
+  if (!getAppState().isolateMode) return
+  setAppState({ isolateMode: false })
+  applyIsolate(false)
 }
 
 async function persistIncident(incident: Incident): Promise<void> {
@@ -152,6 +244,7 @@ export function toggleActiveIncidentMode(): void {
   const next = !getAppState().activeIncidentMode
   setAppState({ activeIncidentMode: next })
   getFocusLayer()?.apply(getAppState().incident, next)
+  if (!next) resetIsolate() // ISOLATE rides on active-incident focus
 }
 
 /** Provider chip: cycle the camera between tactical 3D and top-down satellite. */
@@ -188,6 +281,9 @@ export function setGroundHeightFt(ft: number): void {
 
 async function loadSiteIntel(incident: Incident): Promise<void> {
   const intel = getIntelLayer()
+  // Every sub-fetch checks this after awaiting: a late result for an ended or
+  // superseded incident must not repopulate a board that moved on.
+  const stillCurrent = () => getAppState().incident?.id === incident.id
 
   setLayerStatus('pluto', 'loading')
   setLayerStatus('hydrants', 'loading')
@@ -198,32 +294,39 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
     try {
       // Street/avenue captions — photorealistic tiles carry no map labels.
       const streets = await fetchStreetLabels(incident.lat, incident.lon)
+      if (!stillCurrent()) return
       const layer = getStreetLayer()
       layer?.set(streets)
       layer?.setVisible(getAppState().layerToggles.streets)
     } catch (err) {
       console.error('[streets] labels unavailable:', err)
-      getStreetLayer()?.clear()
+      if (stillCurrent()) getStreetLayer()?.clear()
     }
   })()
 
   void (async () => {
     try {
       const cofo = incident.bin ? await fetchCertificatesOfOccupancy(incident.bin) : []
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, cofo } }))
     } catch (err) {
       console.error('[cofo] records unavailable:', err)
-      setAppState((s) => ({ intel: { ...s.intel, cofo: [] } }))
+      if (stillCurrent()) setAppState((s) => ({ intel: { ...s.intel, cofo: [] } }))
     }
   })()
+
+  // Traffic follows the incident to its new location when the layer is on.
+  void refreshTraffic()
 
   void (async () => {
     try {
       const safety = incident.bin ? await fetchBuildingSafety(incident.bin) : null
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, safety } }))
       setLayerStatus('safety', 'ok')
     } catch (err) {
       console.error('[safety] layer unavailable:', err)
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, safety: null } }))
       setLayerStatus('safety', 'unavailable')
     }
@@ -232,10 +335,12 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
   void (async () => {
     try {
       const pluto = incident.bbl ? await fetchPluto(incident.bbl) : null
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, pluto } }))
       setLayerStatus('pluto', 'ok')
     } catch (err) {
       console.error('[pluto] layer unavailable:', err)
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, pluto: null } }))
       setLayerStatus('pluto', 'unavailable')
     }
@@ -245,11 +350,13 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
     try {
       // Hydrant picture stays tight to the fire — a couple of Manhattan blocks.
       const hydrants = await fetchHydrants(incident.lat, incident.lon, 180)
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, hydrants } }))
       intel?.setHydrants(hydrants)
       setLayerStatus('hydrants', 'ok')
     } catch (err) {
       console.error('[hydrants] layer unavailable:', err)
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, hydrants: [] } }))
       intel?.setHydrants([])
       setLayerStatus('hydrants', 'unavailable')
@@ -259,6 +366,7 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
   void (async () => {
     try {
       const firehouses = await fetchFirehouses(incident.lat, incident.lon)
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, firehouses } }))
       // Globe markers: only the nearest three (the responding houses); the full
       // sorted list stays in state for the Phase 4 simulator.
@@ -266,6 +374,7 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
       setLayerStatus('firehouses', 'ok')
     } catch (err) {
       console.error('[firehouses] layer unavailable:', err)
+      if (!stillCurrent()) return
       setAppState((s) => ({ intel: { ...s.intel, firehouses: [] } }))
       intel?.setFirehouses([])
       setLayerStatus('firehouses', 'unavailable')
@@ -278,9 +387,14 @@ export function toggleLayer(layer: ToggleLayerId): void {
   const next = !getAppState().layerToggles[layer]
   setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: next } }))
   if (layer === 'footprints') getFootprintLayer()?.setVisible(next)
+  if (layer === 'targetbox') getFootprintLayer()?.setTargetVisible(next)
   if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next)
   if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next)
   if (layer === 'streets') getStreetLayer()?.setVisible(next)
+  if (layer === 'traffic') {
+    getTrafficLayer()?.setVisible(next)
+    if (next) void refreshTraffic()
+  }
   if (layer === 'battalions' || layer === 'divisions') {
     getBoundaryLayer()
       ?.setVisible(layer, next)
@@ -296,6 +410,9 @@ export function toggleLayer(layer: ToggleLayerId): void {
  * local treatment as an operator search: fly-in, footprints, intel, focus.
  */
 export function adoptIncident(incident: Incident): void {
+  resetIsolate()
+  lastFootprints = null
+  getTrafficLayer()?.clear() // stale polylines from the previous location
   setAppState({
     incident,
     shapes: {},
@@ -352,6 +469,59 @@ export async function stopScenario(): Promise<void> {
   setAppState({ scenario: null, alert: null, aarOpen: false })
 }
 
+/**
+ * Cancel EVERYTHING — drill, demo dispatch, incident, shapes, units. One
+ * escape hatch that always returns the platform to a clean searching state.
+ */
+export async function endIncident(): Promise<void> {
+  try {
+    const res = await fetch('/api/incident', { method: 'DELETE' })
+    if (!res.ok) {
+      // Server refused — its sim/scenario would instantly repopulate a wiped
+      // board, so keep local state honest and bail.
+      console.error(`[incident] end refused by server (${res.status})`)
+      return
+    }
+  } catch (err) {
+    // Server unreachable — nothing is broadcasting, safe to clear locally.
+    console.error('[incident] end: server unreachable, clearing locally:', err)
+  }
+  clearLocalIncident()
+}
+
+/** Local teardown shared by endIncident and the ws incident:null broadcast. */
+export function clearLocalIncident(): void {
+  // A running replay owns the globe and its EXIT control lives on the
+  // incident UI — ending the incident must end the replay too.
+  if (getAppState().replay.active) replayEngine.stop()
+  resetIsolate()
+  lastFootprints = null
+  setAppState({
+    incident: null,
+    shapes: {},
+    selectedShapeId: null,
+    drawTool: null,
+    targetHeightM: null,
+    inspected: null,
+    scenario: null,
+    alert: null,
+    aarOpen: false,
+    nycemView: false,
+    units: {},
+    intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
+    timeline: [],
+  })
+  getShapeLayer()?.clear()
+  getUnitLayer()?.clear()
+  getFootprintLayer()?.clear()
+  getIntelLayer()?.clear()
+  getStreetLayer()?.clear()
+  getExposureLayer()?.clear()
+  getTrafficLayer()?.clear()
+  getFocusLayer()?.apply(null, false)
+  if (getAppState().groundViewActive) exitGround()
+}
+
 /** NYCEM view: agency-level unit filters, ANDed with the category toggles. */
 export function toggleAgency(agency: Agency): void {
   const next = !getAppState().agencyToggles[agency]
@@ -403,6 +573,38 @@ export async function inspectBuildingAt(lat: number, lon: number): Promise<void>
 export function clearInspected(): void {
   inspectSeq++
   setAppState({ inspected: null })
+}
+
+// ---------------------------------------------------------------------------
+// Live traffic (DOT Traffic Speeds NBE): refreshed every 60 s while the
+// TRAFFIC layer is on and an incident exists. The interval is a permanent
+// low-cost heartbeat — the gate conditions do the work.
+// ---------------------------------------------------------------------------
+
+let trafficTimer: ReturnType<typeof setInterval> | null = null
+
+export async function refreshTraffic(): Promise<void> {
+  const { incident, layerToggles } = getAppState()
+  if (!incident || !layerToggles.traffic) return
+  if (!trafficTimer) {
+    trafficTimer = setInterval(() => void refreshTraffic(), 60_000)
+  }
+  try {
+    // DOT's sensor network covers highways/major arterials only — if nothing
+    // is near a residential incident, widen to show the approach corridors.
+    let links = await fetchTrafficLinks(incident.lat, incident.lon, 2500)
+    if (!links.length) links = await fetchTrafficLinks(incident.lat, incident.lon, 8000)
+    // Stale-guard: the incident may have changed while the fetch was in flight.
+    const now = getAppState()
+    if (now.incident?.id !== incident.id || !now.layerToggles.traffic) return
+    getTrafficLayer()?.set(links)
+  } catch (err) {
+    console.error('[traffic] layer unavailable:', err)
+    // Same stale-guard as the success path — a late failure from a previous
+    // incident must not wipe links a newer refresh already drew.
+    const now = getAppState()
+    if (now.incident?.id === incident.id && now.layerToggles.traffic) getTrafficLayer()?.clear()
+  }
 }
 
 /** Close-in look at a single intel feature (hydrant / firehouse row click). */

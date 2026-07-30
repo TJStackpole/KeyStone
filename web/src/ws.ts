@@ -1,4 +1,4 @@
-import { adoptIncident, flyToUnit } from './actions'
+import { adoptIncident, clearLocalIncident, flyToUnit } from './actions'
 import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
 import type {
@@ -117,10 +117,24 @@ export function connectWs(): void {
 
 function handle(msg: ServerMsg): void {
   // During REPLAY the globe belongs to the replay engine — hold live mutations
-  // (transcripts still flow; they're history-safe).
-  if (getAppState().replay.active && msg.type !== 'transcript' && msg.type !== 'tak.status') return
+  // (transcripts still flow; they're history-safe). Incident lifecycle changes
+  // (END from any station, a new stand-up) must NOT be dropped — they exit
+  // replay via adopt/clear rather than leaving a dead board on this station.
+  if (
+    getAppState().replay.active &&
+    msg.type !== 'transcript' &&
+    msg.type !== 'tak.status' &&
+    msg.type !== 'incident'
+  ) {
+    return
+  }
   switch (msg.type) {
     case 'snapshot': {
+      // Reconcile the incident FIRST — a station that was disconnected when
+      // END or a new stand-up happened only learns about it here.
+      const local = getAppState().incident
+      if (!msg.incident && local) clearLocalIncident()
+      else if (msg.incident && msg.incident.id !== local?.id) adoptIncident(msg.incident)
       // Authoritative rebuild — clears units/shapes that changed while
       // disconnected (e.g. server restart swept the registry).
       getUnitLayer()?.clear()
@@ -148,6 +162,9 @@ function handle(msg: ServerMsg): void {
       if (msg.incident && msg.incident.id !== prev?.id) {
         // Server-initiated incident (scenario load) — full local stand-up.
         adoptIncident(msg.incident)
+      } else if (!msg.incident && prev) {
+        // Board reset (END INCIDENT from any station) — full local teardown.
+        clearLocalIncident()
       } else {
         setAppState({ incident: msg.incident })
       }

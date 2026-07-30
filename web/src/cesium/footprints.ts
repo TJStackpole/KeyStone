@@ -10,9 +10,9 @@ export interface Footprint {
   polygons: number[][][][]
 }
 
-// Translucent enough to see the real building through the highlight — the
-// glowing outline still marks the fire building unmistakably.
-const TARGET_FILL = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.32)
+// Strong enough to read across the map, translucent enough to see the real
+// building through it — and independently toggleable (Fire Bldg chip).
+const TARGET_FILL = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.45)
 const TARGET_OUTLINE = Cesium.Color.fromCssColorString('#fbbf24')
 const NEIGHBOR_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.28)
 
@@ -66,8 +66,10 @@ function ringToHierarchy(poly: number[][][]): Cesium.PolygonHierarchy {
  */
 export class FootprintLayer {
   private primitives: Cesium.Primitive[] = []
+  private targetPrimitives: Cesium.Primitive[] = []
   private viewer: Cesium.Viewer
   private visible = true
+  private targetVisible = true
   private renderSeq = 0
 
   constructor(viewer: Cesium.Viewer) {
@@ -78,11 +80,25 @@ export class FootprintLayer {
     this.renderSeq++
     for (const p of this.primitives) this.viewer.scene.primitives.remove(p)
     this.primitives = []
+    this.targetPrimitives = []
   }
 
   setVisible(show: boolean): void {
     this.visible = show
-    for (const p of this.primitives) p.show = show
+    this.applyVisibility()
+  }
+
+  /** Fire Bldg chip: the orange target box on its own switch. */
+  setTargetVisible(show: boolean): void {
+    this.targetVisible = show
+    this.applyVisibility()
+  }
+
+  private applyVisibility(): void {
+    for (const p of this.primitives) {
+      const isTarget = this.targetPrimitives.includes(p)
+      p.show = this.visible && (!isTarget || this.targetVisible)
+    }
   }
 
   /**
@@ -128,7 +144,8 @@ export class FootprintLayer {
   async render(feats: Footprint[], targetBin: string | undefined, extrudeNeighbors: boolean): Promise<void> {
     this.clear()
     const seq = this.renderSeq
-    const fillInstances: Cesium.GeometryInstance[] = []
+    const neighborFillInstances: Cesium.GeometryInstance[] = []
+    const targetFillInstances: Cesium.GeometryInstance[] = []
     const outlineInstances: Cesium.GeometryInstance[] = []
 
     // Base the target's box at true street level so low-rise highlights hug
@@ -143,7 +160,7 @@ export class FootprintLayer {
       const h0 = isTarget ? base : 0
       for (let i = 0; i < f.polygons.length; i++) {
         const hierarchy = ringToHierarchy(f.polygons[i])
-        fillInstances.push(
+        ;(isTarget ? targetFillInstances : neighborFillInstances).push(
           new Cesium.GeometryInstance({
             id: `footprint:${f.bin}:${i}`,
             geometry: new Cesium.PolygonGeometry({
@@ -175,15 +192,26 @@ export class FootprintLayer {
       }
     }
 
-    if (fillInstances.length) {
+    if (neighborFillInstances.length) {
       const fill = new Cesium.Primitive({
-        geometryInstances: fillInstances,
+        geometryInstances: neighborFillInstances,
         appearance: new Cesium.PerInstanceColorAppearance({ translucent: true, closed: true }),
         asynchronous: true,
       })
-      fill.show = this.visible
       this.viewer.scene.primitives.add(fill)
       this.primitives.push(fill)
+    }
+    // Target fill + outline live in their own primitives so the orange box
+    // can be toggled independently of the neighbor extrusions (Fire Bldg chip).
+    if (targetFillInstances.length) {
+      const fill = new Cesium.Primitive({
+        geometryInstances: targetFillInstances,
+        appearance: new Cesium.PerInstanceColorAppearance({ translucent: true, closed: true }),
+        asynchronous: true,
+      })
+      this.viewer.scene.primitives.add(fill)
+      this.primitives.push(fill)
+      this.targetPrimitives.push(fill)
     }
     if (outlineInstances.length) {
       const outline = new Cesium.Primitive({
@@ -191,9 +219,10 @@ export class FootprintLayer {
         appearance: new Cesium.PerInstanceColorAppearance({ flat: true, translucent: false }),
         asynchronous: true,
       })
-      outline.show = this.visible
       this.viewer.scene.primitives.add(outline)
       this.primitives.push(outline)
+      this.targetPrimitives.push(outline)
     }
+    this.applyVisibility()
   }
 }

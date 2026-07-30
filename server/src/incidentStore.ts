@@ -69,6 +69,13 @@ export function createIncident(incident: Incident): IncidentFile {
   return state
 }
 
+/** Tear the whole board down — no incident, no shapes, fresh timeline. */
+export function clearIncident(): IncidentFile {
+  state = { incident: null, shapes: [], timeline: [] }
+  appendTimeline('incident.cleared', {})
+  return state
+}
+
 export function updateIncident(patch: Partial<Incident>): IncidentFile {
   if (!state.incident) return state
   state.incident = { ...state.incident, ...patch }

@@ -268,6 +268,8 @@ export interface StreetLabel {
   name: string
   lat: number
   lon: number
+  /** Street direction at the label anchor, degrees true — labels run along it. */
+  bearingDeg: number
 }
 
 interface CenterlineRow {
@@ -292,7 +294,7 @@ export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500)
   if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
   const rows = (await res.json()) as CenterlineRow[]
 
-  const best = new Map<string, { len: number; lat: number; lon: number }>()
+  const best = new Map<string, { len: number; lat: number; lon: number; bearingDeg: number }>()
   for (const r of rows) {
     const name = r.full_street_name?.trim()
     const line = r.the_geom?.type === 'MultiLineString' ? r.the_geom.coordinates[0] : undefined
@@ -300,13 +302,90 @@ export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500)
     const len = Number(r.segmentlength ?? 0)
     const prev = best.get(name)
     if (prev && prev.len >= len) continue
-    const [mLon, mLat] = line[Math.floor(line.length / 2)]
-    best.set(name, { len, lat: mLat, lon: mLon })
+    const mid = Math.floor(line.length / 2)
+    const [mLon, mLat] = line[mid]
+    // Local direction from the vertices bracketing the anchor.
+    const [aLon, aLat] = line[Math.max(0, mid - 1)]
+    const [bLon, bLat] = line[Math.min(line.length - 1, mid + 1)]
+    const bearingDeg =
+      (Math.atan2((bLon - aLon) * Math.cos((mLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI
+    best.set(name, { len, lat: mLat, lon: mLon, bearingDeg: (bearingDeg + 360) % 360 })
   }
   return [...best.entries()]
     .sort((a, b) => b[1].len - a[1].len)
     .slice(0, 30)
-    .map(([name, v]) => ({ name, lat: v.lat, lon: v.lon }))
+    .map(([name, v]) => ({ name, lat: v.lat, lon: v.lon, bearingDeg: v.bearingDeg }))
+}
+
+// --------------------- live traffic (DOT Traffic Speeds NBE) -----------------
+
+export interface TrafficLink {
+  name: string
+  speedMph: number
+  asOf: string
+  /** [lon, lat] vertices along the sensor link. */
+  positions: [number, number][]
+}
+
+interface TrafficRow {
+  link_id?: string
+  speed?: string
+  status?: string
+  link_points?: string
+  link_name?: string
+  data_as_of?: string
+}
+
+const TRAFFIC_SPEEDS = 'https://data.cityofnewyork.us/resource/i4gi-tjb9.json'
+
+// Truncated link_points tokens produce coordinates far outside the city —
+// keep vertices to the NYC operating box or the polyline crosses the Atlantic.
+const NYC = { latMin: 40.3, latMax: 41.2, lonMin: -74.6, lonMax: -73.3 }
+
+/**
+ * Live link speeds from NYC DOT (TRANSCOM feed). The dataset is a rolling
+ * ARCHIVE — one row per link per ~5-minute reading — so we must order by
+ * data_as_of DESC and keep only the newest reading per link, or the layer
+ * draws stacks of stale, mutually contradictory polylines.
+ */
+export async function fetchTrafficLinks(lat: number, lon: number, radiusM = 2500): Promise<TrafficLink[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'link_id,speed,status,link_points,link_name,data_as_of',
+    $order: 'data_as_of DESC',
+    $limit: '4000',
+  })
+  const res = await fetch(`${TRAFFIC_SPEEDS}?${params}`)
+  if (!res.ok) throw new Error(`traffic SODA ${res.status}`)
+  const rows = (await res.json()) as TrafficRow[]
+  const seen = new Set<string>()
+  const out: TrafficLink[] = []
+  for (const r of rows) {
+    const linkId = r.link_id ?? r.link_name ?? ''
+    if (seen.has(linkId)) continue // rows are newest-first; keep the latest per link
+    seen.add(linkId)
+    const speed = Number(r.speed)
+    if (!Number.isFinite(speed) || speed <= 0 || Number(r.status ?? 0) < 0) continue
+    const positions: [number, number][] = []
+    for (const pair of (r.link_points ?? '').trim().split(/\s+/)) {
+      const [pLat, pLon] = pair.split(',').map(Number)
+      if (
+        Number.isFinite(pLat) &&
+        Number.isFinite(pLon) &&
+        pLat >= NYC.latMin &&
+        pLat <= NYC.latMax &&
+        pLon >= NYC.lonMin &&
+        pLon <= NYC.lonMax
+      ) {
+        positions.push([pLon, pLat])
+      }
+    }
+    if (positions.length < 2) continue
+    const near = positions.some(([pLon, pLat]) => haversineMeters(lat, lon, pLat, pLon) <= radiusM)
+    if (!near) continue
+    out.push({ name: r.link_name ?? 'link', speedMph: speed, asOf: r.data_as_of ?? '', positions })
+  }
+  return out
 }
 
 // --------------------- Certificates of Occupancy (by BIN) -------------------
