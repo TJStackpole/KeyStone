@@ -18,6 +18,7 @@ import { NycemPanel } from './components/NycemPanel'
 import { MaydayAlert } from './components/MaydayAlert'
 import { AarPanel } from './components/AarPanel'
 import { StreetViewPanel } from './components/StreetViewPanel'
+import { Compass } from './components/Compass'
 
 /** Floating escape hatch while the camera is at street level. */
 function GroundViewExit() {
@@ -109,6 +110,7 @@ export default function App() {
       <MaydayAlert />
       <AarPanel />
       <StreetViewPanel />
+      <Compass />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">KEYSTONE</div>
         <div className="status">{bootMsg}</div>

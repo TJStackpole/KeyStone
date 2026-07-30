@@ -55,6 +55,10 @@ export interface AppState {
   dispatching: boolean
   shapes: Record<string, IcsShape>
   drawTool: DrawTool
+  /** STGE picker: 'auto' = next-due company, else a specific responding callsign. */
+  stagingPick: string
+  /** Tap-a-building pushes the tapped address into the search bar via this. */
+  searchPrefill: string | null
   selectedShapeId: string | null
   /** Right utility dock: one panel, tabbed, no overlaps. */
   utilityTab: 'sitrep' | 'video' | 'bio' | 'floors' | null
@@ -138,6 +142,8 @@ const initial: AppState = {
   dispatching: false,
   shapes: {},
   drawTool: null,
+  stagingPick: 'auto',
+  searchPrefill: null,
   selectedShapeId: null,
   utilityTab: null,
   selectedUnitUid: null,

@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium'
-import { deleteShape, exitGround, inspectBuildingAt, saveShape } from '../actions'
+import { deleteShape, exitGround, inspectBuildingAt, rotateSelectedApparatus, saveShape } from '../actions'
 import { ShapeLayer, ZONE_STYLE } from '../cesium/shapes'
 import { enterGroundView } from '../cesium/viewmode'
 import { haversineMeters } from '../lib/geo'
@@ -26,6 +26,7 @@ export class DrawController {
   private draftSource = new Cesium.CustomDataSource('draw-draft')
   private handleSource = new Cesium.CustomDataSource('draw-handles')
   private dragIndex: number | null = null
+  private draggingApparatus: string | null = null
   private keyListener = (e: KeyboardEvent) => this.onKey(e)
 
   constructor(private viewer: Cesium.Viewer, private shapes: ShapeLayer) {
@@ -163,6 +164,8 @@ export class DrawController {
   private onKey(e: KeyboardEvent): void {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
     if (e.key === 'Enter') this.finishZone()
+    if (e.key === '[') rotateSelectedApparatus(-15)
+    if (e.key === ']') rotateSelectedApparatus(15)
     if (e.key === 'Escape') {
       if (getAppState().groundViewActive) exitGround()
       this.cancelDraft()
@@ -243,12 +246,19 @@ export class DrawController {
    * line rigs up a street by looking down it.
    */
   private async placeApparatus(pos: { lat: number; lon: number; hae: number }): Promise<void> {
+    const pick = getAppState().stagingPick
     let callsign = `E-${200 + Math.floor(Math.random() * 90)}`
-    try {
-      const res = await fetch('/api/staging/next')
-      if (res.ok) callsign = ((await res.json()) as { callsign: string }).callsign
-    } catch {
-      // offline fallback keeps the tool usable
+    if (pick && pick !== 'auto') {
+      // Chief chose a specific responding unit from the picker.
+      callsign = pick
+      setAppState({ stagingPick: 'auto' }) // next placement reverts to next-due
+    } else {
+      try {
+        const res = await fetch('/api/staging/next')
+        if (res.ok) callsign = ((await res.json()) as { callsign: string }).callsign
+      } catch {
+        // offline fallback keeps the tool usable
+      }
     }
     const headingDeg = (Cesium.Math.toDegrees(this.viewer.camera.heading) + 360) % 360
     void saveShape({
@@ -297,13 +307,38 @@ export class DrawController {
   private onLeftDown(e: Cesium.ScreenSpaceEventHandler.PositionedEvent): void {
     const picked = this.viewer.scene.pick(e.position) as { id?: Cesium.Entity } | undefined
     const entityId = picked?.id?.id
-    if (typeof entityId === 'string' && entityId.startsWith('handle:')) {
+    if (typeof entityId !== 'string') return
+    if (entityId.startsWith('handle:')) {
       this.dragIndex = Number(entityId.split(':')[1])
       this.viewer.scene.screenSpaceCameraController.enableInputs = false
+      return
+    }
+    // Staging pads drag directly — grab the whole rig, no handles needed.
+    if (entityId.startsWith('shape:') && !getAppState().drawTool) {
+      const shapeId = ShapeLayer.shapeIdFromEntityId(entityId)
+      const shape = shapeId ? getAppState().shapes[shapeId] : null
+      if (shape?.kind === 'apparatus') {
+        this.draggingApparatus = shape.id
+        setAppState({ selectedShapeId: shape.id })
+        this.viewer.scene.screenSpaceCameraController.enableInputs = false
+      }
     }
   }
 
   private onMouseMove(e: Cesium.ScreenSpaceEventHandler.MotionEvent): void {
+    if (this.draggingApparatus) {
+      const shape = getAppState().shapes[this.draggingApparatus]
+      if (shape?.kind === 'apparatus') {
+        const pos = this.groundPosition(e.endPosition)
+        if (pos) {
+          const hae = pos.hae >= -36 && pos.hae <= 450 ? pos.hae : shape.hae
+          const updated = { ...shape, lat: pos.lat, lon: pos.lon, hae }
+          setAppState((s) => ({ shapes: { ...s.shapes, [shape.id]: updated } }))
+          this.shapes.upsert(updated)
+        }
+      }
+      return
+    }
     if (this.dragIndex === null) return
     const state = getAppState()
     const shape = state.selectedShapeId ? state.shapes[state.selectedShapeId] : null
@@ -318,6 +353,13 @@ export class DrawController {
   }
 
   private onLeftUp(): void {
+    if (this.draggingApparatus) {
+      const dragged = getAppState().shapes[this.draggingApparatus]
+      this.draggingApparatus = null
+      this.viewer.scene.screenSpaceCameraController.enableInputs = true
+      if (dragged) void saveShape(dragged) // persist + re-publish CoT
+      return
+    }
     if (this.dragIndex === null) return
     this.dragIndex = null
     this.viewer.scene.screenSpaceCameraController.enableInputs = true

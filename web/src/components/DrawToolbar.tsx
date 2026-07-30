@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { deleteSelectedShape, setDrawTool } from '../actions'
+import { deleteSelectedShape, rotateSelectedApparatus, setDrawTool } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { setAppState, useAppState } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
@@ -9,12 +9,56 @@ import type { PostKind, ZoneKind } from '../types'
 const ZONES: ZoneKind[] = ['perimeter']
 const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
 
+/** STGE picker: choose the next-due company or a specific responding unit. */
+function StagingPicker() {
+  const { units, shapes, stagingPick } = useAppState()
+  const reserved = new Set(
+    Object.values(shapes)
+      .filter((s) => s.kind === 'apparatus')
+      .map((s) => (s.kind === 'apparatus' ? s.callsign : '')),
+  )
+  const candidates = Object.values(units)
+    .filter(
+      (u) =>
+        u.agency === 'FDNY' &&
+        ['engine', 'ladder', 'rescue', 'battalion'].includes(u.category) &&
+        (!u.status || u.status === 'Enroute' || u.status === 'Staged') &&
+        !reserved.has(u.callsign),
+    )
+    .sort((a, b) => a.callsign.localeCompare(b.callsign))
+  return (
+    <div className="staging-picker glass">
+      <span className="picker-label">STAGE FOR:</span>
+      <button
+        className={`toggle-chip${stagingPick === 'auto' ? ' on' : ''}`}
+        onClick={() => setAppState({ stagingPick: 'auto' })}
+        title="Auto-label with the next-due company"
+      >
+        AUTO
+      </button>
+      {candidates.map((u) => (
+        <button
+          key={u.uid}
+          className={`toggle-chip${stagingPick === u.callsign ? ' on' : ''}`}
+          onClick={() => setAppState({ stagingPick: u.callsign })}
+          title={`Reserve the next pad for ${u.callsign} (${u.status ?? 'responding'})`}
+        >
+          {u.callsign}
+        </button>
+      ))}
+      {candidates.length === 0 && <span className="picker-note">NO UNRESERVED RESPONDING UNITS — AUTO USES NEXT-DUE</span>}
+    </div>
+  )
+}
+
 export function DrawToolbar() {
-  const { drawTool, selectedShapeId, incident, streetViewOpen } = useAppState()
+  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes } = useAppState()
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
   const zoneActive = drawTool && (ZONES as string[]).includes(drawTool)
+  const selectedShape = selectedShapeId ? shapes[selectedShapeId] : null
+  const apparatusSelected = selectedShape?.kind === 'apparatus'
 
   if (collapsed) {
     return (
@@ -128,7 +172,20 @@ export function DrawToolbar() {
                     : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
         </div>
       )}
-      {!drawTool && selectedShapeId && (
+      {drawTool === 'apparatus' && <StagingPicker />}
+      {!drawTool && selectedShapeId && apparatusSelected && (
+        <div className="draw-hint glass">
+          {selectedShape?.kind === 'apparatus' ? `${selectedShape.callsign} · ` : ''}DRAG PAD TO MOVE ·
+          <button className="hint-btn" onClick={() => rotateSelectedApparatus(-15)} title="Rotate left ([ key)">
+            ⟲
+          </button>
+          <button className="hint-btn" onClick={() => rotateSelectedApparatus(15)} title="Rotate right (] key)">
+            ⟳
+          </button>
+          ROTATE · DEL REMOVES · ESC DESELECTS
+        </div>
+      )}
+      {!drawTool && selectedShapeId && !apparatusSelected && (
         <div className="draw-hint glass">SHAPE SELECTED — DRAG VERTICES TO EDIT · DEL TO REMOVE · ESC TO DESELECT</div>
       )}
     </>

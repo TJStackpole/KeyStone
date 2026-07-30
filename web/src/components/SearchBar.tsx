@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { autocompleteAddress } from '../api/geosearch'
 import { standUpIncident } from '../actions'
+import { setAppState, useAppState } from '../state/store'
 import type { GeoHit } from '../types'
 
 /** Bold the query tokens inside a suggestion, Google-Maps-style. */
@@ -38,6 +39,16 @@ export function SearchBar() {
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
+
+  // Tap-a-building fills the search with that address (one Enter away from a
+  // new incident there).
+  const { searchPrefill } = useAppState()
+  useEffect(() => {
+    if (!searchPrefill) return
+    setAppState({ searchPrefill: null })
+    onChange(searchPrefill)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchPrefill])
 
   function onChange(value: string) {
     setQuery(value)

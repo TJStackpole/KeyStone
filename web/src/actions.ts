@@ -604,6 +604,40 @@ export function clearLocalIncident(): void {
   if (getAppState().groundViewActive) exitGround()
 }
 
+/** Rotate the selected staging pad in place (hint-bar buttons and [ ] keys). */
+export function rotateSelectedApparatus(deltaDeg: number): void {
+  const s = getAppState()
+  const shape = s.selectedShapeId ? s.shapes[s.selectedShapeId] : null
+  if (!shape || shape.kind !== 'apparatus') return
+  void saveShape({ ...shape, heading: (shape.heading + deltaDeg + 360) % 360 })
+}
+
+/** Compass click: swing the camera back to north, rotating about the view center. */
+export function reorientNorth(): void {
+  const scene = getScene()
+  if (!scene) return
+  const viewer = scene.viewer
+  const canvas = viewer.scene.canvas
+  const center = viewer.camera.pickEllipsoid(
+    new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+    viewer.scene.globe.ellipsoid,
+  )
+  const pitch = Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-10))
+  if (center) {
+    const range = Cesium.Cartesian3.distance(viewer.camera.position, center)
+    viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, 1), {
+      offset: new Cesium.HeadingPitchRange(0, pitch, range),
+      duration: 0.8,
+    })
+  } else {
+    viewer.camera.flyTo({
+      destination: viewer.camera.position.clone(),
+      orientation: { heading: 0, pitch: viewer.camera.pitch, roll: 0 },
+      duration: 0.8,
+    })
+  }
+}
+
 /** NYCEM view: agency-level unit filters, ANDed with the category toggles. */
 export function toggleAgency(agency: Agency): void {
   const next = !getAppState().agencyToggles[agency]
@@ -640,7 +674,12 @@ export async function inspectBuildingAt(lat: number, lon: number): Promise<void>
     setAppState({ inspected: null })
     return
   }
-  setAppState({ inspected: { hit, loading: true, pluto: null, safety: null, cofo: [] } })
+  // The tapped address also lands in the search bar — one Enter away from
+  // standing up a new incident there.
+  setAppState({
+    inspected: { hit, loading: true, pluto: null, safety: null, cofo: [] },
+    searchPrefill: hit.label,
+  })
   const [pluto, safety, cofo] = await Promise.all([
     hit.bbl ? fetchPluto(hit.bbl).catch(() => null) : Promise.resolve(null),
     hit.bin ? fetchBuildingSafety(hit.bin).catch(() => null) : Promise.resolve(null),
