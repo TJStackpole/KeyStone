@@ -10,6 +10,7 @@ export const ZONE_STYLE: Record<ZoneKind, { label: string; css: string }> = {
   hot: { label: 'HOT ZONE', css: '#ef4444' },
   warm: { label: 'WARM ZONE', css: '#f59e0b' },
   cold: { label: 'COLD ZONE', css: '#22c55e' },
+  perimeter: { label: 'PERIMETER', css: '#22d3ee' },
 }
 
 export const POST_META: Record<PostKind, { label: string; glyph: string; css: string }> = {
@@ -115,11 +116,14 @@ export class ShapeLayer {
       (acc, p) => ({ lat: acc.lat + p.lat / shape.positions.length, lon: acc.lon + p.lon / shape.positions.length }),
       { lat: 0, lon: 0 },
     )
+    // A perimeter is outline-only; the pick target stays the (invisible) fill
+    // polygon so select/edit works identically to the legacy filled zones.
+    const fillAlpha = shape.zone === 'perimeter' ? 0.01 : shape.zone === 'hot' ? 0.32 : 0.24
     this.source.entities.add({
       id: `shape:${shape.id}`,
       polygon: {
         hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(flat)),
-        material: color.withAlpha(shape.zone === 'hot' ? 0.32 : 0.24),
+        material: color.withAlpha(fillAlpha),
         classificationType: Cesium.ClassificationType.BOTH,
       },
     })
@@ -134,7 +138,7 @@ export class ShapeLayer {
     })
     this.source.entities.add({
       id: `shape:${shape.id}:label`,
-      position: Cesium.Cartesian3.fromDegrees(centroid.lon, centroid.lat, 2),
+      position: Cesium.Cartesian3.fromDegrees(centroid.lon, centroid.lat, 0),
       label: {
         text: ZONE_STYLE[shape.zone].label,
         font: `700 12px 'JetBrains Mono', monospace`,
@@ -142,6 +146,7 @@ export class ShapeLayer {
         showBackground: true,
         backgroundColor: LABEL_BG,
         backgroundPadding: new Cesium.Cartesian2(7, 4),
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })
@@ -150,10 +155,11 @@ export class ShapeLayer {
   private addPost(shape: Extract<IcsShape, { kind: 'post' }>): void {
     this.source.entities.add({
       id: `shape:${shape.id}`,
-      position: Cesium.Cartesian3.fromDegrees(shape.lon, shape.lat, 1),
+      position: Cesium.Cartesian3.fromDegrees(shape.lon, shape.lat, 0),
       billboard: {
         image: postIcon(shape.post),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
@@ -165,6 +171,7 @@ export class ShapeLayer {
         backgroundPadding: new Cesium.Cartesian2(5, 3),
         pixelOffset: new Cesium.Cartesian2(0, -34),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })

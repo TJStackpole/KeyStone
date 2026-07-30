@@ -68,12 +68,14 @@ export class FootprintLayer {
   private primitives: Cesium.Primitive[] = []
   private viewer: Cesium.Viewer
   private visible = true
+  private renderSeq = 0
 
   constructor(viewer: Cesium.Viewer) {
     this.viewer = viewer
   }
 
   clear(): void {
+    this.renderSeq++
     for (const p of this.primitives) this.viewer.scene.primitives.remove(p)
     this.primitives = []
   }
@@ -84,17 +86,61 @@ export class FootprintLayer {
   }
 
   /**
+   * Street level around a footprint, as height above ellipsoid. Sampling the
+   * centroid would hit the photorealistic building's ROOF, so sample a ring
+   * of points just outside the footprint and take the lowest — that's the
+   * sidewalk. Falls back to 0 (keyless ellipsoid ground) when unsupported.
+   */
+  private async sampleGroundBase(f: Footprint): Promise<number> {
+    const scene = this.viewer.scene
+    if (!scene.sampleHeightSupported) return 0
+    const outer = f.polygons[0]?.[0]
+    if (!outer?.length) return 0
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
+    for (const [lon, lat] of outer) {
+      minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon)
+      minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat)
+    }
+    const cLon = (minLon + maxLon) / 2
+    const cLat = (minLat + maxLat) / 2
+    // Ring radius: half the bbox diagonal plus a sidewalk's width.
+    const degPad = 8 / 111000
+    const rLon = (maxLon - minLon) / 2 + degPad
+    const rLat = (maxLat - minLat) / 2 + degPad
+    const ring: Cesium.Cartographic[] = []
+    for (let i = 0; i < 8; i++) {
+      const th = (i / 8) * 2 * Math.PI
+      ring.push(Cesium.Cartographic.fromDegrees(cLon + rLon * Math.sin(th), cLat + rLat * Math.cos(th)))
+    }
+    try {
+      const sampled = await scene.sampleHeightMostDetailed(ring)
+      const heights = sampled.map((c) => c?.height).filter((h): h is number => Number.isFinite(h))
+      return heights.length ? Math.min(...heights) : 0
+    } catch {
+      return 0
+    }
+  }
+
+  /**
    * @param extrudeNeighbors false when an upgraded provider already renders buildings —
    *        then only the target footprint highlight is drawn.
    */
-  render(feats: Footprint[], targetBin: string | undefined, extrudeNeighbors: boolean): void {
+  async render(feats: Footprint[], targetBin: string | undefined, extrudeNeighbors: boolean): Promise<void> {
     this.clear()
+    const seq = this.renderSeq
     const fillInstances: Cesium.GeometryInstance[] = []
     const outlineInstances: Cesium.GeometryInstance[] = []
+
+    // Base the target's box at true street level so low-rise highlights hug
+    // the building instead of floating (geoid offset on photorealistic tiles).
+    const target = targetBin !== undefined ? feats.find((f) => f.bin === targetBin) : undefined
+    const base = target ? await this.sampleGroundBase(target) : 0
+    if (seq !== this.renderSeq) return // superseded by a newer render/clear
 
     for (const f of feats) {
       const isTarget = targetBin !== undefined && f.bin === targetBin
       if (!isTarget && !extrudeNeighbors) continue
+      const h0 = isTarget ? base : 0
       for (let i = 0; i < f.polygons.length; i++) {
         const hierarchy = ringToHierarchy(f.polygons[i])
         fillInstances.push(
@@ -102,8 +148,8 @@ export class FootprintLayer {
             id: `footprint:${f.bin}:${i}`,
             geometry: new Cesium.PolygonGeometry({
               polygonHierarchy: hierarchy,
-              height: 0,
-              extrudedHeight: f.heightM,
+              height: h0,
+              extrudedHeight: h0 + f.heightM,
               vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
             }),
             attributes: {
@@ -117,8 +163,8 @@ export class FootprintLayer {
               id: `footprint-outline:${f.bin}:${i}`,
               geometry: new Cesium.PolygonOutlineGeometry({
                 polygonHierarchy: hierarchy,
-                height: 0,
-                extrudedHeight: f.heightM,
+                height: h0,
+                extrudedHeight: h0 + f.heightM,
               }),
               attributes: {
                 color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_OUTLINE),

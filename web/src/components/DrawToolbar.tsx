@@ -4,7 +4,9 @@ import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { useAppState } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
 
-const ZONES: ZoneKind[] = ['hot', 'warm', 'cold']
+// One editable outline replaces the old HOT/WARM/COLD trio; legacy zone
+// shapes still render, they just can't be drawn fresh.
+const ZONES: ZoneKind[] = ['perimeter']
 const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
 
 export function DrawToolbar() {
@@ -28,17 +30,17 @@ export function DrawToolbar() {
         <button className="tool-collapse" onClick={() => setCollapsed(true)} title="Minimize ICS tools">
           ◂
         </button>
-        <div className="tool-section-label">ZONES</div>
+        <div className="tool-section-label">PERIM</div>
         {ZONES.map((z) => (
           <button
             key={z}
             className={`tool-btn${drawTool === z ? ' on' : ''}`}
             style={{ ['--tool-color' as string]: ZONE_STYLE[z].css }}
             onClick={() => setDrawTool(z)}
-            title={`Draw ${ZONE_STYLE[z].label} polygon`}
+            title="Draw an editable perimeter outline — click vertices, Enter or double-click to close, then drag points to adjust"
           >
             <span className="tool-swatch zone" />
-            {z.toUpperCase()}
+            PERIM
           </button>
         ))}
         <div className="tool-section-label">POSTS</div>

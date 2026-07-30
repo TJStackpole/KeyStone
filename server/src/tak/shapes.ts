@@ -25,6 +25,8 @@ const ZONE_STYLE: Record<ZoneShape['zone'], { label: string; stroke: number; fil
   hot: { label: 'HOT ZONE', stroke: 0xffef4444, fill: 0x59ef4444 },
   warm: { label: 'WARM ZONE', stroke: 0xfff59e0b, fill: 0x4df59e0b },
   cold: { label: 'COLD ZONE', stroke: 0xff22c55e, fill: 0x4022c55e },
+  // Outline only — zero-alpha fill in ATAK too.
+  perimeter: { label: 'PERIMETER', stroke: 0xff22d3ee, fill: 0x0022d3ee },
 }
 
 export const POST_LABEL: Record<PostShape['post'], string> = {

@@ -5,7 +5,7 @@ import { haversineMeters } from '../lib/geo'
 import { getAppState, setAppState } from '../state/store'
 import type { IcsShape, PostKind, ZoneKind } from '../types'
 
-const ZONES: ZoneKind[] = ['hot', 'warm', 'cold']
+const ZONES: ZoneKind[] = ['hot', 'warm', 'cold', 'perimeter']
 const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
 
 function newShapeId(prefix: string): string {
@@ -210,7 +210,7 @@ export class DrawController {
       },
     })
     this.measureSource.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(mid.lon, mid.lat, 2),
+      position: Cesium.Cartesian3.fromDegrees(mid.lon, mid.lat, 0),
       label: {
         text: `${Math.round(meters)} m · ${Math.round(feet)} ft`,
         font: `700 12px 'JetBrains Mono', monospace`,
@@ -218,6 +218,7 @@ export class DrawController {
         showBackground: true,
         backgroundColor: Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.8),
         backgroundPadding: new Cesium.Cartesian2(7, 4),
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })
@@ -320,8 +321,15 @@ export class DrawController {
     const color = Cesium.Color.fromCssColorString(ZONE_STYLE[zone].css)
     for (let i = 0; i < this.draft.length; i++) {
       this.draftSource.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(this.draft[i].lon, this.draft[i].lat, 1),
-        point: { pixelSize: 8, color, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        position: Cesium.Cartesian3.fromDegrees(this.draft[i].lon, this.draft[i].lat, 0),
+        point: {
+          pixelSize: 8,
+          color,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1.5,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
       })
     }
     if (this.draft.length >= 2) {
@@ -334,7 +342,7 @@ export class DrawController {
         },
       })
     }
-    if (this.draft.length >= 3) {
+    if (this.draft.length >= 3 && zone !== 'perimeter') {
       this.draftSource.entities.add({
         polygon: {
           hierarchy: new Cesium.PolygonHierarchy(
@@ -356,12 +364,13 @@ export class DrawController {
     shape.positions.forEach((p, i) => {
       this.handleSource.entities.add({
         id: `handle:${i}`,
-        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 1),
+        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0),
         point: {
           pixelSize: 11,
           color: Cesium.Color.WHITE,
           outlineColor: color,
           outlineWidth: 3,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })

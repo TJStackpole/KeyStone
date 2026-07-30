@@ -48,13 +48,12 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // ACTIVE INCIDENT focus: sharpen the fire building, de-emphasize >4 blocks.
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
 
-  // Fresh incident, fresh overlay: clear local shapes and suggest the initial
-  // 75 m hot zone (server-side shape list was reset by the incident POST).
-  // targetHeightM resets too — a stale height would mis-size the collapse tool
-  // until the new footprints load.
+  // Fresh incident, fresh overlay: clear local shapes (server-side list was
+  // reset by the incident POST). Zones are drawn manually by the chief — no
+  // auto-suggested perimeter. targetHeightM resets too — a stale height would
+  // mis-size the collapse tool until the new footprints load.
   setAppState({ shapes: {}, selectedShapeId: null, drawTool: null, targetHeightM: null })
   getShapeLayer()?.clear()
-  suggestHotZone(incident)
 }
 
 export async function changeIncidentType(type: IncidentType): Promise<void> {
@@ -304,29 +303,6 @@ export function deleteSelectedShape(): void {
   void deleteShape(id)
   setAppState({ selectedShapeId: null })
   getDrawController()?.renderHandles()
-}
-
-/**
- * Auto-suggested initial perimeter: a 75 m hot-zone circle around the incident
- * (spec F3). A real, editable, deletable shape like any hand-drawn zone.
- */
-function suggestHotZone(incident: Incident): void {
-  const R_EARTH = 6371008.8
-  const radius = 75
-  const positions: { lat: number; lon: number }[] = []
-  for (let i = 0; i < 20; i++) {
-    const theta = (i / 20) * 2 * Math.PI
-    const dLat = ((radius * Math.cos(theta)) / R_EARTH) * (180 / Math.PI)
-    const dLon = ((radius * Math.sin(theta)) / (R_EARTH * Math.cos((incident.lat * Math.PI) / 180))) * (180 / Math.PI)
-    positions.push({ lat: incident.lat + dLat, lon: incident.lon + dLon })
-  }
-  void saveShape({
-    id: `WT-ICS-ZONE-HOT-AUTO-${incident.id}`,
-    kind: 'zone',
-    zone: 'hot',
-    positions,
-    createdAt: new Date().toISOString(),
-  })
 }
 
 /**

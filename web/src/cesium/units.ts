@@ -94,6 +94,13 @@ export class UnitLayer {
     const id = `unit:${unit.uid}`
     const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae)
     const now = Cesium.JulianDate.now()
+    // Street-level units clamp to the scene surface (CoT hae 0 floats above
+    // photorealistic-tile streets); drones fly true altitude and interior
+    // members hold their floor height inside the building.
+    const clampRef =
+      unit.category !== 'drone' && !(unit.floor && unit.floor > 0)
+        ? Cesium.HeightReference.CLAMP_TO_GROUND
+        : Cesium.HeightReference.NONE
 
     let entity = this.source.entities.getById(id)
     if (!entity) {
@@ -112,6 +119,7 @@ export class UnitLayer {
         billboard: {
           image: ICONS[unit.category] ?? ICONS.unknown,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          heightReference: clampRef,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
@@ -124,6 +132,7 @@ export class UnitLayer {
           backgroundPadding: new Cesium.Cartesian2(5, 3),
           pixelOffset: new Cesium.Cartesian2(0, -24),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: clampRef,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
@@ -137,7 +146,10 @@ export class UnitLayer {
       }
       if (entity.billboard) {
         entity.billboard.image = new Cesium.ConstantProperty(ICONS[unit.category] ?? ICONS.unknown)
+        // Members transition exterior <-> interior; re-clamp accordingly.
+        entity.billboard.heightReference = new Cesium.ConstantProperty(clampRef)
       }
+      if (entity.label) entity.label.heightReference = new Cesium.ConstantProperty(clampRef)
     }
 
     if (unit.category === 'drone') this.updateDroneExtras(unit, show)
@@ -151,7 +163,9 @@ export class UnitLayer {
   private updateDroneExtras(unit: Unit, show: boolean): void {
     const projId = `unit:${unit.uid}:proj`
     const dronePos = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae)
-    const groundPos = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, 0)
+    // Overshoot below grade — the line is depth-tested, so tiles hide the
+    // underground tail and it visually ends at the street on any provider.
+    const groundPos = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, -60)
 
     // Clean up FOV cones left by older builds.
     this.source.entities.removeById(`unit:${unit.uid}:cone`)

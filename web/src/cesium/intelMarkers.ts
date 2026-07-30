@@ -33,12 +33,15 @@ export class IntelMarkerLayer {
     for (const h of hydrants) {
       this.hydrantSource.entities.add({
         id: `hydrant:${h.id}`,
-        position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat, 1),
+        // Clamped to the scene surface — a fixed ellipsoid height floats ~30 m
+        // over photorealistic-tile streets (geoid offset).
+        position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat, 0),
         point: {
           pixelSize: 7,
           color: HYDRANT_COLOR,
           outlineColor: HYDRANT_OUTLINE,
           outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
@@ -50,10 +53,11 @@ export class IntelMarkerLayer {
     for (const f of firehouses) {
       this.firehouseSource.entities.add({
         id: `firehouse:${f.name}`,
-        position: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, 1),
+        position: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, 0),
         billboard: {
           image: FIREHOUSE_ICON,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
@@ -65,6 +69,7 @@ export class IntelMarkerLayer {
           backgroundPadding: new Cesium.Cartesian2(6, 3),
           pixelOffset: new Cesium.Cartesian2(0, -30),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })

@@ -40,7 +40,7 @@ export interface GeoHit {
 
 // ------------------------------ ICS shapes (Phase 5) ------------------------
 
-export type ZoneKind = 'hot' | 'warm' | 'cold'
+export type ZoneKind = 'hot' | 'warm' | 'cold' | 'perimeter'
 export type PostKind = 'icp' | 'staging' | 'triage' | 'media' | 'transport'
 
 export interface ZoneShape {
