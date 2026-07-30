@@ -25,7 +25,7 @@ export type LayerStatus = 'idle' | 'loading' | 'ok' | 'unavailable'
 export type DataLayerId = 'footprints' | 'pluto' | 'hydrants' | 'firehouses' | 'safety' | 'persistence'
 
 /** Globe layers the operator can toggle from the Site Intel panel. */
-export type ToggleLayerId = 'footprints' | 'hydrants' | 'firehouses' | 'battalions' | 'divisions'
+export type ToggleLayerId = 'footprints' | 'hydrants' | 'firehouses' | 'streets' | 'battalions' | 'divisions'
 
 export interface GeoHit {
   label: string

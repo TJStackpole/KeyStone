@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium'
-import { fetchBuildingSafety, fetchFirehouses, fetchHydrants, fetchPluto } from './api/nyc'
+import { fetchBuildingSafety, fetchFirehouses, fetchHydrants, fetchPluto, fetchStreetLabels } from './api/nyc'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
 import { exitGroundView, setTopDown } from './cesium/viewmode'
@@ -11,6 +11,7 @@ import {
   getIntelLayer,
   getScene,
   getShapeLayer,
+  getStreetLayer,
   getUnitLayer,
 } from './cesium/scene'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
@@ -178,6 +179,19 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
 
   void (async () => {
     try {
+      // Street/avenue captions — photorealistic tiles carry no map labels.
+      const streets = await fetchStreetLabels(incident.lat, incident.lon)
+      const layer = getStreetLayer()
+      layer?.set(streets)
+      layer?.setVisible(getAppState().layerToggles.streets)
+    } catch (err) {
+      console.error('[streets] labels unavailable:', err)
+      getStreetLayer()?.clear()
+    }
+  })()
+
+  void (async () => {
+    try {
       const safety = incident.bin ? await fetchBuildingSafety(incident.bin) : null
       setAppState((s) => ({ intel: { ...s.intel, safety } }))
       setLayerStatus('safety', 'ok')
@@ -239,6 +253,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
   if (layer === 'footprints') getFootprintLayer()?.setVisible(next)
   if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next)
   if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next)
+  if (layer === 'streets') getStreetLayer()?.setVisible(next)
   if (layer === 'battalions' || layer === 'divisions') {
     getBoundaryLayer()
       ?.setVisible(layer, next)

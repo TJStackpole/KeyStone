@@ -10,6 +10,7 @@ const DOB_VIOLATIONS = 'https://data.cityofnewyork.us/resource/3h2n-5cm9.json'
 const ECB_VIOLATIONS = 'https://data.cityofnewyork.us/resource/6bgk-3dad.json'
 const DOB_COMPLAINTS = 'https://data.cityofnewyork.us/resource/eabe-havv.json'
 const HPD_VIOLATIONS = 'https://data.cityofnewyork.us/resource/wvxf-dwi5.json'
+const STREET_CENTERLINE = 'https://data.cityofnewyork.us/resource/inkn-q76z.json'
 
 export interface PlutoAttributes {
   bbl: string
@@ -257,4 +258,49 @@ export async function fetchFirehouses(lat: number, lon: number, signal?: AbortSi
       }
     })
     .sort((a, b) => a.distanceM - b.distanceM)
+}
+
+export interface StreetLabel {
+  name: string
+  lat: number
+  lon: number
+}
+
+interface CenterlineRow {
+  full_street_name?: string
+  segmentlength?: string
+  the_geom?: { type: string; coordinates: number[][][] }
+}
+
+/**
+ * Street/avenue names near a point from the NYC Street Centerline (CSCL).
+ * One label per distinct street name, anchored at the midpoint of its longest
+ * nearby segment — enough to caption the fireground like a map.
+ */
+export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500): Promise<StreetLabel[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'full_street_name,segmentlength,the_geom',
+    $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
+    $limit: '400',
+  })
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`)
+  if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
+  const rows = (await res.json()) as CenterlineRow[]
+
+  const best = new Map<string, { len: number; lat: number; lon: number }>()
+  for (const r of rows) {
+    const name = r.full_street_name?.trim()
+    const line = r.the_geom?.type === 'MultiLineString' ? r.the_geom.coordinates[0] : undefined
+    if (!name || !line?.length) continue
+    const len = Number(r.segmentlength ?? 0)
+    const prev = best.get(name)
+    if (prev && prev.len >= len) continue
+    const [mLon, mLat] = line[Math.floor(line.length / 2)]
+    best.set(name, { len, lat: mLat, lon: mLon })
+  }
+  return [...best.entries()]
+    .sort((a, b) => b[1].len - a[1].len)
+    .slice(0, 30)
+    .map(([name, v]) => ({ name, lat: v.lat, lon: v.lon }))
 }

@@ -71,7 +71,7 @@ const initial: AppState = {
     persistence: 'idle',
   },
   intel: { pluto: null, hydrants: [], firehouses: [], safety: null },
-  layerToggles: { footprints: true, hydrants: true, firehouses: true, battalions: false, divisions: false },
+  layerToggles: { footprints: true, hydrants: true, firehouses: true, streets: true, battalions: false, divisions: false },
   units: {},
   takConnected: null,
   unitToggles: {
