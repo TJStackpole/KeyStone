@@ -1,14 +1,62 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   loadScenario,
   runDemoScenario,
   setIsolateView,
   toggleActiveIncidentMode,
   toggleIsolateMode,
+  toggleLayer,
   toggleTopDownView,
 } from '../actions'
 import { setAppState, useAppState } from '../state/store'
+import type { ToggleLayerId } from '../types'
 import { SearchBar } from './SearchBar'
+
+// Map overlays that live in the top-bar OVERLAYS dropdown rather than the
+// (incident-gated) Site Intel chip row — they're useful with no incident up.
+const OVERLAYS: { id: ToggleLayerId; label: string; hint: string }[] = [
+  { id: 'battalions', label: 'FDNY Battalions', hint: 'Battalion boundary lines' },
+  { id: 'divisions', label: 'FDNY Divisions', hint: 'Division boundary lines' },
+  { id: 'lots', label: 'Address grid', hint: 'Tax-lot borders — click inside one to load its address' },
+]
+
+function OverlaysMenu() {
+  const { layerToggles } = useAppState()
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const anyOn = OVERLAYS.some((o) => layerToggles[o.id])
+  return (
+    <div className="overlays-wrap" ref={wrapRef}>
+      <button
+        className={`chip chip-btn${anyOn ? ' active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        title="Map overlays — battalion/division boundaries and the address grid"
+      >
+        <span className="dot" /> OVERLAYS {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="overlays-menu glass">
+          {OVERLAYS.map((o) => (
+            <label key={o.id} className="overlay-row" title={o.hint}>
+              <input type="checkbox" checked={layerToggles[o.id]} onChange={() => toggleLayer(o.id)} />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const MODE_LABEL: Record<string, string> = {
   keyless: 'KEYLESS 3D',
@@ -83,6 +131,7 @@ export function TopBar() {
             <span className="dot" /> {LAYER_LABEL[k]} UNAVAILABLE
           </span>
         ))}
+        <OverlaysMenu />
         {takConnected === true && (
           <button
             className="chip chip-btn"

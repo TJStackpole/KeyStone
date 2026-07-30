@@ -41,6 +41,8 @@ function StatusNote({ status, empty }: { status: LayerStatus; empty?: string }) 
   return null
 }
 
+// Battalions / Divisions / the address grid moved to the top bar's OVERLAYS
+// dropdown — they're map-wide overlays, useful with no incident up.
 const TOGGLES: { id: ToggleLayerId; label: string }[] = [
   { id: 'footprints', label: 'Bldgs' },
   { id: 'targetbox', label: 'Fire Bldg' },
@@ -48,9 +50,6 @@ const TOGGLES: { id: ToggleLayerId; label: string }[] = [
   { id: 'firehouses', label: 'Houses' },
   { id: 'streets', label: 'Streets' },
   { id: 'traffic', label: 'Traffic' },
-  { id: 'lots', label: 'Lots' },
-  { id: 'battalions', label: 'Battalions' },
-  { id: 'divisions', label: 'Divisions' },
 ]
 
 /** Public record for any building the operator tapped (not the fire building). */

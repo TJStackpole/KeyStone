@@ -706,6 +706,38 @@ html, body {
 .gps-toggle.on { color: #22c55e; border-color: rgba(34, 197, 94, 0.55); }
 .gps-toggle:hover { border-color: var(--border-strong); }
 
+/* OVERLAYS dropdown (top bar) */
+.overlays-wrap { position: relative; }
+.overlays-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  z-index: 80;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.overlay-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.05em;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.overlay-row input {
+  accent-color: var(--cyan);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
 /* MODEL / LIVE segmented sub-chips (isolate view picker) */
 .chip.seg { padding: 2px; gap: 0; }
 .seg-btn {
