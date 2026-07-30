@@ -128,6 +128,8 @@ const initial: AppState = {
     streets: true,
     traffic: false,
     lots: true, // draws only when zoomed in — see refreshLots' height gate
+    roads: true, // yellow road-network overlay, camera-following
+    tunnels: true, // the four major vehicular tunnels, citywide
     battalions: false,
     divisions: false,
     poiFirehouses: false,

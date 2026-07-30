@@ -33,6 +33,8 @@ export type ToggleLayerId =
   | 'streets'
   | 'traffic'
   | 'lots'
+  | 'roads'
+  | 'tunnels'
   | 'battalions'
   | 'divisions'
   | 'poiFirehouses'

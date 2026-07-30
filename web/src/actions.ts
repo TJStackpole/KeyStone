@@ -5,9 +5,11 @@ import {
   fetchFirehouses,
   fetchHydrants,
   fetchPluto,
+  fetchRoadSegments,
   fetchStreetLabels,
   fetchTaxLots,
   fetchTrafficLinks,
+  fetchTunnels,
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
@@ -24,6 +26,7 @@ import {
   getScene,
   getLotLayer,
   getPoiLayer,
+  getRoadLayer,
   getShapeLayer,
   getStreetLayer,
   getTacticalLayer,
@@ -688,6 +691,14 @@ export function toggleLayer(layer: ToggleLayerId): void {
     getLotLayer()?.setVisible(next && !getAppState().isolateMode)
     if (next) void refreshLots(true)
   }
+  if (layer === 'roads') {
+    getRoadLayer()?.setRoadsVisible(next)
+    if (next) void refreshRoads(true)
+  }
+  if (layer === 'tunnels') {
+    getRoadLayer()?.setTunnelsVisible(next)
+    if (next) ensureTunnels()
+  }
   if (layer.startsWith('poi')) {
     // Citywide facility overlays (FacDB) — lazy-loaded on first enable. A
     // failed fetch reverts the checkbox so it never lies (and retries clean).
@@ -959,20 +970,20 @@ export function toggleAgency(agency: Agency): void {
 // ---------------------------------------------------------------------------
 
 const LOT_MAX_CAMERA_M = 4500
+const ROAD_MAX_CAMERA_M = 6000
 let lotSeq = 0
 let lastLotFetch: { lat: number; lon: number; radiusM: number } | null = null
 
-export async function refreshLots(force = false): Promise<void> {
+/**
+ * Where the operator is LOOKING (screen-center ellipsoid pick), clamped along
+ * its bearing so horizon-grazing pitches don't put the fetch center
+ * kilometers out. Falls back to the camera's ground foot.
+ */
+function lookAtCenter(): { lat: number; lon: number; heightM: number } | null {
   const scene = getScene()
-  const layer = getLotLayer()
-  if (!scene || !layer || !getAppState().layerToggles.lots) return
-  // ISOLATE studies ONE building — ground-classified lot lines would paint
-  // cyan borders up the levitated facade (facades sit exactly on lot lines).
-  if (getAppState().isolateMode) return
+  if (!scene) return null
   const viewer = scene.viewer
   const cam = viewer.camera.positionCartographic
-  if (cam.height > LOT_MAX_CAMERA_M) return // parcel lines are street-scale detail
-  // Center on what the operator is LOOKING at, not the camera's own foot.
   const footLat = Cesium.Math.toDegrees(cam.latitude)
   const footLon = Cesium.Math.toDegrees(cam.longitude)
   let lat = footLat
@@ -987,34 +998,128 @@ export async function refreshLots(force = false): Promise<void> {
       const c = Cesium.Cartographic.fromCartesian(center)
       const pLat = Cesium.Math.toDegrees(c.latitude)
       const pLon = Cesium.Math.toDegrees(c.longitude)
-      // Horizon-grazing pitches put the center ray kilometers out — clamp the
-      // pick along its bearing so a tilt toward the skyline doesn't fetch (and
-      // replace the grid with) some far-off empty patch.
       const maxM = Math.min(Math.max(cam.height * 3, 800), 2500)
       const dLatM = (pLat - footLat) * 111_320
       const dLonM = (pLon - footLon) * 111_320 * Math.cos((footLat * Math.PI) / 180)
       const dist = Math.hypot(dLatM, dLonM)
       const k = dist > maxM ? maxM / dist : 1
-      lat = footLat + ((pLat - footLat) * k)
+      lat = footLat + (pLat - footLat) * k
       lon = footLon + (pLon - footLon) * k
     }
   }
-  const radiusM = Math.min(900, Math.max(300, cam.height * 0.7))
-  // Don't refetch for small nudges — the previous batch still covers the view.
-  if (!force && lastLotFetch) {
-    const moved = Math.hypot((lat - lastLotFetch.lat) * 111_320, (lon - lastLotFetch.lon) * 85_000)
-    if (moved < lastLotFetch.radiusM * 0.35 && radiusM <= lastLotFetch.radiusM * 1.3) return
-  }
+  return { lat, lon, heightM: cam.height }
+}
+
+/** Small-nudge suppression shared by the camera-following layers. */
+function movedEnough(
+  last: { lat: number; lon: number; radiusM: number } | null,
+  lat: number,
+  lon: number,
+  radiusM: number,
+): boolean {
+  if (!last) return true
+  const moved = Math.hypot((lat - last.lat) * 111_320, (lon - last.lon) * 85_000)
+  return moved >= last.radiusM * 0.35 || radiusM > last.radiusM * 1.3
+}
+
+export async function refreshLots(force = false): Promise<void> {
+  const layer = getLotLayer()
+  if (!layer || !getAppState().layerToggles.lots) return
+  // ISOLATE studies ONE building — ground-classified lot lines would paint
+  // cyan borders up the levitated facade (facades sit exactly on lot lines).
+  if (getAppState().isolateMode) return
+  const center = lookAtCenter()
+  if (!center || center.heightM > LOT_MAX_CAMERA_M) return // parcel lines are street-scale detail
+  const { lat, lon } = center
+  const radiusM = Math.min(900, Math.max(300, center.heightM * 0.7))
+  if (!force && !movedEnough(lastLotFetch, lat, lon, radiusM)) return
   const seq = ++lotSeq
   try {
     const lots = await fetchTaxLots(lat, lon, radiusM)
     if (seq !== lotSeq || !getAppState().layerToggles.lots) return
+    if (layer !== getLotLayer()) return // scene torn down/remounted mid-fetch
     // Empty results keep the old grid (render no-ops) — and must not poison
     // the movement gate, or the next pan would never refetch.
     if (lots.length) lastLotFetch = { lat, lon, radiusM }
     layer.render(lots)
   } catch (err) {
     console.error('[lots] layer unavailable:', err) // degrade, never crash
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Road network + tunnels (OVERLAYS): yellow centerline overlay following the
+// camera, plus the four major vehicular tunnels loaded once citywide.
+// ---------------------------------------------------------------------------
+
+let roadSeq = 0
+let lastRoadFetch: { lat: number; lon: number; radiusM: number } | null = null
+
+export async function refreshRoads(force = false): Promise<void> {
+  const layer = getRoadLayer()
+  if (!layer || !getAppState().layerToggles.roads) return
+  const center = lookAtCenter()
+  if (!center || center.heightM > ROAD_MAX_CAMERA_M) return
+  const { lat, lon } = center
+  const radiusM = Math.min(1200, Math.max(400, center.heightM * 0.8))
+  if (!force && !movedEnough(lastRoadFetch, lat, lon, radiusM)) return
+  const seq = ++roadSeq
+  try {
+    const segments = await fetchRoadSegments(lat, lon, radiusM)
+    if (seq !== roadSeq || !getAppState().layerToggles.roads) return
+    if (layer !== getRoadLayer()) return // scene torn down/remounted mid-fetch
+    if (segments.length) lastRoadFetch = { lat, lon, radiusM }
+    layer.renderRoads(segments)
+  } catch (err) {
+    console.error('[roads] layer unavailable:', err)
+  }
+}
+
+let tunnelsLoaded = false
+let tunnelsLoading = false
+
+export function ensureTunnels(): void {
+  const layer = getRoadLayer()
+  if (!layer || tunnelsLoaded || tunnelsLoading || !getAppState().layerToggles.tunnels) return
+  tunnelsLoading = true
+  fetchTunnels()
+    .then((segments) => {
+      if (layer !== getRoadLayer()) return // scene torn down/remounted mid-fetch
+      tunnelsLoaded = true
+      layer.renderTunnels(segments)
+      layer.setTunnelsVisible(getAppState().layerToggles.tunnels)
+    })
+    .catch((err) => {
+      console.error('[tunnels] layer unavailable:', err)
+      setAppState((s) => ({ layerToggles: { ...s.layerToggles, tunnels: false } }))
+    })
+    .finally(() => {
+      tunnelsLoading = false
+    })
+}
+
+// Street labels now FOLLOW the camera (not just the incident) so every street
+// in view is named when zoomed to a readable range.
+let streetSeq = 0
+let lastStreetFetch: { lat: number; lon: number; radiusM: number } | null = null
+
+export async function refreshStreetLabels(force = false): Promise<void> {
+  const layer = getStreetLayer()
+  if (!layer || !getAppState().layerToggles.streets) return
+  const center = lookAtCenter()
+  if (!center || center.heightM > ROAD_MAX_CAMERA_M) return
+  const { lat, lon } = center
+  const radiusM = Math.min(1000, Math.max(400, center.heightM * 0.8))
+  if (!force && !movedEnough(lastStreetFetch, lat, lon, radiusM)) return
+  const seq = ++streetSeq
+  try {
+    const streets = await fetchStreetLabels(lat, lon, radiusM)
+    if (seq !== streetSeq || !getAppState().layerToggles.streets) return
+    if (layer !== getStreetLayer()) return // scene torn down/remounted mid-fetch
+    if (streets.length) lastStreetFetch = { lat, lon, radiusM }
+    if (streets.length) layer.set(streets)
+  } catch (err) {
+    console.error('[streets] labels unavailable:', err)
   }
 }
 

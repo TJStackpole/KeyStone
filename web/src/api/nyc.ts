@@ -289,7 +289,7 @@ export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500)
   const params = new URLSearchParams({
     $select: 'full_street_name,segmentlength,the_geom',
     $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
-    $limit: '400',
+    $limit: '600',
   })
   const res = await fetch(`${STREET_CENTERLINE}?${params}`)
   if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
@@ -317,7 +317,7 @@ export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500)
   }
   return [...best.entries()]
     .sort((a, b) => b[1].len - a[1].len)
-    .slice(0, 30)
+    .slice(0, 45) // every street in a camera-radius view gets its name
     .map(([name, v]) => ({ name, lat: v.lat, lon: v.lon, bearingDeg: v.bearingDeg }))
 }
 
@@ -516,4 +516,69 @@ export async function fetchFacilities(where: string, signal?: AbortSignal): Prom
     .filter((r) => r.facname && r.latitude && r.longitude)
     .map((r) => ({ name: r.facname!, lat: Number(r.latitude), lon: Number(r.longitude) }))
     .filter((f) => Number.isFinite(f.lat) && Number.isFinite(f.lon))
+}
+
+// ---------------------------------------------------------------------------
+// Road network + tunnels (NYC Street Centerline) — the OVERLAYS road layer.
+// rw_type: 1 street, 2 highway, 3 bridge, 4 tunnel, 9 ramp.
+// ---------------------------------------------------------------------------
+
+export interface RoadSegment {
+  name: string
+  /** True for highways/bridges/ramps — drawn heavier than local streets. */
+  major: boolean
+  /** MultiLineString parts: [ [ [lon,lat], ... ], ... ] */
+  lines: number[][][]
+}
+
+interface CenterlineGeomRow {
+  full_street_name?: string
+  rw_type?: string
+  the_geom?: { type: string; coordinates: number[][][] }
+}
+
+/** Drivable road segments (streets/highways/bridges/ramps) near a point. */
+export async function fetchRoadSegments(
+  lat: number,
+  lon: number,
+  radiusM: number,
+  signal?: AbortSignal,
+): Promise<RoadSegment[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'full_street_name,rw_type,the_geom',
+    $where: `rw_type in('1','2','3','9') AND within_circle(the_geom, ${lat}, ${lon}, ${Math.round(radiusM)})`,
+    $order: 'objectid',
+    $limit: '3000',
+  })
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { signal })
+  if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
+  const rows = (await res.json()) as CenterlineGeomRow[]
+  return rows
+    .filter((r) => r.the_geom?.type === 'MultiLineString' && r.the_geom.coordinates?.length)
+    .map((r) => ({
+      name: (r.full_street_name ?? '').trim(),
+      major: r.rw_type === '2' || r.rw_type === '3' || r.rw_type === '9',
+      lines: r.the_geom!.coordinates,
+    }))
+}
+
+/** Every vehicular tunnel segment citywide (they're sparse — 171 rows). */
+export async function fetchTunnels(signal?: AbortSignal): Promise<RoadSegment[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'full_street_name,rw_type,the_geom',
+    $where: `rw_type='4'`,
+    $limit: '400',
+  })
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { signal })
+  if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
+  const rows = (await res.json()) as CenterlineGeomRow[]
+  return rows
+    .filter((r) => r.the_geom?.type === 'MultiLineString' && r.the_geom.coordinates?.length)
+    .map((r) => ({
+      name: (r.full_street_name ?? '').trim(),
+      major: true,
+      lines: r.the_geom!.coordinates,
+    }))
 }
