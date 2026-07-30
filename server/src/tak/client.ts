@@ -3,9 +3,9 @@ import net from 'node:net'
 import { buildCotXml, parseCotXml, type CotEvent } from './cot.js'
 
 /**
- * Every WATCHTOWER TCP connection announces an EUD identity on connect — TAK
+ * Every KEYSTONE TCP connection announces an EUD identity on connect — TAK
  * servers key per-client delivery off the uid in a client's self-announcement,
- * and a silent socket receives no fan-out. Identities prefixed WATCHTOWER- are
+ * and a silent socket receives no fan-out. Identities prefixed KEYSTONE- (or legacy WATCHTOWER-) are
  * internal and filtered out of the unit registry.
  */
 export interface TakIdentity {
@@ -40,7 +40,7 @@ export class TakClient extends EventEmitter {
   constructor(
     private readonly host: string,
     private readonly port: number,
-    private readonly identity: TakIdentity = { uid: 'WATCHTOWER-COP', callsign: 'WATCHTOWER' },
+    private readonly identity: TakIdentity = { uid: 'KEYSTONE-COP', callsign: 'KEYSTONE' },
   ) {
     super()
   }

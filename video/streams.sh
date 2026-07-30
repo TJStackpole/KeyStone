@@ -1,5 +1,5 @@
 #!/bin/sh
-# WATCHTOWER demo video streams.
+# KEYSTONE demo video streams.
 #
 # Generates four placeholder clips on first run (2 aerial-style, 2 bodycam-
 # style — synthetic lavfi sources, no real footage) and loops each into

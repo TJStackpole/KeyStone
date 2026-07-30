@@ -1,4 +1,4 @@
-# WATCHTOWER infrastructure.
+# KEYSTONE infrastructure.
 # Phases 1-2 need no containers — `docker compose up -d` is required from Phase 3 onward.
 
 services:
@@ -12,7 +12,7 @@ services:
     container_name: watchtower-takserver
     restart: unless-stopped
     ports:
-      - "8087:8087"   # CoT TCP (plain) — ATAK clients + WATCHTOWER backend
+      - "8087:8087"   # CoT TCP (plain) — ATAK clients + KEYSTONE backend
 
   # Phase 6 — RTSP in -> WebRTC/HLS out video gateway.
   mediamtx:

@@ -2,11 +2,11 @@ import { XMLParser } from 'fast-xml-parser'
 
 // ---------------------------------------------------------------------------
 // Cursor-on-Target (CoT) — genuine event XML, the lingua franca of TAK.
-// Every unit position in WATCHTOWER round-trips through a real TAK server as
+// Every unit position in KEYSTONE round-trips through a real TAK server as
 // one of these events; a real ATAK phone's traffic parses identically.
 // ---------------------------------------------------------------------------
 
-/** Personnel biometric telemetry (WATCHTOWER CoT detail extension). */
+/** Personnel biometric telemetry (KEYSTONE CoT detail extension). */
 export interface BioTelemetry {
   /** Heart rate, bpm. */
   hr: number
@@ -36,13 +36,13 @@ export interface CotEvent {
   course?: number
   /** Track speed, m/s. */
   speed?: number
-  /** WATCHTOWER extension: operational status carried in <detail>. */
+  /** KEYSTONE extension: operational status carried in <detail>. */
   status?: string
-  /** WATCHTOWER extension: personnel role (ff | officer | medic). */
+  /** KEYSTONE extension: personnel role (ff | officer | medic). */
   role?: string
-  /** WATCHTOWER extension: building floor (1-based; 0/absent = exterior). */
+  /** KEYSTONE extension: building floor (1-based; 0/absent = exterior). */
   floor?: number
-  /** WATCHTOWER extension: personnel biometrics. */
+  /** KEYSTONE extension: personnel biometrics. */
   bio?: BioTelemetry
   /** Original XML as received (proof-of-protocol logging, replay). */
   raw?: string
@@ -80,7 +80,7 @@ const CALLSIGN_RULES: [RegExp, UnitCategory][] = [
   [/^(UAS|UAV|DRONE|DR)[- ]?\d/i, 'drone'],
 ]
 
-/** CoT type atoms WATCHTOWER publishes per category (MIL-STD-2525 friendly framing). */
+/** CoT type atoms KEYSTONE publishes per category (MIL-STD-2525 friendly framing). */
 export const CATEGORY_COT_TYPE: Record<UnitCategory, string> = {
   engine: 'a-f-G-E-V-F',
   ladder: 'a-f-G-E-V-F',
@@ -104,7 +104,7 @@ const ROLE_CATEGORY: Record<string, UnitCategory> = {
 }
 
 export function categorize(callsign: string | undefined, cotType: string, role?: string): UnitCategory {
-  // Personnel role (WATCHTOWER extension) wins — dismounted members carry the
+  // Personnel role (KEYSTONE extension) wins — dismounted members carry the
   // same designator family as their apparatus, so callsign rules would misfile them.
   if (role && ROLE_CATEGORY[role]) return ROLE_CATEGORY[role]
   if (callsign) {
@@ -182,9 +182,9 @@ export function buildCotXml(o: BuildCotOptions): string {
     detail += `<track course="${(o.course ?? 0).toFixed(1)}" speed="${(o.speed ?? 0).toFixed(1)}"/>`
   }
   if (o.status || o.role || o.bio) {
-    // WATCHTOWER extension element — unknown detail children are legal CoT and
+    // KEYSTONE extension element — unknown detail children are legal CoT and
     // pass through TAK servers untouched; ATAK simply ignores them.
-    let ext = '<watchtower'
+    let ext = '<keystone'
     if (o.status) ext += ` status="${esc(o.status)}"`
     if (o.role) ext += ` role="${esc(o.role)}"`
     if (o.floor !== undefined) ext += ` floor="${Math.round(o.floor)}"`
@@ -250,7 +250,11 @@ export function parseCotXml(xml: string): CotEvent | null {
   const contact = detail ? firstNode((detail as ParsedAttrs).contact) : undefined
   const track = detail ? firstNode((detail as ParsedAttrs).track) : undefined
   const group = detail ? firstNode((detail as ParsedAttrs)['__group']) : undefined
-  const watchtower = detail ? firstNode((detail as ParsedAttrs).watchtower) : undefined
+  // Read the KEYSTONE extension; fall back to the legacy <watchtower> tag so
+  // older publishers (pre-rebrand test scripts) keep working.
+  const watchtower = detail
+    ? (firstNode((detail as ParsedAttrs).keystone) ?? firstNode((detail as ParsedAttrs).watchtower))
+    : undefined
 
   const course = track ? Number(attr(track, 'course')) : NaN
   const speed = track ? Number(attr(track, 'speed')) : NaN

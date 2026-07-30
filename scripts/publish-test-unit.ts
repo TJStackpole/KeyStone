@@ -4,7 +4,7 @@
  *
  *   npx tsx scripts/publish-test-unit.ts
  *
- * The WATCHTOWER backend (a separate TCP client of the same TAK server)
+ * The KEYSTONE backend (a separate TCP client of the same TAK server)
  * receives the fan-out, and E-99 appears on the globe within ~2 seconds.
  * Optional env: TAK_HOST (default 127.0.0.1), TAK_PORT (default 8087).
  */
@@ -29,7 +29,7 @@ const xml =
   `<contact callsign="E-99"/>` +
   `<__group name="Blue" role="Team Member"/>` +
   `<track course="45.0" speed="0.0"/>` +
-  `<watchtower status="On Scene"/>` +
+  `<keystone status="On Scene"/>` +
   `</detail>` +
   `</event>\n`
 

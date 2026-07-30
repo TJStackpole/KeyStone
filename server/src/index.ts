@@ -76,10 +76,12 @@ const tak = new TakClient(TAK_HOST, TAK_PORT)
 // of EUDs would — the TAK server then fans its traffic out to the dashboard's
 // subscriber connection above. (Publishing on the subscriber socket wouldn't
 // round-trip: TAK servers don't echo events back to their sender.)
-const simTak = new TakClient(TAK_HOST, TAK_PORT, { uid: 'WATCHTOWER-SIM', callsign: 'WT-SIM' })
+const simTak = new TakClient(TAK_HOST, TAK_PORT, { uid: 'KEYSTONE-SIM', callsign: 'KS-SIM' })
 
 /** Internal EUD identities — never shown as units. */
-const INTERNAL_UIDS = new Set(['WATCHTOWER-COP', 'WATCHTOWER-SIM'])
+// Legacy WATCHTOWER-* uids stay filtered: a TAK server session started before
+// the KeyStone rebrand may still fan out their old self-announcements.
+const INTERNAL_UIDS = new Set(['KEYSTONE-COP', 'KEYSTONE-SIM', 'WATCHTOWER-COP', 'WATCHTOWER-SIM'])
 
 tak.on('status', (connected: boolean) => broadcast({ type: 'tak.status', connected }))
 
@@ -322,7 +324,7 @@ simComms.start()
 // ---------------------------------------------------------------------------
 // Incident API
 // ---------------------------------------------------------------------------
-app.get('/healthz', (_req, res) => res.json({ ok: true, service: 'watchtower-server' }))
+app.get('/healthz', (_req, res) => res.json({ ok: true, service: 'keystone-server' }))
 
 app.get('/api/incident', (_req, res) => res.json(getState()))
 
@@ -371,5 +373,5 @@ app.post('/api/timeline', (req, res) => {
 })
 
 httpServer.listen(PORT, () => {
-  console.log(`[watchtower-server] listening on :${PORT} (http + ws /ws)`)
+  console.log(`[keystone-server] listening on :${PORT} (http + ws /ws)`)
 })

@@ -1,4 +1,4 @@
-"""WATCHTOWER transcription sidecar.
+"""KEYSTONE transcription sidecar.
 
 Two modes, selected by BROADCASTIFY_URL:
 
@@ -10,7 +10,7 @@ Two modes, selected by BROADCASTIFY_URL:
              we transcribe rolling 12-second chunks and emit lines as they
              complete.
 
-Every line goes to all connected WebSocket clients (the WATCHTOWER backend)
+Every line goes to all connected WebSocket clients (the KEYSTONE backend)
 as JSON: {"text": ..., "offset": seconds-into-source, "live": bool}
 """
 

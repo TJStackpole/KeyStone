@@ -1,6 +1,6 @@
-# WATCHTOWER
+# KEYSTONE
 
-Browser-based 3D incident command dashboard — a common operating picture demo for FDNY / NYC Emergency Management.
+Browser-based 3D incident command dashboard (formerly WATCHTOWER) — a common operating picture demo for FDNY / NYC Emergency Management.
 
 Operator types a NYC address → camera flies to a 3D view built from **real NYC Open Data** → an incident is created → units (real ATAK clients + simulated units, both speaking genuine Cursor-on-Target) appear as tracked markers → ICS perimeters, command posts, video panels, and a live comms/transcript panel complete the picture.
 
@@ -45,7 +45,7 @@ Any Open Data failure degrades gracefully: logged, surfaced as a "layer unavaila
 
 ## TAK server selection (Phase 3)
 
-WATCHTOWER's CoT spine runs through a **real open-source TAK server** in Docker
+KEYSTONE's CoT spine runs through a **real open-source TAK server** in Docker
 ([taky](https://github.com/tkuester/taky) v0.10) — the backend is a plain-TCP
 CoT client on port 8087, exactly like an ATAK phone. The CoT client is
 server-agnostic: `TAK_HOST` / `TAK_PORT` in `.env` point it anywhere, including

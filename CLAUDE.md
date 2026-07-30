@@ -1,10 +1,10 @@
-# WATCHTOWER — Project Context (CLAUDE.md)
+# KEYSTONE — Project Context (CLAUDE.md)
 
 Place this file at the repo root. Claude Code reads it automatically every session.
 
 ## What this is
 
-WATCHTOWER is a browser-based 3D incident command dashboard — a common operating picture demo for FDNY / NYC Emergency Management. Core flow: operator types a NYC address → camera flies to a 3D view of the site built from **real NYC Open Data** → an incident is created → units (real ATAK clients + simulated units, both speaking genuine Cursor-on-Target) appear as tracked markers → operator draws ICS perimeters and command posts → drone/body-cam video panels and a comms/transcript panel complete the picture.
+KEYSTONE (formerly WATCHTOWER) is a browser-based 3D incident command dashboard — a common operating picture demo for FDNY / NYC Emergency Management. Core flow: operator types a NYC address → camera flies to a 3D view of the site built from **real NYC Open Data** → an incident is created → units (real ATAK clients + simulated units, both speaking genuine Cursor-on-Target) appear as tracked markers → operator draws ICS perimeters and command posts → drone/body-cam video panels and a comms/transcript panel complete the picture.
 
 This is a pilot demo for real stakeholders, not a toy. Real data and real protocols everywhere possible; simulation only where reality is inaccessible (encrypted NYPD radio, on-scene video), and every simulated element is visibly labeled SIMULATED.
 

@@ -62,7 +62,7 @@ export default function App() {
       <UtilityDock />
       <CommsPanel />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
-        <div className="mark">WATCHTOWER</div>
+        <div className="mark">KEYSTONE</div>
         <div className="status">{bootMsg}</div>
       </div>
     </div>
