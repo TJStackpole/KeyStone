@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   loadScenario,
   runDemoScenario,
+  setIsolateView,
   toggleActiveIncidentMode,
   toggleIsolateMode,
   toggleTopDownView,
@@ -52,6 +53,7 @@ export function TopBar() {
     incident,
     activeIncidentMode,
     isolateMode,
+    isolateView,
     viewMode,
     nycemView,
   } = useAppState()
@@ -112,6 +114,24 @@ export function TopBar() {
           >
             <span className="dot" /> ISOLATE
           </button>
+        )}
+        {incident && activeIncidentMode && isolateMode && (
+          <span className="chip seg">
+            <button
+              className={`seg-btn${isolateView === 'model' ? ' on' : ''}`}
+              onClick={() => setIsolateView('model')}
+              title="Clean schematic 3D model from the building's real data — floors, entrances, estimated egress and stairs"
+            >
+              MODEL
+            </button>
+            <button
+              className={`seg-btn${isolateView === 'live' ? ' on' : ''}`}
+              onClick={() => setIsolateView('live')}
+              title="The real (clipped) imagery of the building"
+            >
+              LIVE
+            </button>
+          </span>
         )}
         {incident && (
           <button

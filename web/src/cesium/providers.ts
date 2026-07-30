@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { getAppState } from '../state/store'
 import type { ProviderMode } from '../types'
 
 export interface SceneHandle {
@@ -209,6 +210,27 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
           roll: 0,
         },
         duration: 0.8,
+      })
+    }
+  })
+
+  // Hard floor: the camera must never slip beneath the map while orbiting or
+  // scrolling. The floor tracks whatever surface IS the map right now — the
+  // flat globe when it's shown (keyless / isolate ground), else the sunken
+  // photorealistic streets (~-30 m geoid). Ground view is exempt: it manages
+  // its own street-level camera with collision deliberately off.
+  scene.preRender.addEventListener(() => {
+    if (getAppState().groundViewActive) return
+    // Camera FLIGHTS manage their own path (the ground-view exit climbs from
+    // street level — a clamp's setView would cancel it and strand the camera).
+    // User gestures are not tweens, so scroll/drag stays clamped.
+    if ((scene as unknown as { tweens: { length: number } }).tweens.length > 0) return
+    const floor = scene.globe.show ? 2 : -26
+    const pos = viewer.camera.positionCartographic
+    if (pos.height < floor) {
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromRadians(pos.longitude, pos.latitude, floor),
+        orientation: { heading: viewer.camera.heading, pitch: viewer.camera.pitch, roll: viewer.camera.roll },
       })
     }
   })

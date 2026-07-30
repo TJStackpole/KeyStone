@@ -13,6 +13,8 @@ export interface ChatMsg {
   text: string
   ts: string
   self?: boolean
+  /** Sender is a simulated unit (WT-SIM-/DRILL- uid) — labeled SIM in the UI. */
+  sim?: boolean
 }
 
 function esc(v: string): string {
@@ -23,11 +25,15 @@ function esc(v: string): string {
     .replaceAll('"', '&quot;')
 }
 
-export function buildGeoChatXml(text: string, sender: { uid: string; callsign: string }, msgId: string): string {
+export function buildGeoChatXml(
+  text: string,
+  sender: { uid: string; callsign: string },
+  msgId: string,
+  room = 'All Chat Rooms',
+): string {
   const now = new Date()
   const stale = new Date(now.getTime() + 86_400_000)
   const iso = (d: Date) => d.toISOString()
-  const room = 'All Chat Rooms'
   const uid = `GeoChat.${sender.uid}.${room}.${msgId}`
   return (
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -76,11 +82,16 @@ export function extractGeoChat(raw: string, eventUid: string): ChatMsg | null {
         ? String(remarks['#text'])
         : ''
   if (!text) return null
+  // Sender uid (chatgrp uid0) tells us whether this is one of our clearly
+  // labeled simulated units — the UI badges those SIM.
+  const chatgrp = chat ? first(chat.chatgrp) : undefined
+  const senderUid = String(chatgrp?.['@_uid0'] ?? '')
   return {
     id: eventUid,
     from: String(chat['@_senderCallsign'] ?? 'UNKNOWN'),
     room: String(chat['@_chatroom'] ?? 'All Chat Rooms'),
     text,
     ts: new Date().toISOString(),
+    sim: senderUid.startsWith('WT-SIM-') || senderUid.startsWith('DRILL-') || undefined,
   }
 }

@@ -94,6 +94,8 @@ export interface AppState {
   isolateMode: boolean
   /** Meters the isolated building is lifted — interior members ride along. */
   isolateLiftM: number
+  /** ISOLATE rendering: clean schematic 3D model vs the clipped real imagery. */
+  isolateView: 'model' | 'live'
   /** Camera mode: tactical 3D or straight-down satellite-style view. */
   viewMode: '3d' | 'topdown'
   /** Street-level camera dropped by the GND tool. */
@@ -184,6 +186,7 @@ const initial: AppState = {
   activeIncidentMode: true,
   isolateMode: false,
   isolateLiftM: 0,
+  isolateView: 'model',
   viewMode: '3d',
   groundViewActive: false,
   groundViewFt: 6,

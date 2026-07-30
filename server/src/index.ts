@@ -18,6 +18,7 @@ import {
 import { ScenarioEngine } from './scenario/engine.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
+import { CHAT_ROOMS, SimUnitChatter } from './simChat.js'
 import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
 import { shapeDeleteCot, shapeToCot } from './tak/shapes.js'
@@ -130,19 +131,23 @@ tak.on('event', (ev) => {
 app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-100) }))
 
 app.post('/api/chat', (req, res) => {
-  const { text } = req.body as { text?: string }
+  const { text, room } = req.body as { text?: string; room?: string }
   const trimmed = (text ?? '').trim()
   if (!trimmed) return res.status(400).json({ error: 'text required' })
   if (trimmed.length > 500) return res.status(400).json({ error: 'message too long (500 max)' })
+  // Interagency comm architecture: the console speaks as OEM Watch Command
+  // into the broadcast room or any agency room (FDNY/NYPD/EMS/PAPD/OEM).
+  const targetRoom =
+    room && (CHAT_ROOMS as readonly string[]).includes(room) ? room : 'All Chat Rooms'
   const msgId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
-  const sender = { uid: 'KEYSTONE-COP', callsign: 'KEYSTONE' }
-  const xml = buildGeoChatXml(trimmed, sender, msgId)
+  const sender = { uid: 'KEYSTONE-COP', callsign: 'OEM WATCH CMD' }
+  const xml = buildGeoChatXml(trimmed, sender, msgId, targetRoom)
   const sent = publishCot(xml)
   if (!sent) return res.status(503).json({ error: 'TAK link down — message not sent' })
   const msg: ChatMsg = {
-    id: `GeoChat.${sender.uid}.All Chat Rooms.${msgId}`,
+    id: `GeoChat.${sender.uid}.${targetRoom}.${msgId}`,
     from: sender.callsign,
-    room: 'All Chat Rooms',
+    room: targetRoom,
     text: trimmed,
     ts: new Date().toISOString(),
     self: true,
@@ -194,8 +199,18 @@ registry.on('remove', (uid) => {
   // (the registry no longer knows it, so no further remove ever arrives).
   pendingUnits.delete(uid)
   lastTrackSample.delete(uid)
+  simChatter.forget(uid)
   broadcast({ type: 'unit.remove', uid })
 })
+
+// Simulated arrival chatter: sim/drill units post a GeoChat line into their
+// agency's room when they arrive on scene (published as real CoT via TAK,
+// so it round-trips back through the same pipeline as human messages).
+const simChatter = new SimUnitChatter(
+  (xml) => publishCot(xml),
+  (msg) => recordChat(msg),
+)
+registry.on('unit', (unit) => simChatter.onUnit(unit))
 
 tak.start()
 simTak.start()
@@ -489,6 +504,7 @@ app.post('/api/incident', (req, res) => {
   for (const u of registry.all()) if (u.uid.startsWith('WT-SIM-')) registry.remove(u.uid)
   issuedStaging.clear()
   stagingFlip = 0
+  simChatter.reset() // fresh incident — units announce their next arrival
   const state = createIncident(incident)
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
@@ -503,6 +519,7 @@ app.delete('/api/incident', (_req, res) => {
   simulator.stop()
   issuedStaging.clear()
   stagingFlip = 0
+  simChatter.reset()
   for (const u of registry.all()) registry.remove(u.uid)
   const state = clearIncident()
   broadcast({ type: 'incident', incident: null })
@@ -551,6 +568,7 @@ const scenario = new ScenarioEngine({
     simulator.stop()
     issuedStaging.clear()
     stagingFlip = 0
+    simChatter.reset() // drill units announce their arrivals too
     const state = createIncident(incident)
     console.log(`[scenario] incident ${incident.id} — ${incident.address}`)
     broadcast({ type: 'incident', incident: state.incident })

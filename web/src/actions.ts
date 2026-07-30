@@ -288,6 +288,7 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     if (tileset) {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
       tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
+      tileset.show = true // MODEL view hides it — never leave the city hidden
       if (scene.mode === 'google') scene.viewer.scene.globe.show = false
     }
     setAppState({ isolateLiftM: 0 })
@@ -342,21 +343,44 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     }
     // Re-place interior members at their (possibly lifted) heights.
     applyUnitVisibility()
-    // Size-up-quality imagery while isolated; restores itself (and the focus
-    // layer's SSE policy) on the way out.
-    boostIsolateVisuals(true)
     // Keyless: the neighbors are our own extrusions — just stop drawing them.
     if (scene.extrudeFootprints) {
       void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, false)
     }
-    // Park the street-level orange box ONLY when a real tileset still shows
-    // the building — in keyless mode the extruded box IS the building, so it
-    // must stand alone (the Fire Bldg chip keeps controlling it there).
-    getFootprintLayer()?.setTargetVisible(scene.extrudeFootprints ? getAppState().layerToggles.targetbox : false)
-    // Tactical schematic: floor grid, fire floor, entrances — what crews walk into.
-    void applyTacticalModel(true)
+    // MODEL/LIVE appearance: tileset visibility, imagery boost, target-box
+    // park, and the schematic itself all key off the selected view.
+    applyIsolateAppearance()
     if (opts.frame) frameIsolatedBuilding(base)
   })()
+}
+
+/**
+ * ISOLATE has two looks: MODEL (clean schematic replaces the building — the
+ * clipped real mesh reads patchy up close) and LIVE (the real clipped
+ * imagery with the wireframe over it). Applies tileset visibility, the
+ * imagery boost, the street-box park, and rebuilds the schematic.
+ */
+function applyIsolateAppearance(): void {
+  const scene = getScene()
+  if (!scene) return
+  const s = getAppState()
+  const live = s.isolateView === 'live'
+  if (scene.buildingTileset) scene.buildingTileset.show = !s.isolateMode || live
+  // The ultra-detail boost only pays for itself when the real mesh is shown.
+  boostIsolateVisuals(s.isolateMode && live)
+  // Street-level orange box: parked while isolated except in keyless LIVE,
+  // where the extruded box IS the building (chip keeps controlling it there).
+  getFootprintLayer()?.setTargetVisible(
+    s.isolateMode ? scene.extrudeFootprints && live && s.layerToggles.targetbox : s.layerToggles.targetbox,
+  )
+  void applyTacticalModel(s.isolateMode)
+}
+
+/** MODEL / LIVE sub-chips while ISOLATE is up. */
+export function setIsolateView(view: 'model' | 'live'): void {
+  if (getAppState().isolateView === view) return
+  setAppState({ isolateView: view })
+  if (getAppState().isolateMode) applyIsolateAppearance()
 }
 
 let tacticalSeq = 0
@@ -405,6 +429,7 @@ async function applyTacticalModel(on: boolean): Promise<void> {
     floors,
     fireFloor,
     address: { lat: inc.lat, lon: inc.lon },
+    view: now.isolateView,
   })
 }
 
@@ -599,11 +624,12 @@ export function toggleLayer(layer: ToggleLayerId): void {
   setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: next } }))
   if (layer === 'footprints') getFootprintLayer()?.setVisible(next)
   if (layer === 'targetbox') {
-    // While a LIFTED isolate is active the box stays parked — it would sit
-    // 35-80 m below the levitated building as a detached slab. Keyless isolate
-    // has no lift and the box IS the building, so the chip keeps working there.
+    // While a LIFTED isolate (or the schematic MODEL view) is active the box
+    // stays parked — it would sit under the levitated building as a detached
+    // slab, or fight the schematic volume. Keyless LIVE isolate has no lift
+    // and the box IS the building, so the chip keeps working there.
     const s = getAppState()
-    getFootprintLayer()?.setTargetVisible(next && !(s.isolateMode && s.isolateLiftM > 0))
+    getFootprintLayer()?.setTargetVisible(next && !(s.isolateMode && (s.isolateLiftM > 0 || s.isolateView === 'model')))
   }
   if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next)
   if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next)

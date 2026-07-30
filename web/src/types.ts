@@ -202,6 +202,8 @@ export interface ChatMsg {
   text: string
   ts: string
   self?: boolean
+  /** Sender is a simulated unit — badge it SIM (no silent simulation). */
+  sim?: boolean
 }
 
 export type UnitStatus = 'Enroute' | 'On Scene' | 'Staged' | 'Operating'

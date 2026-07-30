@@ -20,6 +20,10 @@ const FIRE = Cesium.Color.fromCssColorString('#ef4444')
 const ENTRANCE = Cesium.Color.fromCssColorString('#22c55e')
 const EGRESS = Cesium.Color.fromCssColorString('#f59e0b')
 const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.78)
+const VOLUME_FILL = GRID.withAlpha(0.1)
+const SLAB_FILL = Cesium.Color.fromCssColorString('#7dd3fc').withAlpha(0.28)
+const FIRE_SLAB_FILL = FIRE.withAlpha(0.45)
+const CORE_FILL = EGRESS.withAlpha(0.55)
 
 const MAX_RINGS = 40 // towers get a ring every Nth storey, labels follow
 
@@ -31,6 +35,12 @@ export interface TacticalModelOpts {
   fireFloor?: number
   /** Address point — the main entrance sits on the nearest footprint edge. */
   address: { lat: number; lon: number }
+  /**
+   * 'model': full schematic — glass volume, floor slabs, estimated stair
+   * core — replacing the (patchy when clipped) real imagery. 'live': just the
+   * wireframe/marks over the real building.
+   */
+  view: 'model' | 'live'
 }
 
 /** Closest point on the ring (lon/lat pairs) to `p`, plus that edge's index and squared distance. */
@@ -95,6 +105,12 @@ export class TacticalModelLayer {
     const step = Math.max(1, Math.ceil(floors / MAX_RINGS))
 
     const entrance = closestOnRing(ring, opts.address)
+
+    // MODEL view: clean schematic replaces the (patchy when clipped) real
+    // imagery — glass volume per wing, floor slabs, estimated stair core.
+    if (opts.view === 'model') {
+      this.buildModel(target, ring, opts, z0, floors, storey, step)
+    }
 
     // Floor rings (fire floor always drawn, in red).
     for (let f = 0; f <= floors; f += 1) {
@@ -200,6 +216,110 @@ export class TacticalModelLayer {
         backgroundColor: LABEL_BG,
         backgroundPadding: new Cesium.Cartesian2(8, 4),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+  }
+
+  /**
+   * Schematic building from REAL data (footprint rings, measured height,
+   * PLUTO floor count): translucent volume for every wing, a slab per storey
+   * (fire floor red), and a stair core. NYC publishes no stairwell layouts,
+   * so the core is placed at the wing's centroid, oriented to its longest
+   * wall, and labeled (EST.) per the no-silent-simulation rule.
+   */
+  private buildModel(
+    target: Footprint,
+    ring: number[][],
+    opts: TacticalModelOpts,
+    z0: number,
+    floors: number,
+    storey: number,
+    step: number,
+  ): void {
+    // Glass volume for EVERY part of the footprint (multi-wing complexes).
+    for (let i = 0; i < target.polygons.length; i++) {
+      const outer = target.polygons[i][0]
+      if (!outer || outer.length < 3) continue
+      this.source.entities.add({
+        id: `tact:vol:${i}`,
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(outer.flat())),
+          height: z0,
+          extrudedHeight: z0 + opts.heightM,
+          material: VOLUME_FILL,
+          outline: true,
+          outlineColor: GRID.withAlpha(0.5),
+        },
+      })
+    }
+
+    // Floor slabs on the entrance wing (towers keep the same ring stepping).
+    const slabHierarchy = new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(ring.flat()))
+    for (let f = 1; f < floors; f++) {
+      const isFire = opts.fireFloor !== undefined && f === opts.fireFloor
+      if (f % step !== 0 && !isFire) continue
+      const z = z0 + f * storey
+      this.source.entities.add({
+        id: `tact:slab:${f}`,
+        polygon: {
+          hierarchy: slabHierarchy,
+          height: z - 0.12,
+          extrudedHeight: z + 0.12,
+          material: isFire ? FIRE_SLAB_FILL : SLAB_FILL,
+        },
+      })
+    }
+
+    // Estimated stair core: centroid of the entrance wing, oriented to its
+    // longest wall, full building height.
+    let cLon = 0, cLat = 0
+    const n = ring.length - 1 // ring is closed
+    for (let i = 0; i < n; i++) {
+      cLon += ring[i][0]
+      cLat += ring[i][1]
+    }
+    cLon /= n
+    cLat /= n
+    const cosLat = Math.cos((cLat * Math.PI) / 180)
+    let bestLen = 0
+    let wallBearing = 0
+    for (let i = 0; i < ring.length - 1; i++) {
+      const dx = (ring[i + 1][0] - ring[i][0]) * cosLat
+      const dy = ring[i + 1][1] - ring[i][1]
+      const len = dx * dx + dy * dy
+      if (len > bestLen) {
+        bestLen = len
+        wallBearing = Math.atan2(dx, dy)
+      }
+    }
+    const along = { x: Math.sin(wallBearing), y: Math.cos(wallBearing) } // unit, meters
+    const across = { x: Math.cos(wallBearing), y: -Math.sin(wallBearing) }
+    const HALF_L = 3.2, HALF_W = 2.2 // a code-typical stair shaft, meters
+    const corner = (a: number, c: number): [number, number] => {
+      const mx = a * along.x + c * across.x
+      const my = a * along.y + c * across.y
+      return [cLon + mx / (111_320 * cosLat), cLat + my / 111_320]
+    }
+    const coreRing = [corner(HALF_L, HALF_W), corner(HALF_L, -HALF_W), corner(-HALF_L, -HALF_W), corner(-HALF_L, HALF_W)]
+    this.source.entities.add({
+      id: 'tact:core',
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(coreRing.flat())),
+        height: z0,
+        extrudedHeight: z0 + opts.heightM,
+        material: CORE_FILL,
+        outline: true,
+        outlineColor: EGRESS,
+      },
+    })
+    this.source.entities.add({
+      id: 'tact:core:label',
+      position: Cesium.Cartesian3.fromDegrees(cLon, cLat, z0 + opts.heightM * 0.55),
+      billboard: {
+        image: crispTextImage('STAIRS (EST.)', '#fbbf24', 20),
+        scale: 0.5,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(150, 1, 2500, 0.5),
       },
     })
   }

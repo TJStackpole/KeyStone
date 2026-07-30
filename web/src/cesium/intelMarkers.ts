@@ -11,8 +11,18 @@ const FIREHOUSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height
 
 const FIREHOUSE_ICON = `data:image/svg+xml;base64,${btoa(FIREHOUSE_SVG)}`
 
-const HYDRANT_COLOR = Cesium.Color.fromCssColorString('#22d3ee')
-const HYDRANT_OUTLINE = Cesium.Color.fromCssColorString('#0a0e14')
+// Hydrant glyph: bonnet, barrel, side caps, base — small enough to read as a
+// street fixture, theme cyan so it can't be mistaken for a unit marker.
+const HYDRANT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="18" viewBox="0 0 16 18">
+  <path d="M8 1.2 C5.7 1.2 4.1 2.7 3.9 4.6 L12.1 4.6 C11.9 2.7 10.3 1.2 8 1.2 Z" fill="#22d3ee" stroke="#0a0e14" stroke-width="0.8"/>
+  <rect x="4.7" y="4.6" width="6.6" height="9" rx="1.2" fill="#22d3ee" stroke="#0a0e14" stroke-width="0.8"/>
+  <circle cx="2.9" cy="8.6" r="1.7" fill="#22d3ee" stroke="#0a0e14" stroke-width="0.8"/>
+  <circle cx="13.1" cy="8.6" r="1.7" fill="#22d3ee" stroke="#0a0e14" stroke-width="0.8"/>
+  <circle cx="8" cy="8.8" r="1.5" fill="#0e7490"/>
+  <rect x="3.2" y="13.6" width="9.6" height="2.6" rx="0.9" fill="#22d3ee" stroke="#0a0e14" stroke-width="0.8"/>
+</svg>`
+
+const HYDRANT_ICON = `data:image/svg+xml;base64,${btoa(HYDRANT_SVG)}`
 
 /**
  * Site-intel globe markers: hydrants (cyan points) and firehouses (red house
@@ -33,15 +43,15 @@ export class IntelMarkerLayer {
       this.hydrantSource.entities.add({
         id: `hydrant:${h.id}`,
         // Clamped to the scene surface — a fixed ellipsoid height floats ~30 m
-        // over photorealistic-tile streets (geoid offset).
+        // over photorealistic-tile streets (geoid offset). BOTTOM origin so
+        // the little hydrant STANDS on the ground instead of sinking into it.
         position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat, 0),
-        point: {
-          pixelSize: 7,
-          color: HYDRANT_COLOR,
-          outlineColor: HYDRANT_OUTLINE,
-          outlineWidth: 2,
+        billboard: {
+          image: HYDRANT_ICON,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(300, 1, 4000, 0.45),
         },
       })
     }

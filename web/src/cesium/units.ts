@@ -80,6 +80,18 @@ const VEHICLE_TRAIL_EXEMPT = new Set(['ff', 'officer', 'medic', 'drone'])
 
 const MAX_POSITION_SAMPLES = 120 // ~4 minutes at the 2 s CoT cadence
 
+// Responding-unit pulse: an expanding, fading ring under every ENROUTE
+// vehicle so active responders read at a glance. White ring texture tinted
+// per-agency via billboard.color; scale+alpha ride one shared phase.
+const PULSE_RING = svgIcon(
+  `<circle cx="13" cy="13" r="10.5" fill="none" stroke="#ffffff" stroke-width="2.6"/>`,
+)
+const PULSE_PERIOD_MS = 1400
+/** 0 -> 1 sawtooth-ish phase (eased) shared by every pulse ring. */
+function pulsePhase(): number {
+  return ((Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS) ** 0.7
+}
+
 export class UnitLayer {
   private source = new Cesium.CustomDataSource('units')
   /** Recent enroute positions per vehicle — the live response trail. */
@@ -207,6 +219,54 @@ export class UnitLayer {
 
     if (unit.category === 'drone') this.updateDroneExtras(unit, show)
     this.updateTrail(unit, show)
+    this.updatePulse(unit, show, entity.position as Cesium.PositionProperty, clampRef)
+  }
+
+  /**
+   * Pulsating ring under a GPS-tracked vehicle while it is ENROUTE — the
+   * "this unit is actively responding" cue. Shares the unit's interpolated
+   * position property, so it rides along the street with the marker; removed
+   * the moment the unit arrives.
+   */
+  private updatePulse(
+    unit: Unit,
+    show: boolean,
+    position: Cesium.PositionProperty,
+    clampRef: Cesium.HeightReference,
+  ): void {
+    const pulseId = `unit:${unit.uid}:pulse`
+    const enroute = !unit.status || unit.status === 'Enroute'
+    if (VEHICLE_TRAIL_EXEMPT.has(unit.category) || !enroute) {
+      this.source.entities.removeById(pulseId)
+      return
+    }
+    let pulse = this.source.entities.getById(pulseId)
+    if (!pulse) {
+      const base = Cesium.Color.fromCssColorString(TRAIL_COLOR[unit.agency] ?? '#22d3ee')
+      const scratch = new Cesium.Color()
+      pulse = this.source.entities.add({
+        id: pulseId,
+        position,
+        billboard: {
+          image: PULSE_RING,
+          // Expand 0.7x -> 2.1x while fading out; CallbackProperties update
+          // vertex attributes only — no geometry rebuilds per frame.
+          scale: new Cesium.CallbackProperty(() => 0.7 + 1.4 * pulsePhase(), false),
+          color: new Cesium.CallbackProperty(
+            () => Cesium.Color.fromAlpha(base, 0.9 * (1 - pulsePhase()), scratch),
+            false,
+          ),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          heightReference: clampRef,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    } else {
+      // The marker's position property is recreated on entity re-create —
+      // keep the ring pointed at the CURRENT one.
+      if (pulse.position !== position) pulse.position = position
+    }
+    pulse.show = show
   }
 
   /**
@@ -297,6 +357,7 @@ export class UnitLayer {
     this.source.entities.removeById(`unit:${uid}:proj`)
     this.source.entities.removeById(`unit:${uid}:cone`)
     this.source.entities.removeById(`unit:${uid}:trail`)
+    this.source.entities.removeById(`unit:${uid}:pulse`)
     this.trails.delete(uid)
     this.sampleTimes.delete(uid)
   }
