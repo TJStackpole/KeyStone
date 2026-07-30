@@ -1,8 +1,65 @@
-import { haversineMeters } from './lib/geo.js'
+import { haversineMeters, Polyline, type PathPoint } from './lib/geo.js'
 
 // FDNY Firehouse Listing (NYC Open Data, keyless) — the simulator dispatches
 // the real nearest companies from their real houses.
 const FIREHOUSES = 'https://data.cityofnewyork.us/resource/hc8x-tcnd.json'
+
+// NYC Building Footprints (the same dataset the client extrudes) doubles as a
+// keyless land mask: a point with no footprint within the probe radius is
+// open water. Two radii, two questions — a spawn point must sit ON a block
+// (75 m), while a route leg only needs to not be in the river: parks, plazas
+// and bridge approaches carry roads but have no footprints for ~100 m, so
+// route probes use 150 m. Mid-river points are ≥300 m from any footprint and
+// still read wet.
+const FOOTPRINTS = 'https://data.cityofnewyork.us/resource/5zhs-2jue.json'
+const LAND_RADIUS_M = 75
+const CORRIDOR_RADIUS_M = 150
+
+const landCache = new Map<string, boolean>()
+
+/**
+ * Land mask for spawn points and route legs. An Open Data failure reads as
+ * land so the simulator degrades to its old unvalidated behavior instead of
+ * dead-ending the demo.
+ */
+export async function isLand(lat: number, lon: number, radiusM = LAND_RADIUS_M): Promise<boolean> {
+  // ~11 m cells: repeated dispatches at the seed addresses (fixed bearings)
+  // hit the cache without smearing the shoreline.
+  const key = `${lat.toFixed(4)},${lon.toFixed(4)},${radiusM}`
+  const cached = landCache.get(key)
+  if (cached !== undefined) return cached
+  try {
+    const params = new URLSearchParams({
+      $select: 'bin',
+      $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
+      $limit: '1',
+    })
+    const res = await fetch(`${FOOTPRINTS}?${params}`, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) throw new Error(`footprints SODA ${res.status}`)
+    const rows = (await res.json()) as unknown[]
+    const land = rows.length > 0
+    landCache.set(key, land)
+    return land
+  } catch {
+    return true
+  }
+}
+
+/**
+ * Sample a path every `stepM` and count points that fail the corridor land
+ * mask. 0 means the path never crosses open water (the rivers are ~500-600 m
+ * wide, so a 200 m step cannot hop one).
+ */
+export async function countWetSamples(points: PathPoint[], stepM = 200): Promise<number> {
+  const line = new Polyline(points)
+  const probes: Promise<boolean>[] = []
+  for (let d = stepM / 2; d < line.totalM; d += stepM) {
+    const { lat, lon } = line.at(d)
+    probes.push(isLand(lat, lon, CORRIDOR_RADIUS_M))
+  }
+  const results = await Promise.all(probes)
+  return results.filter((land) => !land).length
+}
 
 export interface Firehouse {
   name: string

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { BuildingSafety, CofoRecord, Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
   Agency,
+  ChatMsg,
   CommsChannel,
   CommsConfig,
   DataLayerId,
@@ -79,6 +80,9 @@ export interface AppState {
   nycemView: boolean
   /** After-action report overlay (auto-opens at scenario end). */
   aarOpen: boolean
+  /** TAK GeoChat: every EUD on the TAK server, "All Chat Rooms". */
+  chats: ChatMsg[]
+  chatOpen: boolean
   commsConfig: CommsConfig | null
   replay: { active: boolean; playing: boolean; t: number; duration: number }
   timeline: TimelineEvent[]
@@ -169,6 +173,8 @@ const initial: AppState = {
   alert: null,
   nycemView: false,
   aarOpen: false,
+  chats: [],
+  chatOpen: false,
   commsConfig: null,
   replay: { active: false, playing: false, t: 0, duration: 0 },
   timeline: [],

@@ -17,7 +17,7 @@ const FOCUS_RADIUS_M = 350
 /** Outer edge of the dim mask (beyond this the map fades under the veil). */
 const MASK_OUTER_M = 15_000
 
-const DEFAULT_SSE = 16
+const DEFAULT_SSE = 12 // photorealistic tiles stay legible even out of focus
 const FOCUS_SSE = 8
 
 function circle(lat: number, lon: number, radiusM: number, points: number): Cesium.Cartesian3[] {

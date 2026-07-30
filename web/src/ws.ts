@@ -2,6 +2,7 @@ import { adoptIncident, clearLocalIncident, flyToUnit, unitMapVisible } from './
 import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
 import type {
+  ChatMsg,
   CommsChannel,
   ExposureLabel,
   IcsShape,
@@ -20,6 +21,7 @@ interface SnapshotMsg {
   shapes?: IcsShape[]
   timeline?: TimelineEvent[]
   takConnected?: boolean
+  chats?: ChatMsg[]
 }
 interface ShapeMsg {
   type: 'shape'
@@ -69,6 +71,10 @@ interface ExposureMsg {
 interface AarMsg {
   type: 'scenario.aar'
 }
+interface ChatWsMsg {
+  type: 'chat'
+  msg: ChatMsg
+}
 type ServerMsg =
   | SnapshotMsg
   | IncidentMsg
@@ -83,6 +89,7 @@ type ServerMsg =
   | AlertMsg
   | ExposureMsg
   | AarMsg
+  | ChatWsMsg
 
 let started = false
 
@@ -154,6 +161,7 @@ function handle(msg: ServerMsg): void {
         shapes,
         timeline: (msg.timeline ?? []).slice(-600),
         takConnected: msg.takConnected ?? null,
+        chats: msg.chats ?? [],
       })
       break
     }
@@ -193,6 +201,11 @@ function handle(msg: ServerMsg): void {
       break
     case 'scenario.aar':
       setAppState({ aarOpen: true })
+      break
+    case 'chat':
+      setAppState((s) =>
+        s.chats.some((c) => c.id === msg.msg.id) ? {} : { chats: [...s.chats, msg.msg].slice(-200) },
+      )
       break
     case 'unit.remove':
       setAppState((s) => {

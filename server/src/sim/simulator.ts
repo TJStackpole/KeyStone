@@ -1,4 +1,5 @@
 import { bearingDeg, destination, Polyline, type PathPoint } from '../lib/geo.js'
+import { countWetSamples } from '../nyc.js'
 import { buildCotXml, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
 import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
 
@@ -358,9 +359,7 @@ export class FirstAlarmSimulator {
     } catch {
       // demo router down/rate-limited — fall through to the grid path
     }
-    // Manhattan-grid approximation: leg along the avenue, then the street.
-    const corner = { lat: dest.lat, lon: origin.lon }
-    return new Polyline([origin, corner, dest])
+    return gridFallbackPath(origin, dest)
   }
 
   private tick(): void {
@@ -431,6 +430,32 @@ export class FirstAlarmSimulator {
       )
     }
   }
+}
+
+/**
+ * Manhattan-grid approximation when OSRM is down: leg along the avenue, then
+ * the street. A blind corner choice can cut across the river for waterfront
+ * incidents, so both corner variants are sampled against the land mask and
+ * the first dry one wins. If neither is dry (origin across the water — a
+ * ground route would need a bridge this fallback can't draw), take the
+ * least-wet: the demo degrades, it doesn't dead-end.
+ */
+export async function gridFallbackPath(origin: PathPoint, dest: PathPoint): Promise<Polyline> {
+  const variants: PathPoint[][] = [
+    [origin, { lat: dest.lat, lon: origin.lon }, dest],
+    [origin, { lat: origin.lat, lon: dest.lon }, dest],
+  ]
+  let best = variants[0]
+  let bestWet = Infinity
+  for (const v of variants) {
+    const wet = await countWetSamples(v)
+    if (wet === 0) return new Polyline(v)
+    if (wet < bestWet) {
+      bestWet = wet
+      best = v
+    }
+  }
+  return new Polyline(best)
 }
 
 /** Drones climb linearly toward cruise altitude while enroute. */

@@ -85,6 +85,48 @@ export function SearchBar() {
     void standUpIncident(hit)
   }
 
+  // ------------------------- voice input (keyless) --------------------------
+  // Browser SpeechRecognition: press the mic, speak the address, the live
+  // transcript feeds the same autocomplete as typing.
+  const [listening, setListening] = useState(false)
+  const recRef = useRef<{ stop: () => void } | null>(null)
+  const SpeechRec = (
+    window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }
+  ).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
+
+  function toggleMic() {
+    if (listening) {
+      recRef.current?.stop()
+      return
+    }
+    if (!SpeechRec) return
+    interface RecResult {
+      results: ArrayLike<ArrayLike<{ transcript: string }>>
+    }
+    const rec = new (SpeechRec as new () => {
+      lang: string
+      interimResults: boolean
+      maxAlternatives: number
+      onresult: ((e: RecResult) => void) | null
+      onend: (() => void) | null
+      onerror: (() => void) | null
+      start: () => void
+      stop: () => void
+    })()
+    rec.lang = 'en-US'
+    rec.interimResults = true
+    rec.maxAlternatives = 1
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results, (r) => r[0]?.transcript ?? '').join(' ').trim()
+      if (transcript) onChange(transcript)
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    recRef.current = rec
+    rec.start()
+    setListening(true)
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
     if (!open || (!hits.length && !failed)) return
     if (e.key === 'ArrowDown') {
@@ -116,6 +158,18 @@ export function SearchBar() {
         onKeyDown={onKeyDown}
         onFocus={() => hits.length && setOpen(true)}
       />
+      {!!SpeechRec && (
+        <button
+          className={`mic-btn${listening ? ' on' : ''}`}
+          onClick={toggleMic}
+          title={listening ? 'Stop listening' : 'Speak an address'}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+          </svg>
+        </button>
+      )}
       {open && (
         <div className="search-dropdown glass">
           {failed && <div className="search-empty">GEOSEARCH UNAVAILABLE — CHECK NETWORK</div>}

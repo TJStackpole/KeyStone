@@ -191,6 +191,16 @@ export interface ExposureLabel {
   lon: number
 }
 
+/** TAK GeoChat message (b-t-f CoT, "All Chat Rooms"). */
+export interface ChatMsg {
+  id: string
+  from: string
+  room: string
+  text: string
+  ts: string
+  self?: boolean
+}
+
 export type UnitStatus = 'Enroute' | 'On Scene' | 'Staged' | 'Operating'
 
 export interface Unit {

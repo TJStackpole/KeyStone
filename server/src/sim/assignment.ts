@@ -1,5 +1,5 @@
-import { destination } from '../lib/geo.js'
-import { fetchFirehousesNear, type Firehouse } from '../nyc.js'
+import { destination, type PathPoint } from '../lib/geo.js'
+import { countWetSamples, fetchFirehousesNear, isLand, type Firehouse } from '../nyc.js'
 import type { UnitCategory } from '../tak/cot.js'
 
 export interface UnitSpec {
@@ -29,7 +29,9 @@ export async function buildFirstAlarm(lat: number, lon: number): Promise<UnitSpe
     console.warn('[sim] firehouse data unavailable — using synthetic origins:', err)
   }
 
-  const units: UnitSpec[] = []
+  // Synthetic origins resolve async (land-mask probes) — collected as
+  // promises so all units validate concurrently, then awaited together.
+  const units: (UnitSpec | Promise<UnitSpec>)[] = []
   const usedHouses = new Set<string>()
 
   const takeHouse = (pred: (f: Firehouse) => boolean): Firehouse | undefined => {
@@ -106,10 +108,10 @@ export async function buildFirstAlarm(lat: number, lon: number): Promise<UnitSpe
   units.push(synthetic('OEM-1', 'oem', lat, lon, 2400, 10, 200))
 
   // --- Drones: launch nearby, climb to altitude, orbit on arrival ------------
-  units.push({ ...synthetic('UAS-1', 'drone', lat, lon, 900, 15, 250), hae: 80 })
-  units.push({ ...synthetic('UAS-2', 'drone', lat, lon, 1200, 15, 120), hae: 115 })
+  units.push(synthetic('UAS-1', 'drone', lat, lon, 900, 15, 250).then((u) => ({ ...u, hae: 80 })))
+  units.push(synthetic('UAS-2', 'drone', lat, lon, 1200, 15, 120).then((u) => ({ ...u, hae: 115 })))
 
-  return units
+  return Promise.all(units)
 }
 
 /** Escalation reinforcements: next-nearest real companies not already assigned. */
@@ -125,7 +127,7 @@ export async function buildReinforcements(
   } catch {
     // fall through — synthetic reinforcements below
   }
-  const units: UnitSpec[] = []
+  const units: (UnitSpec | Promise<UnitSpec>)[] = []
 
   const pick = (
     count: number,
@@ -155,10 +157,10 @@ export async function buildReinforcements(
   pick(plan.e, (f) => f.engines, 'E', 'engine', 11)
   pick(plan.l, (f) => f.ladders, 'L', 'ladder', 10.5)
   if (plan.bc > 0) pick(plan.bc, (f) => f.battalions, 'BC', 'battalion', 13)
-  return units
+  return Promise.all(units)
 }
 
-function synthetic(
+async function synthetic(
   callsign: string,
   category: UnitCategory,
   lat: number,
@@ -166,7 +168,33 @@ function synthetic(
   distanceM: number,
   speedMps: number,
   bearing?: number,
-): UnitSpec {
+): Promise<UnitSpec> {
   const b = bearing ?? Math.floor(Math.random() * 360)
-  return { callsign, category, origin: destination(lat, lon, b, distanceM), speedMps }
+  return { callsign, category, origin: await landOrigin(lat, lon, b, distanceM), speedMps }
+}
+
+/**
+ * Spawn point `distanceM` out on a bearing near `preferred` that is (a) on
+ * land and (b) on the same shore — its straight chord back to the incident
+ * never crosses water — so waterfront incidents (100 Gold St) don't get units
+ * materializing in the East River or routed across it. Sweeps outward from
+ * the preferred bearing in 30° steps; if no candidate has a dry chord, takes
+ * the first land candidate (a real router can still bridge from there); if
+ * the whole ring is wet, degrades to a short offset from the incident block,
+ * which is known land.
+ */
+async function landOrigin(
+  incLat: number,
+  incLon: number,
+  preferred: number,
+  distanceM: number,
+): Promise<PathPoint> {
+  let firstLand: PathPoint | null = null
+  for (const delta of [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180]) {
+    const p = destination(incLat, incLon, (preferred + delta + 360) % 360, distanceM)
+    if (!(await isLand(p.lat, p.lon))) continue
+    if ((await countWetSamples([p, { lat: incLat, lon: incLon }])) === 0) return p
+    firstLand ??= p
+  }
+  return firstLand ?? destination(incLat, incLon, preferred, 150)
 }

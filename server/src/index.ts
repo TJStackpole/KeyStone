@@ -17,6 +17,7 @@ import {
 } from './incidentStore.js'
 import { ScenarioEngine } from './scenario/engine.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
+import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
 import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
 import { shapeDeleteCot, shapeToCot } from './tak/shapes.js'
@@ -62,6 +63,7 @@ wss.on('connection', (socket) => {
       timeline: state.timeline.filter((e) => e.kind !== 'unit.track').slice(-400),
       units: registry.all(),
       takConnected: tak.connected,
+      chats: chatLog.slice(-100),
     }),
   )
 })
@@ -87,11 +89,54 @@ const INTERNAL_UIDS = new Set(['KEYSTONE-COP', 'KEYSTONE-SIM', 'WATCHTOWER-COP',
 
 tak.on('status', (connected: boolean) => broadcast({ type: 'tak.status', connected }))
 
+// ------------------------------- TAK GeoChat --------------------------------
+const chatLog: ChatMsg[] = []
+const seenChatIds = new Set<string>()
+
+function recordChat(msg: ChatMsg): void {
+  if (seenChatIds.has(msg.id)) return
+  seenChatIds.add(msg.id)
+  chatLog.push(msg)
+  if (chatLog.length > 200) chatLog.shift()
+  broadcast({ type: 'chat', msg })
+}
+
 tak.on('event', (ev) => {
   if (INTERNAL_UIDS.has(ev.uid)) return
+  // GeoChat from any EUD on the server (including our own fan-out echo,
+  // which the id-dedupe drops).
+  if (ev.type === 'b-t-f' && ev.raw) {
+    const msg = extractGeoChat(ev.raw, ev.uid)
+    if (msg) recordChat(msg)
+    return
+  }
   // Proof-of-protocol: log genuine CoT XML as it arrives off the TAK server.
   console.log(`[cot] rx ${(ev.raw ?? '').replace(/\s+/g, ' ').slice(0, 240)}`)
   if (isUnitEvent(ev)) registry.upsertFromCot(ev)
+})
+
+app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-100) }))
+
+app.post('/api/chat', (req, res) => {
+  const { text } = req.body as { text?: string }
+  const trimmed = (text ?? '').trim()
+  if (!trimmed) return res.status(400).json({ error: 'text required' })
+  if (trimmed.length > 500) return res.status(400).json({ error: 'message too long (500 max)' })
+  const msgId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
+  const sender = { uid: 'KEYSTONE-COP', callsign: 'KEYSTONE' }
+  const xml = buildGeoChatXml(trimmed, sender, msgId)
+  const sent = publishCot(xml)
+  if (!sent) return res.status(503).json({ error: 'TAK link down — message not sent' })
+  const msg: ChatMsg = {
+    id: `GeoChat.${sender.uid}.All Chat Rooms.${msgId}`,
+    from: sender.callsign,
+    room: 'All Chat Rooms',
+    text: trimmed,
+    ts: new Date().toISOString(),
+    self: true,
+  }
+  recordChat(msg)
+  res.status(201).json(msg)
 })
 
 // Compact unit-track sampling for REPLAY: at most one timeline sample per unit

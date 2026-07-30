@@ -19,6 +19,7 @@ import { MaydayAlert } from './components/MaydayAlert'
 import { AarPanel } from './components/AarPanel'
 import { StreetViewPanel } from './components/StreetViewPanel'
 import { Compass } from './components/Compass'
+import { TakChatPanel } from './components/TakChatPanel'
 
 /** Floating escape hatch while the camera is at street level. */
 function GroundViewExit() {
@@ -110,6 +111,7 @@ export default function App() {
       <MaydayAlert />
       <AarPanel />
       <StreetViewPanel />
+      <TakChatPanel />
       <Compass />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">KEYSTONE</div>

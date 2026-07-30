@@ -82,9 +82,13 @@ export function TopBar() {
           </span>
         ))}
         {takConnected === true && (
-          <span className="chip">
+          <button
+            className="chip chip-btn"
+            onClick={() => setAppState((s) => ({ chatOpen: !s.chatOpen }))}
+            title="TAK link is up — click for GeoChat with every unit on the server"
+          >
             <span className="dot" /> TAK LINK
-          </span>
+          </button>
         )}
         {takConnected === false && (
           <span className="chip warn">

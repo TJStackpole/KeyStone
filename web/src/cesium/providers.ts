@@ -124,13 +124,30 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
         `https://tile.googleapis.com/v1/3dtiles/root.json?key=${googleKey}`,
         { showCreditsOnScreen: true },
       )
+      // Stream tiles for the destination DURING camera flights — the address
+      // fly-in arrives with imagery already sharpening instead of all-blur.
+      tileset.preloadFlightDestinations = true
+      tileset.cacheBytes = 768 * 1024 * 1024
       scene.primitives.add(tileset)
       buildingTileset = tileset
+      // CRITICAL: hide the ellipsoid globe. Photorealistic streets sit BELOW
+      // ellipsoid zero (geoid offset), so the invisible globe surface above
+      // them is what CLAMP_TO_GROUND and sampleHeight hit first — the root
+      // cause of "floating" hydrants/units at oblique angles. The tileset
+      // covers the earth; nothing is lost. (ISOLATE re-shows it for the
+      // flattened-map ground and hides it again on exit.)
+      scene.globe.show = false
     } catch (err) {
       console.error('[providers] Google 3D Tiles failed, staying keyless:', err)
       return { viewer, mode: 'keyless', extrudeFootprints: true }
     }
   }
+
+  // More parallel tile/data requests — Cesium's defaults leave bandwidth idle
+  // and the blur lingers. These hosts serve immutable tiles; hammering is fine.
+  Cesium.RequestScheduler.maximumRequestsPerServer = 18
+  Cesium.RequestScheduler.requestsByServer['tile.googleapis.com:443'] = 18
+  Cesium.RequestScheduler.requestsByServer['tile.openstreetmap.org:443'] = 12
 
   // Operating envelope: NYC + the tri-state approaches (~30 mi past the city
   // line for mutual-aid work). The camera can't wander outside it, and zoom is

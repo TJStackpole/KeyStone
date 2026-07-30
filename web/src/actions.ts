@@ -262,10 +262,14 @@ function applyIsolate(on: boolean): void {
           const lift = Cesium.Cartesian3.multiplyByScalar(up, isolateLiftM(), new Cesium.Cartesian3())
           tileset.modelMatrix = Cesium.Matrix4.fromTranslation(lift)
         }
+        // The globe is hidden in google mode (clamp correctness) — isolate
+        // needs it back as the flattened-map ground under the lone building.
+        scene.viewer.scene.globe.show = true
       }
     } else {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
       tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
+      if (scene.mode === 'google') scene.viewer.scene.globe.show = false
     }
   }
   // Size-up-quality imagery while isolated; restores itself (and the focus
