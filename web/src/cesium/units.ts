@@ -141,6 +141,9 @@ export class UnitLayer {
       entity.show = show
     } else {
       ;(entity.position as Cesium.SampledPositionProperty).addSample(now, position)
+      // Visibility policy can change between updates (GPS toggle, a member
+      // entering/leaving the building) — re-apply it every time.
+      entity.show = show
       // Interior members carry their floor in the label ("E-6/1 · FL 4").
       const labelText = unit.floor && unit.floor > 0 ? `${unit.callsign} · FL ${unit.floor}` : unit.callsign
       if (entity.label && entity.label.text?.getValue(now) !== labelText) {

@@ -1,4 +1,4 @@
-import { adoptIncident, clearLocalIncident, flyToUnit } from './actions'
+import { adoptIncident, clearLocalIncident, flyToUnit, unitMapVisible } from './actions'
 import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
 import type {
@@ -141,7 +141,7 @@ function handle(msg: ServerMsg): void {
       const units: Record<string, Unit> = {}
       for (const u of msg.units ?? []) {
         units[u.uid] = u
-        getUnitLayer()?.upsert(u, getAppState().unitToggles[u.category] ?? true)
+        getUnitLayer()?.upsert(u, unitMapVisible(u))
       }
       getShapeLayer()?.clear()
       const shapes: Record<string, IcsShape> = {}
@@ -172,10 +172,7 @@ function handle(msg: ServerMsg): void {
     }
     case 'unit': {
       setAppState((s) => ({ units: { ...s.units, [msg.unit.uid]: msg.unit } }))
-      const st = getAppState()
-      const show =
-        (st.unitToggles[msg.unit.category] ?? true) && (st.agencyToggles[msg.unit.agency] ?? true)
-      getUnitLayer()?.upsert(msg.unit, show)
+      getUnitLayer()?.upsert(msg.unit, unitMapVisible(msg.unit))
       break
     }
     case 'scenario.status':

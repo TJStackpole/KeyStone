@@ -27,7 +27,7 @@ import {
 } from './cesium/scene'
 import { replayEngine } from './replay'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
-import type { Agency, GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, UnitCategory } from './types'
+import type { Agency, GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, Unit, UnitCategory } from './types'
 
 function newIncidentId(): string {
   return `INC-${Date.now().toString(36).toUpperCase()}`
@@ -642,11 +642,7 @@ export function reorientNorth(): void {
 export function toggleAgency(agency: Agency): void {
   const next = !getAppState().agencyToggles[agency]
   setAppState((s) => ({ agencyToggles: { ...s.agencyToggles, [agency]: next } }))
-  const layer = getUnitLayer()
-  const st = getAppState()
-  for (const u of Object.values(st.units)) {
-    if (u.agency === agency) layer?.upsert(u, (st.unitToggles[u.category] ?? true) && next)
-  }
+  applyUnitVisibility()
 }
 
 // ---------------------------------------------------------------------------
@@ -753,12 +749,46 @@ export function flyToUnit(uid: string): void {
   flyToFeature(unit.lat, unit.lon)
 }
 
+const PERSONNEL_CATEGORIES = new Set<UnitCategory>(['ff', 'officer', 'medic'])
+
+/**
+ * GPS tracking policy — the ONE place that decides whether a unit gets a dot
+ * on the map. Current policy (per the chief): vehicles track for every
+ * agency; individual member GPS only for firefighters INSIDE the building
+ * (floor >= 1); other agencies' personnel are not tracked individually.
+ * The GPS toggle kills all map tracking. Accountability boards (roster,
+ * BIO, FLOORS) are unaffected — they're rosters, not GPS.
+ */
+export function unitMapVisible(u: Unit): boolean {
+  const s = getAppState()
+  if (!s.gpsTracking) return false
+  if (!(s.unitToggles[u.category] ?? true)) return false
+  if (!(s.agencyToggles[u.agency] ?? true)) return false
+  if (PERSONNEL_CATEGORIES.has(u.category)) {
+    return u.category === 'ff' && (u.floor ?? 0) >= 1
+  }
+  return true
+}
+
+/** Re-run the visibility policy over every unit on the picture. */
+export function applyUnitVisibility(): void {
+  const layer = getUnitLayer()
+  if (!layer) return
+  for (const u of Object.values(getAppState().units)) layer.upsert(u, unitMapVisible(u))
+}
+
+/** Master GPS tracking switch (roster header button). */
+export function toggleGpsTracking(): void {
+  setAppState((s) => ({ gpsTracking: !s.gpsTracking }))
+  applyUnitVisibility()
+}
+
 /** Per-category visibility toggle (roster group headers). */
 export function toggleUnitCategory(category: UnitCategory): void {
   const state = getAppState()
   const next = !state.unitToggles[category]
   setAppState((s) => ({ unitToggles: { ...s.unitToggles, [category]: next } }))
-  getUnitLayer()?.setCategoryVisible(category, next, Object.values(state.units))
+  applyUnitVisibility()
 }
 
 // ---------------------------------------------------------------------------

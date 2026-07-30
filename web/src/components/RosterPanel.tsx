@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { dispatchAssignment, flyToUnit, toggleUnitCategory } from '../actions'
+import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleUnitCategory } from '../actions'
 import { useAppState } from '../state/store'
 import type { Agency, Unit, UnitCategory } from '../types'
 
@@ -52,7 +52,7 @@ function callsignSortKey(cs: string): [string, number] {
 }
 
 export function RosterPanel() {
-  const { units, incident, takConnected, dispatching } = useAppState()
+  const { units, incident, takConnected, dispatching, gpsTracking } = useAppState()
   const [collapsed, setCollapsed] = useState(false)
 
   const grouped = useMemo(() => {
@@ -84,6 +84,13 @@ export function RosterPanel() {
           <span className="card-title">Units</span>
           <span className="roster-count">{total}</span>
           <span className={`chev${collapsed ? ' closed' : ''}`}>▾</span>
+        </button>
+        <button
+          className={`gps-toggle${gpsTracking ? ' on' : ''}`}
+          onClick={toggleGpsTracking}
+          title="GPS unit tracking on the map. Policy: vehicles for all agencies; member GPS only for firefighters inside the building. Off = no unit dots."
+        >
+          ⦿ GPS {gpsTracking ? 'ON' : 'OFF'}
         </button>
         {incident && (
           <button

@@ -52,6 +52,8 @@ export interface AppState {
   unitToggles: Record<UnitCategory, boolean>
   /** Agency-level map filters (NYCEM view) — ANDed with unitToggles. */
   agencyToggles: Record<Agency, boolean>
+  /** Master GPS tracking switch: off = no unit dots on the map at all. */
+  gpsTracking: boolean
   dispatching: boolean
   shapes: Record<string, IcsShape>
   drawTool: DrawTool
@@ -139,6 +141,7 @@ const initial: AppState = {
     unknown: true,
   },
   agencyToggles: { FDNY: true, EMS: true, NYPD: true, PAPD: true, OEM: true, TAK: true },
+  gpsTracking: true,
   dispatching: false,
   shapes: {},
   drawTool: null,
