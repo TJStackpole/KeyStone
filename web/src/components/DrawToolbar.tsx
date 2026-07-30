@@ -73,6 +73,15 @@ export function DrawToolbar() {
           <span className="tool-swatch zone" />
           CLPS
         </button>
+        <button
+          className={`tool-btn${drawTool === 'apparatus' ? ' on' : ''}`}
+          style={{ ['--tool-color' as string]: '#dc2626' }}
+          onClick={() => setDrawTool('apparatus')}
+          title="Staging: place truck-scale spots auto-labeled with the next incoming units (stays armed; Esc to stop)"
+        >
+          <span className="tool-swatch zone" />
+          STGE
+        </button>
         <div className="tool-divider" />
         <button
           className="tool-btn danger"
@@ -91,7 +100,9 @@ export function DrawToolbar() {
               ? 'CLICK TWO POINTS TO MEASURE · ESC CLEARS'
               : drawTool === 'collapse'
                 ? 'CLICK ANYWHERE — COLLAPSE ZONE DRAWS AT 1.5× BUILDING HEIGHT'
-                : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
+                : drawTool === 'apparatus'
+                  ? 'CLICK TO RESERVE TRUCK-SIZE STAGING SPOTS (AUTO-LABELED NEXT-DUE UNITS) · ESC TO STOP'
+                  : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
         </div>
       )}
       {!drawTool && selectedShapeId && (

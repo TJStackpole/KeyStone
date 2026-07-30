@@ -59,29 +59,33 @@ html, body {
   height: 52px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 0 16px;
+  gap: 10px;
+  padding: 0 12px;
   z-index: 30;
 }
 
+/* Stacked eyebrow wordmark: subtitle rides above the name so the brand takes
+   a single narrow column and every top-bar chip fits on one row. */
 .wordmark {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1;
   white-space: nowrap;
   user-select: none;
 }
 .wordmark .name {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: 0.22em;
   color: var(--cyan);
   text-shadow: 0 0 14px rgba(34, 211, 238, 0.5);
 }
 .wordmark .sub {
-  font-size: 10px;
-  letter-spacing: 0.18em;
+  font-size: 6.5px;
+  letter-spacing: 0.08em;
   color: var(--text-faint);
   text-transform: uppercase;
 }
@@ -90,7 +94,7 @@ html, body {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .clock {
@@ -107,12 +111,12 @@ html, body {
   align-items: center;
   gap: 6px;
   height: 22px;
-  padding: 0 9px;
+  padding: 0 7px;
   border-radius: 3px;
   border: 1px solid var(--border);
   font-family: var(--mono);
   font-size: 10px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: var(--cyan-dim);
   text-transform: uppercase;
   white-space: nowrap;
@@ -126,7 +130,7 @@ html, body {
 .chip.warn .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
 
 /* ---------- search ---------- */
-.searchwrap { position: relative; flex: 0 1 480px; min-width: 260px; }
+.searchwrap { position: relative; flex: 0 1 480px; min-width: 190px; }
 
 .search-input {
   width: 100%;

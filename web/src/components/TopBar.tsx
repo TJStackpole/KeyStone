@@ -6,7 +6,7 @@ import { SearchBar } from './SearchBar'
 const MODE_LABEL: Record<string, string> = {
   keyless: 'KEYLESS 3D',
   ion: 'ION TERRAIN',
-  google: 'GOOGLE 3D TILES',
+  google: 'GOOGLE 3D',
 }
 
 function Clock() {
@@ -45,12 +45,12 @@ export function TopBar() {
   return (
     <header className="topbar glass">
       <div className="wordmark">
-        <span className="name">WATCHTOWER</span>
         <span className="sub">Common Operating Picture · FDNY / NYCEM</span>
+        <span className="name">WATCHTOWER</span>
       </div>
       <SearchBar />
-      <button className="demo-btn" onClick={() => void runDemoScenario()} title="Structural fire, 100 Gold St — full flow unattended">
-        ▶ DEMO: 100 GOLD ST
+      <button className="demo-btn" onClick={() => void runDemoScenario()} title="Demo scenario: structural fire, 100 Gold St — full flow unattended">
+        ▶ DEMO
       </button>
       <div className="topbar-right">
         {down.map((k) => (

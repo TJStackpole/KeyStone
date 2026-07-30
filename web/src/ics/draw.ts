@@ -47,7 +47,7 @@ export class DrawController {
 
   // ------------------------------- picking ---------------------------------
 
-  private groundPosition(screen: Cesium.Cartesian2): { lat: number; lon: number } | null {
+  private groundPosition(screen: Cesium.Cartesian2): { lat: number; lon: number; hae: number } | null {
     const scene = this.viewer.scene
     let cartesian: Cesium.Cartesian3 | undefined
     if (scene.pickPositionSupported) {
@@ -59,7 +59,11 @@ export class DrawController {
     }
     if (!cartesian) return null
     const carto = Cesium.Cartographic.fromCartesian(cartesian)
-    return { lat: Cesium.Math.toDegrees(carto.latitude), lon: Cesium.Math.toDegrees(carto.longitude) }
+    return {
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      lon: Cesium.Math.toDegrees(carto.longitude),
+      hae: carto.height,
+    }
   }
 
   // ----------------------------- interactions ------------------------------
@@ -71,7 +75,7 @@ export class DrawController {
     if (!pos) return
 
     if (tool === 'measure') {
-      this.measurePoints.push(pos)
+      this.measurePoints.push({ lat: pos.lat, lon: pos.lon })
       if (this.measurePoints.length === 2) {
         this.renderMeasure()
         this.measurePoints = []
@@ -84,8 +88,13 @@ export class DrawController {
       setAppState({ drawTool: null })
       return
     }
+    if (tool === 'apparatus') {
+      // Stays armed so the chief can lay out a whole staging line click by click.
+      void this.placeApparatus(pos)
+      return
+    }
     if (tool && ZONES.includes(tool as ZoneKind)) {
-      this.draft.push(pos)
+      this.draft.push({ lat: pos.lat, lon: pos.lon })
       this.renderDraft(tool as ZoneKind)
       return
     }
@@ -215,6 +224,33 @@ export class DrawController {
   }
 
   /**
+   * Staging reservation: true-scale apparatus footprint at the click point,
+   * auto-labeled with the next incoming unit (real next-due companies from
+   * the server), oriented along the current camera heading so the chief can
+   * line rigs up a street by looking down it.
+   */
+  private async placeApparatus(pos: { lat: number; lon: number; hae: number }): Promise<void> {
+    let callsign = `E-${200 + Math.floor(Math.random() * 90)}`
+    try {
+      const res = await fetch('/api/staging/next')
+      if (res.ok) callsign = ((await res.json()) as { callsign: string }).callsign
+    } catch {
+      // offline fallback keeps the tool usable
+    }
+    const headingDeg = (Cesium.Math.toDegrees(this.viewer.camera.heading) + 360) % 360
+    void saveShape({
+      id: `WT-ICS-STAGE-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 36).toString(36).toUpperCase()}`,
+      kind: 'apparatus',
+      callsign,
+      lat: pos.lat,
+      lon: pos.lon,
+      heading: headingDeg,
+      hae: Number.isFinite(pos.hae) ? pos.hae : 0,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
+  /**
    * One-click collapse zone: FDNY rule-of-thumb radius of 1.5x building height
    * around the incident building, published like any hand-drawn hot zone.
    */
@@ -261,7 +297,7 @@ export class DrawController {
     if (!shape || shape.kind !== 'zone') return
     const pos = this.groundPosition(e.endPosition)
     if (!pos) return
-    const positions = shape.positions.map((p, i) => (i === this.dragIndex ? pos : p))
+    const positions = shape.positions.map((p, i) => (i === this.dragIndex ? { lat: pos.lat, lon: pos.lon } : p))
     const updated = { ...shape, positions }
     setAppState((s) => ({ shapes: { ...s.shapes, [shape.id]: updated } }))
     this.shapes.upsert(updated)

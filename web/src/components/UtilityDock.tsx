@@ -171,19 +171,24 @@ function VideoContent() {
 
   return (
     <div className="dock-scroll">
-      <div className="intel-section-title">UAS · ON THE PICTURE</div>
+      <div className="intel-section-title">UAS · {drones.length ? 'ON THE PICTURE' : 'STANDBY FEEDS'}</div>
       <div className="bodycam-grid">
-        {drones.length === 0 && <div className="roster-empty">NO UAS ALOFT — DISPATCH THE ASSIGNMENT</div>}
-        {drones.map((d) => (
-          <VideoTile
-            key={d.uid}
-            stream={droneStreamFor(d.uid, drones.map((x) => x.uid))}
-            label={`${d.callsign} · ${Math.round(d.hae)} m`}
-            chip="FDNY UAS"
-            selected={selectedUnitUid === d.uid}
-            onClick={() => select(d.uid)}
-          />
-        ))}
+        {drones.length > 0
+          ? drones.map((d) => (
+              <VideoTile
+                key={d.uid}
+                stream={droneStreamFor(d.uid, drones.map((x) => x.uid))}
+                label={`${d.callsign} · ${Math.round(d.hae)} m`}
+                chip="FDNY UAS"
+                selected={selectedUnitUid === d.uid}
+                onClick={() => select(d.uid)}
+              />
+            ))
+          : // Demo always has aerial video: simulated UAS feeds stream even
+            // before aircraft launch, labeled STANDBY until they're aloft.
+            ['drone1', 'drone2'].map((stream, i) => (
+              <VideoTile key={stream} stream={stream} label={`UAS-${i + 1} · STANDBY`} chip="FDNY UAS" />
+            ))}
       </div>
       <div className="intel-section-title">AVIATION</div>
       <div className="bodycam-grid single">

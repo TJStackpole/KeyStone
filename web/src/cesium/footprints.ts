@@ -10,9 +10,11 @@ export interface Footprint {
   polygons: number[][][][]
 }
 
-const TARGET_FILL = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.78)
+// Translucent enough to see the real building through the highlight — the
+// glowing outline still marks the fire building unmistakably.
+const TARGET_FILL = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.32)
 const TARGET_OUTLINE = Cesium.Color.fromCssColorString('#fbbf24')
-const NEIGHBOR_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.5)
+const NEIGHBOR_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.28)
 
 const SODA_FOOTPRINTS = 'https://data.cityofnewyork.us/resource/5zhs-2jue.json'
 

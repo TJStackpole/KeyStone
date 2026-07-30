@@ -46,7 +46,22 @@ const SHAPE_STALE_S = 24 * 3600
 
 export function shapeToCot(shape: IcsShape): string {
   if (shape.kind === 'zone') return zoneToCot(shape)
+  if (shape.kind === 'apparatus') return apparatusToCot(shape)
   return postToCot(shape)
+}
+
+/** Staging reservations publish as spot markers named for the incoming unit. */
+function apparatusToCot(shape: Extract<IcsShape, { kind: 'apparatus' }>): string {
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<event version="2.0" uid="${esc(shape.id)}" type="b-m-p-s-m" how="h-g-i-g-o" ${isoTimes(SHAPE_STALE_S)}>` +
+    `<point lat="${shape.lat.toFixed(7)}" lon="${shape.lon.toFixed(7)}" hae="0.0" ce="9999999.0" le="9999999.0"/>` +
+    `<detail>` +
+    `<contact callsign="STAGE ${esc(shape.callsign)}"/>` +
+    `<archive/>` +
+    `</detail>` +
+    `</event>\n`
+  )
 }
 
 function zoneToCot(zone: ZoneShape): string {

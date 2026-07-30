@@ -60,9 +60,23 @@ export interface PostShape {
   createdAt: string
 }
 
-export type IcsShape = ZoneShape | PostShape
+/** Chief's staging tool: a true-scale apparatus footprint reserved for an incoming unit. */
+export interface ApparatusShape {
+  id: string
+  kind: 'apparatus'
+  callsign: string
+  lat: number
+  lon: number
+  /** Degrees true — the footprint is drawn along this axis. */
+  heading: number
+  /** Height above ellipsoid of the clicked surface, so the pad renders flat (no facade drape). */
+  hae?: number
+  createdAt: string
+}
 
-export type DrawTool = ZoneKind | PostKind | 'measure' | 'collapse' | null
+export type IcsShape = ZoneShape | PostShape | ApparatusShape
+
+export type DrawTool = ZoneKind | PostKind | 'measure' | 'collapse' | 'apparatus' | null
 
 // ------------------------------ comms (Phase 7) -----------------------------
 

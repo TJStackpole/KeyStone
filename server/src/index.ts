@@ -154,6 +154,52 @@ app.post('/api/dispatch/stop', (_req, res) => {
   res.json({ stopped: true })
 })
 
+// ---------------------------------------------------------------------------
+// Staging tool (Phase 8+): auto-generate the next incoming unit designator —
+// real next-nearest companies not already on the box, alternating E/L, with a
+// synthetic fallback. Issued designators aren't repeated until a new incident.
+// ---------------------------------------------------------------------------
+const issuedStaging = new Set<string>()
+let stagingFlip = 0
+
+app.get('/api/staging/next', async (_req, res) => {
+  const state = getState()
+  if (!state.incident) return res.status(400).json({ error: 'no active incident' })
+  const taken = new Set<string>([...registry.all().map((u) => u.callsign.toUpperCase()), ...issuedStaging])
+  try {
+    const { fetchFirehousesNear } = await import('./nyc.js')
+    const houses = await fetchFirehousesNear(state.incident.lat, state.incident.lon)
+    const wantLadder = stagingFlip++ % 3 === 2 // E, E, L, E, E, L …
+    const pools: Array<{ prefix: string; nums: (f: (typeof houses)[number]) => number[] }> = wantLadder
+      ? [
+          { prefix: 'L', nums: (f) => f.ladders },
+          { prefix: 'E', nums: (f) => f.engines },
+        ]
+      : [
+          { prefix: 'E', nums: (f) => f.engines },
+          { prefix: 'L', nums: (f) => f.ladders },
+        ]
+    for (const pool of pools) {
+      for (const f of houses) {
+        for (const n of pool.nums(f)) {
+          const callsign = `${pool.prefix}-${n}`
+          if (!taken.has(callsign)) {
+            issuedStaging.add(callsign)
+            return res.json({ callsign })
+          }
+        }
+      }
+    }
+  } catch {
+    // Open Data down — synthetic fallback below
+  }
+  let n = 200 + issuedStaging.size
+  while (taken.has(`E-${n}`)) n++
+  const callsign = `E-${n}`
+  issuedStaging.add(callsign)
+  res.json({ callsign })
+})
+
 app.post('/api/alarm', async (req, res) => {
   const { level } = req.body as { level?: string }
   if (!level || !['10-75', 'all-hands', '2nd', '3rd'].includes(level)) {
@@ -177,11 +223,21 @@ app.post('/api/alarm', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.put('/api/shapes/:id', (req, res) => {
   const shape = req.body as IcsShape
-  if (!shape || shape.id !== req.params.id || (shape.kind !== 'zone' && shape.kind !== 'post')) {
+  const knownKind = shape?.kind === 'zone' || shape?.kind === 'post' || shape?.kind === 'apparatus'
+  if (!shape || shape.id !== req.params.id || !knownKind) {
     return res.status(400).json({ error: 'invalid shape' })
   }
   if (shape.kind === 'zone' && (!Array.isArray(shape.positions) || shape.positions.length < 3)) {
     return res.status(400).json({ error: 'zone needs >= 3 vertices' })
+  }
+  if (
+    shape.kind === 'apparatus' &&
+    (typeof shape.callsign !== 'string' ||
+      !Number.isFinite(shape.lat) ||
+      !Number.isFinite(shape.lon) ||
+      !Number.isFinite(shape.heading))
+  ) {
+    return res.status(400).json({ error: 'apparatus needs callsign, lat, lon, heading' })
   }
   upsertShape(shape)
   broadcast({ type: 'shape', shape })
@@ -290,6 +346,8 @@ app.post('/api/incident', (req, res) => {
   }
   // A new incident supersedes the old picture — stop any convergence in progress.
   simulator.stop()
+  issuedStaging.clear()
+  stagingFlip = 0
   const state = createIncident(incident)
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
