@@ -500,6 +500,7 @@ export function adoptIncident(incident: Incident): void {
     drawTool: null,
     targetHeightM: null,
     inspected: null,
+    streetViewOpen: false,
   })
   getShapeLayer()?.clear()
   const scene = getScene()
@@ -587,6 +588,7 @@ export function clearLocalIncident(): void {
     alert: null,
     aarOpen: false,
     nycemView: false,
+    streetViewOpen: false,
     units: {},
     intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
     timeline: [],

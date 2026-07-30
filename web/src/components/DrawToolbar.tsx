@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { deleteSelectedShape, setDrawTool } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
-import { useAppState } from '../state/store'
+import { setAppState, useAppState } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
 
 // One editable outline replaces the old HOT/WARM/COLD trio; legacy zone
@@ -10,7 +10,7 @@ const ZONES: ZoneKind[] = ['perimeter']
 const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
 
 export function DrawToolbar() {
-  const { drawTool, selectedShapeId, incident } = useAppState()
+  const { drawTool, selectedShapeId, incident, streetViewOpen } = useAppState()
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
@@ -93,6 +93,15 @@ export function DrawToolbar() {
         >
           <span className="tool-swatch post" />
           GND
+        </button>
+        <button
+          className={`tool-btn${streetViewOpen ? ' on' : ''}`}
+          style={{ ['--tool-color' as string]: '#22d3ee' }}
+          onClick={() => setAppState((s) => ({ streetViewOpen: !s.streetViewOpen }))}
+          title="Photographic street view of the incident address — opens aimed at the building; drag to look around"
+        >
+          <span className="tool-swatch post" />
+          STV
         </button>
         <div className="tool-divider" />
         <button

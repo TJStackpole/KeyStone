@@ -332,6 +332,41 @@ app.get('/api/incident', (_req, res) => res.json(getState()))
 
 app.get('/api/units', (_req, res) => res.json({ units: registry.all(), takConnected: tak.connected }))
 
+// Street View panorama metadata (free endpoint): finds the nearest pano to
+// the incident so the client can aim the embed at the building's front.
+// Keyless installs get NO_KEY and the client shows the honest fallback.
+app.get('/api/streetview/meta', async (req, res) => {
+  const key = env('GOOGLE_MAPS_API_KEY', '')
+  if (!key) return res.json({ status: 'NO_KEY' })
+  const lat = Number(req.query.lat)
+  const lon = Number(req.query.lon)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return res.status(400).json({ error: 'lat and lon required' })
+  }
+  try {
+    const url =
+      `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}` +
+      `&source=outdoor&key=${encodeURIComponent(key)}`
+    const upstream = await fetch(url)
+    const body = (await upstream.json()) as {
+      status?: string
+      pano_id?: string
+      date?: string
+      location?: { lat?: number; lng?: number }
+    }
+    res.json({
+      status: body.status ?? 'UNKNOWN',
+      panoId: body.pano_id,
+      date: body.date,
+      lat: body.location?.lat,
+      lon: body.location?.lng,
+    })
+  } catch (err) {
+    console.error('[streetview] metadata failed:', err)
+    res.status(502).json({ status: 'ERROR' })
+  }
+})
+
 app.post('/api/incident', (req, res) => {
   const b = req.body as Partial<Incident>
   if (!b || typeof b.lat !== 'number' || typeof b.lon !== 'number' || !b.address || !b.id || !b.type) {
