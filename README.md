@@ -111,45 +111,57 @@ Everything below is one click or one sentence. Practice once and it runs itself.
 http://localhost:5173, and confirm the top bar shows **TAK LINK**.
 
 1. **"This is a live common operating picture of New York City."**
-   Click **▶ DEMO: 100 GOLD ST** (top bar). The camera flies to a 3D view of
-   Lower Manhattan and locks onto 100 Gold Street, highlighted in amber.
-   *Say: every building, hydrant, and firehouse you'll see is real city data,
-   loading live from NYC Open Data.*
+   Click **▶ DEMO** (top bar). The camera flies to a 3D view of Lower
+   Manhattan and locks onto 100 Gold Street in a translucent amber box.
+   *Say: every building, hydrant, firehouse, and street name you'll see is
+   real city data, loading live from NYC Open Data.*
 
 2. **"The system already knows the building."**
-   Point at the **Site Intel** panel (right): floors, year built, land use from
-   city records; the three nearest hydrants with distances; the three nearest
-   firehouses — real companies, real addresses.
+   Point at **Site Intel** (right): floors, year built, land use, DOB
+   violations, Certificates of Occupancy — plus the three nearest hydrants
+   and firehouses. Tap ANY other building: its record pops up too, and its
+   address lands in the search bar.
 
-3. **"A perimeter is already suggested — and it's shared."**
-   Point at the red **HOT ZONE** ring. *Say: this perimeter isn't a picture on
-   this screen — it's broadcast over the same military-grade protocol (TAK)
-   that's on responders' phones. Anyone running ATAK sees the same zone.*
-   Optionally draw a warm zone: click **WARM**, click 3–4 corners, press Enter.
+3. **"Watch the first alarm converge — live."**
+   Point at the colored tails behind moving units: red FDNY companies
+   rolling from their real firehouses, blue NYPD taking the perimeter.
+   Roster statuses flip Enroute → On Scene → Operating; crews dismount and
+   climb — the FLOORS tab shows who's on which floor, BIO shows who needs
+   rotation.
 
-4. **"Watch the first alarm arrive."** (units are already rolling from the demo
-   button) Point at the roster (left): *these are the actual companies that
-   would get this box — Engine 6 from Beekman Street, the real firehouse 600
-   feet away.* Watch statuses flip Enroute → On Scene → Operating.
+4. **"The chief works the map directly."**
+   Draw a perimeter (**PERIM**: click corners, Enter). Drop truck-scale
+   staging pads (**STGE**: pick a responding unit, click; drag to move,
+   [ ] to rotate). *Everything publishes over TAK — anyone on ATAK sees
+   the same picture, and TAK Chat (click TAK LINK) reaches their phones.*
 
-5. **"Every unit is a real radio track."**
-   Click a drone (cyan rotor) → its video panel opens (labeled SIMULATED).
-   Click **BODYCAMS** (top right) → the 2×2 wall, tiles tied to units on the
-   globe.
+5. **"Isolate the fire building."**
+   With ACTIVE INCIDENT on, click **ISOLATE** — the entire city strips away
+   and the real photorealistic fire building lifts above the map at maximum
+   image quality. Click **STV** for Google Street View of the front door.
+   Click the compass (bottom-left) any time you're lost — it re-norths.
 
 6. **"And the radio runs through it."**
-   Point at the comms dock (bottom): the FDNY tab is machine-transcribed audio
-   with unit numbers highlighted — *when dispatch says Engine 10, watch Engine
-   10 flash on the map.* The NYPD/EMS/OEM tabs are simulations — NYPD radio is
+   The comms dock (bottom): the FDNY tab is machine-transcribed audio with
+   unit numbers highlighted — *when dispatch says Engine 10, watch Engine 10
+   flash on the map.* NYPD/EMS/OEM tabs are simulations — NYPD radio is
    encrypted, and we don't pretend otherwise.
 
 7. **"Command escalates with one touch."**
-   Click **2ND ALARM** in the command strip — reinforcement companies appear
-   and converge. Point at the elapsed clock and on-scene counts.
+   Click **2ND ALARM** — reinforcements converge with tails. Toggle
+   **TRAFFIC** in Site Intel for live DOT congestion on the approach routes
+   (dark red = heavy, red, yellow; free-flowing roads draw nothing).
 
-8. **The closer: click ⟲ REPLAY.**
-   The whole incident re-runs at 4× with a scrub bar. *Say: every incident
-   becomes its own after-action review. Nothing extra to write down.*
+8. **The closer — the drill.** Click **▶ DRILL**: a scripted five-chapter
+   multi-agency exercise at the Port Authority Bus Terminal plays itself —
+   PAPD first-due, MCI, Unified Command, a mayday with live PAR, and an
+   auto-generated after-action report. Jump straight to **Mayday + PAR**
+   with the chapter buttons. Toggle **NYCEM** for the Watch Command
+   coordination view. Everything is labeled DRILL — SIMULATED INCIDENT.
+   (⟲ REPLAY still re-runs any live incident as its own after-action.)
+
+**To reset anything:** ✕ END on the incident card (two clicks) clears every
+drill, demo, and incident on all screens.
 
 ## Build status
 
@@ -163,3 +175,30 @@ http://localhost:5173, and confirm the top bar shows **TAK LINK**.
 | 6 | Video: drones + body-cam wall (MediaMTX) | ✅ |
 | 7 | Comms fusion + live transcription | ✅ |
 | 8 | Command header, demo scenario, replay, polish | ✅ |
+
+## Since v0.1.0 (KeyStone)
+
+Rebranded WATCHTOWER → **KEYSTONE**. Major additions, all keyless-safe and
+TAK-published where applicable:
+
+- **Scenario engine + PABT drill** — scripted multi-agency incidents played
+  through the live pipelines (`assets/scenarios/*.json`, ▶ DRILL); chapter
+  jumps, 1×/4×/10×, NYCEM Watch Command view, mayday alerting, auto
+  after-action report (print → PDF).
+- **Chief tools** — staging pads with unit picker/drag/rotate, editable
+  PERIM outlines, collapse zones, measure; exposure designations.
+- **Views** — ISOLATE (clip + lift the real fire building, max detail),
+  top-down satellite toggle, GND ground view with a 0–50 ft height scale,
+  Google Street View panel (STV), compass re-north.
+- **Data layers** — live DOT traffic (color-coded congestion), street-name
+  captions along their streets, DOB violations + Certificates of Occupancy,
+  tap-a-building record lookup, FDNY battalion/division boundaries.
+- **Tracking policy** — ⦿ GPS master switch: vehicles for all agencies,
+  member dots only for firefighters inside the building; live response
+  trails for converging apparatus.
+- **Comms** — TAK GeoChat to every EUD on the server (TAK LINK chip),
+  voice input on the address search, multi-channel drill radio with a
+  merged command view.
+- **Ops hygiene** — ✕ END clears drill/demo/incident everywhere; a
+  46-agent adversarial review swept the platform and all 40 confirmed
+  findings were fixed.
