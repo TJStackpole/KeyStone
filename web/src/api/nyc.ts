@@ -11,6 +11,7 @@ const ECB_VIOLATIONS = 'https://data.cityofnewyork.us/resource/6bgk-3dad.json'
 const DOB_COMPLAINTS = 'https://data.cityofnewyork.us/resource/eabe-havv.json'
 const HPD_VIOLATIONS = 'https://data.cityofnewyork.us/resource/wvxf-dwi5.json'
 const STREET_CENTERLINE = 'https://data.cityofnewyork.us/resource/inkn-q76z.json'
+const TAX_LOTS = 'https://data.cityofnewyork.us/resource/i38t-6if2.json'
 
 export interface PlutoAttributes {
   bbl: string
@@ -439,4 +440,37 @@ export async function fetchCertificatesOfOccupancy(bin: string, signal?: AbortSi
     issueType: r.issue_type ?? '',
     status: r.application_status_raw ?? '',
   }))
+}
+
+// ---------------------------------------------------------------------------
+// DOF Digital Tax Map — tax lot polygons. The lot-border overlay: every lot
+// near the camera gets its boundary drawn, and a click inside a border
+// resolves that lot's own address (via PLUTO by BBL).
+// ---------------------------------------------------------------------------
+
+export interface TaxLot {
+  bbl: string
+  /** GeoJSON MultiPolygon coordinates: polygons -> rings -> [lon, lat]. */
+  polygons: number[][][][]
+}
+
+interface TaxLotRow {
+  bbl?: string
+  the_geom?: { type: string; coordinates: number[][][][] }
+}
+
+/** Tax lots within `radiusM` of a point (SODA within_circle). */
+export async function fetchTaxLots(lat: number, lon: number, radiusM: number, signal?: AbortSignal): Promise<TaxLot[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'bbl,the_geom',
+    $where: `within_circle(the_geom, ${lat}, ${lon}, ${Math.round(radiusM)})`,
+    $limit: '1500',
+  })
+  const res = await fetch(`${TAX_LOTS}?${params}`, { signal })
+  if (!res.ok) throw new Error(`tax lots SODA ${res.status}`)
+  const rows = (await res.json()) as TaxLotRow[]
+  return rows
+    .filter((r) => r.bbl && r.the_geom?.type === 'MultiPolygon' && r.the_geom.coordinates?.length)
+    .map((r) => ({ bbl: r.bbl!, polygons: r.the_geom!.coordinates }))
 }

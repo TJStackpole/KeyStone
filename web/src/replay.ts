@@ -114,7 +114,12 @@ class ReplayEngine {
       else if (ev.kind === 'unit.track') tracks.set(String(ev.payload.uid), ev.payload)
     }
     for (const s of shapes.values()) getShapeLayer()?.upsert(s)
-    for (const p of tracks.values()) getUnitLayer()?.upsert(trackToUnit(p))
+    for (const p of tracks.values()) {
+      // Historical dots honor the SAME visibility policy as live ones — the
+      // GPS master switch and the interior-FF-only member rule hold in replay.
+      const u = trackToUnit(p)
+      getUnitLayer()?.upsert(u, unitMapVisible(u))
+    }
     this.cursor = this.events.findIndex((e) => e.tm > cutoff)
     if (this.cursor === -1) this.cursor = this.events.length
   }
@@ -122,7 +127,10 @@ class ReplayEngine {
   private applyEvent(ev: ReplayEvent): void {
     if (ev.kind === 'shape.upserted') getShapeLayer()?.upsert(ev.payload as unknown as IcsShape)
     else if (ev.kind === 'shape.removed') getShapeLayer()?.remove(String((ev.payload as { id?: string }).id))
-    else if (ev.kind === 'unit.track') getUnitLayer()?.upsert(trackToUnit(ev.payload))
+    else if (ev.kind === 'unit.track') {
+      const u = trackToUnit(ev.payload)
+      getUnitLayer()?.upsert(u, unitMapVisible(u))
+    }
   }
 
   /** Leaving replay: restore the live picture from the server. */
@@ -179,6 +187,9 @@ function trackToUnit(p: Record<string, unknown>): Unit {
     lon: Number(p.lon),
     hae: Number(p.hae ?? 0),
     status: p.status as string | undefined,
+    // Recorded per sample: interior members must replay ON their floor (and
+    // the "· FL n" label / interior-FF visibility rule need it too).
+    floor: typeof p.floor === 'number' ? p.floor : undefined,
     cotType: 'replay',
     updatedAt: new Date().toISOString(),
     staleAt: new Date(Date.now() + 600_000).toISOString(),

@@ -151,9 +151,9 @@ export class DrawController {
     if (typeof entityId !== 'string' || !entityId.startsWith('handle:')) {
       setAppState({ selectedShapeId: null })
       this.renderHandles()
-      // Tap-a-building: pull the public record (PLUTO, violations, C of O)
-      // for whatever address sits under the click.
-      if (getAppState().incident) void inspectBuildingAt(pos.lat, pos.lon)
+      // Tap-a-building/lot: the address under the click lands in the search
+      // bar (one Enter from an incident there) — with or without an incident.
+      void inspectBuildingAt(pos.lat, pos.lon)
     }
   }
 

@@ -59,15 +59,20 @@ export class SimUnitChatter {
     private record: (msg: ChatMsg) => void,
   ) {}
 
-  /** New incident / drill: every unit announces again on its next arrival. */
+  /** New incident, drill, or assignment: units announce their next arrival. */
   reset(): void {
     this.lastStatus.clear()
     this.announced.clear()
   }
 
+  /**
+   * Registry dropped the uid. Only the status memory clears — `announced`
+   * survives deliberately ("once per assignment" is the invariant): drill
+   * rewinds and stale-sweep/echo churn re-deliver arrived units, and each
+   * would otherwise re-post the arrival line to every phone on the server.
+   */
   forget(uid: string): void {
     this.lastStatus.delete(uid)
-    this.announced.delete(uid)
   }
 
   onUnit(u: Unit): void {
@@ -79,6 +84,17 @@ export class SimUnitChatter {
     if (!u.status || !ARRIVED.has(u.status)) return
     if (prev !== undefined && ARRIVED.has(prev)) return
     if (this.announced.has(u.uid)) return
+    // First observation already-arrived + STALE-STAMPED CoT = the TAK server
+    // replaying its latest points (server restart), not a new arrival — seed
+    // the memory silently. Fresh stamps (drill spawns that start On Scene,
+    // like a facility PD) still announce.
+    if (prev === undefined) {
+      const stamped = Date.parse(u.cotTime ?? '')
+      if (Number.isFinite(stamped) && Date.now() - stamped > 30_000) {
+        this.announced.add(u.uid)
+        return
+      }
+    }
     this.announced.add(u.uid)
     const variants = LINES[u.category] ?? ['on scene']
     const line = variants[u.callsign.length % variants.length]

@@ -1,4 +1,4 @@
-import { adoptIncident, clearLocalIncident, flyToUnit, unitMapVisible } from './actions'
+import { adoptIncident, clearLocalIncident, flyToAlert, unitMapVisible } from './actions'
 import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
 import type {
@@ -161,10 +161,14 @@ function handle(msg: ServerMsg): void {
       else if (msg.incident) setAppState({ incident: msg.incident })
       // Drill transport state rides the snapshot too (server restarts). A
       // station that missed the drill's end must also drop the merged comms
-      // view and any scenario-only channel whose tab no longer exists.
+      // view and any scenario-only channel whose tab no longer exists. Chats
+      // ride along here too — ABOVE the replay gate: the chat panel is a
+      // history-safe stream that stays live during replay, so a reconnect
+      // backfill must not be dropped on the floor mid-replay.
       const scenarioLoaded = !!msg.scenario?.loaded
       setAppState((s) => ({
         scenario: scenarioLoaded ? (msg.scenario ?? null) : null,
+        chats: msg.chats ?? [],
         ...(!scenarioLoaded && s.commsAll ? { commsAll: false } : {}),
         ...(!scenarioLoaded &&
         (s.commsChannel.includes('-') || s.commsChannel === 'papd' || s.commsChannel === 'interagency')
@@ -193,7 +197,6 @@ function handle(msg: ServerMsg): void {
         shapes,
         timeline: (msg.timeline ?? []).slice(-600),
         takConnected: msg.takConnected ?? null,
-        chats: msg.chats ?? [],
       })
       break
     }
@@ -245,8 +248,9 @@ function handle(msg: ServerMsg): void {
         setAppState({ alert: null })
       } else {
         setAppState({ alert: msg.alert })
-        // Map snaps to the member in trouble; label revealed and pulsing.
-        if (msg.alert.uid) flyToUnit(msg.alert.uid)
+        // Map snaps to the member in trouble — at the alert's OWN captured
+        // coordinates (the units store is frozen during replay).
+        flyToAlert(msg.alert)
       }
       break
     }

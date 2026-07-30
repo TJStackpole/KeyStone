@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import { initScene } from './cesium/providers'
 import { registerScene, unregisterScene } from './cesium/scene'
-import { exitGround, restoreIncident, setGroundHeightFt } from './actions'
+import { exitGround, refreshLots, restoreIncident, setGroundHeightFt } from './actions'
 import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
@@ -78,6 +78,9 @@ export default function App() {
         setAppState({ sceneReady: true, providerMode: handle.mode })
         connectWs()
         void restoreIncident()
+        // Tax-lot borders follow the camera: refresh whenever a pan/zoom
+        // settles low enough to read parcels (refreshLots gates on height).
+        handle.viewer.camera.moveEnd.addEventListener(() => void refreshLots())
       })
       .catch((err) => {
         console.error('[scene] init failed:', err)

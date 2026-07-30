@@ -177,6 +177,14 @@ export class ScenarioEngine extends EventEmitter {
     const raw = await readFile(resolve(SCENARIO_DIR, `${safe}.json`), 'utf8')
     const file = JSON.parse(raw) as ScenarioFile
     file.events.sort((a, b) => a.t - b.t)
+    // Normalize custom spawn uids onto the DRILL- prefix: tombstones, the
+    // rx-log filter, SIM chat badging, and arrival chatter all key on it —
+    // an unprefixed uid would silently lose every one of those behaviors.
+    for (const ev of file.events) {
+      if (ev.kind === 'unit_spawn' && ev.unit?.uid && !ev.unit.uid.startsWith('DRILL-')) {
+        ev.unit.uid = `DRILL-${ev.unit.uid}`
+      }
+    }
     this.teardown()
     this.file = file
     const inc: Incident = {
@@ -246,7 +254,16 @@ export class ScenarioEngine extends EventEmitter {
     if (rewind) {
       const name = this.file.name
       const fileRef = this.file
-      this.teardown(true)
+      // Units catchUp is about to respawn re-announce in the SAME millisecond
+      // — their removals must skip the echo tombstone. Units whose spawn lies
+      // AFTER the target get NO respawn, so they keep the tombstone or their
+      // in-flight echoes resurrect them as 10-minute ghosts.
+      const respawning = new Set(
+        this.file.events
+          .filter((e) => e.kind === 'unit_spawn' && e.t <= target && e.unit)
+          .map((e) => e.unit!.uid ?? `DRILL-${e.unit!.callsign}`),
+      )
+      this.teardown(true, respawning)
       this.file = fileRef
       // The dashboards already hold everything up to the old clock — clear the
       // drill channels so the silent replay rebuilds them without duplicates.
@@ -269,13 +286,15 @@ export class ScenarioEngine extends EventEmitter {
   }
 
   /** Remove everything the scenario put on the picture. */
-  private teardown(keepIncident = false): void {
+  private teardown(keepIncident = false, respawning?: Set<string>): void {
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
     }
-    // keepIncident === rewind: the same units respawn within this millisecond.
-    for (const u of this.units.values()) this.deps.removeUnit(u.uid, { tombstone: !keepIncident })
+    // Rewind: only units the seek is about to respawn skip the tombstone.
+    for (const u of this.units.values()) {
+      this.deps.removeUnit(u.uid, { tombstone: !(keepIncident && respawning?.has(u.uid)) })
+    }
     for (const id of this.shapeIds) {
       if (this.deps.removeShape(id)) {
         this.deps.broadcast({ type: 'shape.remove', id })
@@ -450,12 +469,12 @@ export class ScenarioEngine extends EventEmitter {
         break
       }
       case 'aar': {
-        // Never auto-open the report while rewinding through history, nor
-        // re-open (and re-log) it when live playback re-crosses it post-rewind.
-        if (!catchUp && !replayed) {
-          this.deps.broadcast({ type: 'scenario.aar' })
-          this.deps.emitTimeline('scenario.aar', { name: this.file?.name })
-        }
+        // Panel-open is EPHEMERAL UI: fire on every live crossing (a re-run
+        // to the end should re-open the report) but never during the silent
+        // seek replay. The timeline milestone follows the shared suppression
+        // so a rewound re-crossing can't log it twice.
+        if (!catchUp) this.deps.broadcast({ type: 'scenario.aar' })
+        emitTimeline('scenario.aar', { name: this.file?.name ?? '' })
         break
       }
     }

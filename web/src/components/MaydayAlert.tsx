@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { flyToUnit } from '../actions'
+import { flyToAlert } from '../actions'
 import { setAppState, useAppState } from '../state/store'
 
 /**
@@ -37,7 +37,7 @@ export function MaydayAlert() {
           </div>
           <div className="mayday-actions">
             {alert.uid && (
-              <button className="chip chip-btn" onClick={() => alert.uid && flyToUnit(alert.uid)}>
+              <button className="chip chip-btn" onClick={() => flyToAlert(alert)}>
                 CENTER ON MEMBER
               </button>
             )}

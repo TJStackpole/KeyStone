@@ -48,6 +48,7 @@ const TOGGLES: { id: ToggleLayerId; label: string }[] = [
   { id: 'firehouses', label: 'Houses' },
   { id: 'streets', label: 'Streets' },
   { id: 'traffic', label: 'Traffic' },
+  { id: 'lots', label: 'Lots' },
   { id: 'battalions', label: 'Battalions' },
   { id: 'divisions', label: 'Divisions' },
 ]

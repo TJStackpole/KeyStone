@@ -109,7 +109,7 @@ export class TacticalModelLayer {
     // MODEL view: clean schematic replaces the (patchy when clipped) real
     // imagery — glass volume per wing, floor slabs, estimated stair core.
     if (opts.view === 'model') {
-      this.buildModel(target, ring, opts, z0, floors, storey, step)
+      this.buildModel(target, ring, opts, z0, floors, storey, step, entrance)
     }
 
     // Floor rings (fire floor always drawn, in red).
@@ -235,6 +235,7 @@ export class TacticalModelLayer {
     floors: number,
     storey: number,
     step: number,
+    entrance: { lat: number; lon: number },
   ): void {
     // Glass volume for EVERY part of the footprint (multi-wing complexes).
     for (let i = 0; i < target.polygons.length; i++) {
@@ -270,17 +271,19 @@ export class TacticalModelLayer {
       })
     }
 
-    // Estimated stair core: centroid of the entrance wing, oriented to its
-    // longest wall, full building height.
-    let cLon = 0, cLat = 0
+    // Estimated stair core, oriented to the wing's longest wall. A vertex
+    // average is NOT guaranteed inside a concave (L/U-shaped) wing, so walk
+    // candidates from the average toward the entrance until the whole shaft
+    // fits inside the ring — and draw nothing rather than something wrong.
+    let avgLon = 0, avgLat = 0
     const n = ring.length - 1 // ring is closed
     for (let i = 0; i < n; i++) {
-      cLon += ring[i][0]
-      cLat += ring[i][1]
+      avgLon += ring[i][0]
+      avgLat += ring[i][1]
     }
-    cLon /= n
-    cLat /= n
-    const cosLat = Math.cos((cLat * Math.PI) / 180)
+    avgLon /= n
+    avgLat /= n
+    const cosLat = Math.cos((avgLat * Math.PI) / 180)
     let bestLen = 0
     let wallBearing = 0
     for (let i = 0; i < ring.length - 1; i++) {
@@ -294,13 +297,39 @@ export class TacticalModelLayer {
     }
     const along = { x: Math.sin(wallBearing), y: Math.cos(wallBearing) } // unit, meters
     const across = { x: Math.cos(wallBearing), y: -Math.sin(wallBearing) }
-    const HALF_L = 3.2, HALF_W = 2.2 // a code-typical stair shaft, meters
-    const corner = (a: number, c: number): [number, number] => {
-      const mx = a * along.x + c * across.x
-      const my = a * along.y + c * across.y
-      return [cLon + mx / (111_320 * cosLat), cLat + my / 111_320]
+    const cornersAt = (cx: number, cy: number, halfL: number, halfW: number): [number, number][] =>
+      (
+        [
+          [halfL, halfW],
+          [halfL, -halfW],
+          [-halfL, -halfW],
+          [-halfL, halfW],
+        ] as const
+      ).map(([a, c]) => {
+        const mx = a * along.x + c * across.x
+        const my = a * along.y + c * across.y
+        return [cx + mx / (111_320 * cosLat), cy + my / 111_320]
+      })
+    const shaftFits = (cx: number, cy: number, halfL: number, halfW: number): boolean =>
+      pointInRing(cx, cy, ring) && cornersAt(cx, cy, halfL, halfW).every(([x, y]) => pointInRing(x, y, ring))
+    // Candidate centers: the average, then points sliding from it toward the
+    // entrance (concave wings usually have interior mass on that side).
+    let core: { lon: number; lat: number; halfL: number; halfW: number } | null = null
+    outer: for (const [halfL, halfW] of [
+      [3.2, 2.2],
+      [1.8, 1.3], // narrow-wing fallback shaft
+    ] as const) {
+      for (const t of [0, 0.25, 0.45, 0.65, 0.85]) {
+        const cx = avgLon + (entrance.lon - avgLon) * t
+        const cy = avgLat + (entrance.lat - avgLat) * t
+        if (shaftFits(cx, cy, halfL, halfW)) {
+          core = { lon: cx, lat: cy, halfL, halfW }
+          break outer
+        }
+      }
     }
-    const coreRing = [corner(HALF_L, HALF_W), corner(HALF_L, -HALF_W), corner(-HALF_L, -HALF_W), corner(-HALF_L, HALF_W)]
+    if (!core) return // no honest placement — omit rather than mislead
+    const coreRing = cornersAt(core.lon, core.lat, core.halfL, core.halfW)
     this.source.entities.add({
       id: 'tact:core',
       polygon: {
@@ -314,7 +343,7 @@ export class TacticalModelLayer {
     })
     this.source.entities.add({
       id: 'tact:core:label',
-      position: Cesium.Cartesian3.fromDegrees(cLon, cLat, z0 + opts.heightM * 0.55),
+      position: Cesium.Cartesian3.fromDegrees(core.lon, core.lat, z0 + opts.heightM * 0.55),
       billboard: {
         image: crispTextImage('STAIRS (EST.)', '#fbbf24', 20),
         scale: 0.5,

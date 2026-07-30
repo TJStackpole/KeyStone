@@ -64,7 +64,7 @@ wss.on('connection', (socket) => {
       timeline: state.timeline.filter((e) => e.kind !== 'unit.track').slice(-400),
       units: registry.all(),
       takConnected: tak.connected,
-      chats: chatLog.slice(-100),
+      chats: chatLog.slice(-200), // match the retention cap — reconnects must not shear scrollback
       // Reconnecting dashboards learn drill state here — a server restart
       // mid-drill otherwise leaves a stale "playing" DRILL bar forever.
       scenario: scenario.status(),
@@ -128,7 +128,7 @@ tak.on('event', (ev) => {
   if (isUnitEvent(ev)) registry.upsertFromCot(ev)
 })
 
-app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-100) }))
+app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-200) }))
 
 app.post('/api/chat', (req, res) => {
   const { text, room } = req.body as { text?: string; room?: string }
@@ -241,6 +241,7 @@ app.post('/api/dispatch', async (req, res) => {
   const state = getState()
   if (!state.incident) return res.status(400).json({ error: 'no active incident to dispatch to' })
   if (!tak.connected) return res.status(503).json({ error: 'TAK link down — cannot publish CoT' })
+  simChatter.reset() // a fresh assignment announces its arrivals anew
   try {
     const body = (req.body ?? {}) as { floors?: number }
     const result = await simulator.dispatch(state.incident.lat, state.incident.lon, {

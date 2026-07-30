@@ -127,6 +127,7 @@ const initial: AppState = {
     firehouses: true,
     streets: true,
     traffic: false,
+    lots: true, // draws only when zoomed in — see refreshLots' height gate
     battalions: false,
     divisions: false,
   },

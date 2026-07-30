@@ -51,7 +51,14 @@ export function buildGeoChatXml(
   )
 }
 
-const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', ignoreDeclaration: true })
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  ignoreDeclaration: true,
+  // Chat text must NEVER be numerically coerced — strnum turns a reply of
+  // "10.50" into 10.5 and a gate code "007" into 7 on a coordination screen.
+  parseTagValue: false,
+})
 
 interface Node {
   [k: string]: unknown

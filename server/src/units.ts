@@ -25,6 +25,9 @@ export interface Unit {
   cotType: string
   updatedAt: string
   staleAt: string
+  /** The event's own time stamp — lets consumers tell a fresh transmission
+   *  from the TAK server replaying its latest points (e.g. after a restart). */
+  cotTime?: string
 }
 
 const STALE_GRACE_MS = 30_000
@@ -112,6 +115,7 @@ export class UnitRegistry extends EventEmitter {
       cotType: ev.type,
       updatedAt: new Date().toISOString(),
       staleAt,
+      cotTime: ev.time ?? ev.start,
     }
     this.units.set(ev.uid, unit)
     this.emit('unit', unit)

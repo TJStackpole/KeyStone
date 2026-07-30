@@ -19,14 +19,17 @@ export function formatMeters(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`
 }
 
-/** Ray-cast point-in-ring test. Ring is [lon, lat][]; point is lon/lat degrees. */
+/** Ray-cast (even-odd) point-in-ring test. Ring is [lon, lat][]; point is lon/lat degrees. */
 export function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i]
     const [xj, yj] = ring[j]
     const intersects = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
-    if (intersects) inside = true
+    // TOGGLE per crossing — even-odd. (`inside = true` here once made the test
+    // pass for any point with a single eastward crossing, i.e. almost anything
+    // west of the polygon: wrong lot/wing/building resolution on concave rings.)
+    if (intersects) inside = !inside
   }
   return inside
 }

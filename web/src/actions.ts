@@ -6,6 +6,7 @@ import {
   fetchHydrants,
   fetchPluto,
   fetchStreetLabels,
+  fetchTaxLots,
   fetchTrafficLinks,
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
@@ -20,6 +21,7 @@ import {
   getIntelLayer,
   getExposureLayer,
   getScene,
+  getLotLayer,
   getShapeLayer,
   getStreetLayer,
   getTacticalLayer,
@@ -91,6 +93,7 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     inspected: null,
     timeline: [],
     stagingPick: 'auto',
+    isolateView: 'model', // a LIVE pick must not straddle incidents
   })
   getShapeLayer()?.clear()
 }
@@ -270,6 +273,10 @@ function frameIsolatedBuilding(base: number): void {
 }
 
 let isolateApplySeq = 0
+// True only once the ON continuation has actually mutated the scene — the
+// MODEL/LIVE chips must not re-style a scene whose clip hasn't landed yet
+// (hiding the tileset while the globe is still hidden blacks out the map).
+let isolateApplied = false
 
 /**
  * The ON path is async: it waits for the pre-clip street-level sample before
@@ -285,6 +292,7 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
   const tileset = scene.buildingTileset
 
   if (!on) {
+    isolateApplied = false
     if (tileset) {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
       tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
@@ -354,6 +362,7 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     }
     // MODEL/LIVE appearance: tileset visibility, imagery boost, target-box
     // park, and the schematic itself all key off the selected view.
+    isolateApplied = true
     applyIsolateAppearance()
     if (opts.frame) frameIsolatedBuilding(base)
   })()
@@ -385,7 +394,9 @@ function applyIsolateAppearance(): void {
 export function setIsolateView(view: 'model' | 'live'): void {
   if (getAppState().isolateView === view) return
   setAppState({ isolateView: view })
-  if (getAppState().isolateMode) applyIsolateAppearance()
+  // If the async ON path is still awaiting its pre-clip sample, just store
+  // the choice — its own applyIsolateAppearance() picks it up when it lands.
+  if (getAppState().isolateMode && isolateApplied) applyIsolateAppearance()
 }
 
 let tacticalSeq = 0
@@ -643,6 +654,10 @@ export function toggleLayer(layer: ToggleLayerId): void {
     getTrafficLayer()?.setVisible(next)
     if (next) void refreshTraffic()
   }
+  if (layer === 'lots') {
+    getLotLayer()?.setVisible(next)
+    if (next) void refreshLots(true)
+  }
   if (layer === 'battalions' || layer === 'divisions') {
     getBoundaryLayer()
       ?.setVisible(layer, next)
@@ -674,6 +689,7 @@ export function adoptIncident(incident: Incident): void {
     // schematic/floors panels (a fabricated fire floor on a stakeholder demo).
     timeline: [],
     stagingPick: 'auto', // a reserved callsign from the old response is stale
+    isolateView: 'model',
   })
   getShapeLayer()?.clear()
   const scene = getScene()
@@ -896,18 +912,88 @@ export function toggleAgency(agency: Agency): void {
 // is the floor-by-floor legal record a chief can actually get.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Tax-lot borders: DOF Digital Tax Map polygons fetched around the CAMERA
+// whenever it sits low enough to read parcels — every lot in the city is
+// reachable by just panning there. Clicks resolve against these borders.
+// ---------------------------------------------------------------------------
+
+const LOT_MAX_CAMERA_M = 4500
+let lotSeq = 0
+let lastLotFetch: { lat: number; lon: number; radiusM: number } | null = null
+
+export async function refreshLots(force = false): Promise<void> {
+  const scene = getScene()
+  const layer = getLotLayer()
+  if (!scene || !layer || !getAppState().layerToggles.lots) return
+  const viewer = scene.viewer
+  const cam = viewer.camera.positionCartographic
+  if (cam.height > LOT_MAX_CAMERA_M) return // parcel lines are street-scale detail
+  // Center on what the operator is LOOKING at, not the camera's own foot.
+  let lat = Cesium.Math.toDegrees(cam.latitude)
+  let lon = Cesium.Math.toDegrees(cam.longitude)
+  if (cam.height > 0) {
+    const canvas = viewer.scene.canvas
+    const center = viewer.camera.pickEllipsoid(
+      new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+      viewer.scene.globe.ellipsoid,
+    )
+    if (center) {
+      const c = Cesium.Cartographic.fromCartesian(center)
+      lat = Cesium.Math.toDegrees(c.latitude)
+      lon = Cesium.Math.toDegrees(c.longitude)
+    }
+  }
+  const radiusM = Math.min(900, Math.max(300, cam.height * 0.7))
+  // Don't refetch for small nudges — the previous batch still covers the view.
+  if (!force && lastLotFetch) {
+    const moved = Math.hypot((lat - lastLotFetch.lat) * 111_320, (lon - lastLotFetch.lon) * 85_000)
+    if (moved < lastLotFetch.radiusM * 0.35 && radiusM <= lastLotFetch.radiusM * 1.3) return
+  }
+  const seq = ++lotSeq
+  try {
+    const lots = await fetchTaxLots(lat, lon, radiusM)
+    if (seq !== lotSeq || !getAppState().layerToggles.lots) return
+    lastLotFetch = { lat, lon, radiusM }
+    layer.render(lots)
+  } catch (err) {
+    console.error('[lots] layer unavailable:', err) // degrade, never crash
+  }
+}
+
 let inspectSeq = 0
 
 export async function inspectBuildingAt(lat: number, lon: number): Promise<void> {
   const seq = ++inspectSeq
+  // The tax lot UNDER the click is authoritative for the address — the
+  // nearest address POINT can belong to the neighbor when a click lands
+  // mid-lot (yard, parking, big footprint).
+  const lotBbl = getLotLayer()?.lotAt(lon, lat) ?? null
   let hit: GeoHit | null = null
   try {
     hit = await reverseGeocode(lat, lon)
   } catch (err) {
     console.error('[inspect] reverse geocode unavailable:', err)
-    return
   }
-  if (!hit || seq !== inspectSeq) return
+  if (seq !== inspectSeq) return
+  if (lotBbl && hit?.bbl !== lotBbl) {
+    const lotPluto = await fetchPluto(lotBbl).catch(() => null)
+    if (seq !== inspectSeq) return
+    if (lotPluto?.address) {
+      const borough = hit?.borough ?? 'New York'
+      hit = {
+        label: `${lotPluto.address}, ${borough}`,
+        name: lotPluto.address,
+        borough,
+        lat,
+        lon,
+        bbl: lotBbl,
+        // No BIN: the click identified a LOT; BIN-scoped intel stays empty.
+        bin: undefined,
+      }
+    }
+  }
+  if (!hit) return
   const incident = getAppState().incident
   // Tapping the incident building itself just returns the panel to it.
   if (incident?.bin && hit.bin && incident.bin === hit.bin) {
@@ -991,6 +1077,20 @@ export function flyToUnit(uid: string): void {
   if (!unit) return
   getUnitLayer()?.showLabel(uid)
   flyToFeature(unit.lat, unit.lon)
+}
+
+/**
+ * Mayday camera snap. Prefer the coordinates CAPTURED WITH THE ALERT — during
+ * a replay the units store is frozen at replay-start, so flying to the store
+ * position would aim at empty map while highlighting a historical marker.
+ */
+export function flyToAlert(alert: { uid?: string; lat?: number; lon?: number }): void {
+  if (typeof alert.lat === 'number' && typeof alert.lon === 'number') {
+    if (alert.uid && !getAppState().replay.active) getUnitLayer()?.showLabel(alert.uid)
+    flyToFeature(alert.lat, alert.lon)
+    return
+  }
+  if (alert.uid && !getAppState().replay.active) flyToUnit(alert.uid)
 }
 
 const PERSONNEL_CATEGORIES = new Set<UnitCategory>(['ff', 'officer', 'medic'])

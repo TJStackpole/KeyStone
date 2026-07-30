@@ -4,6 +4,34 @@ import { standUpIncident } from '../actions'
 import { setAppState, useAppState } from '../state/store'
 import type { GeoHit } from '../types'
 
+// Speech engines often return house numbers as WORDS ("one hundred gold
+// street") which GeoSearch won't match — fold a leading run of number words
+// into digits so the spoken address autocompletes like a typed one.
+const NUM_WORDS: Record<string, number> = {
+  zero: 0, oh: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
+  fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
+  thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  hundred: 100, thousand: 1000,
+}
+
+function normalizeSpoken(text: string): string {
+  const cleaned = text.replace(/[.,!?]+\s*$/, '').trim()
+  const tokens = cleaned.split(/\s+/).flatMap((t) => t.split('-'))
+  let value = 0
+  let consumed = 0
+  for (const tok of tokens) {
+    const n = NUM_WORDS[tok.toLowerCase()]
+    if (n === undefined) break
+    value = n === 100 || n === 1000 ? Math.max(1, value) * n : value + n
+    consumed++
+  }
+  if (consumed > 0 && value > 0 && consumed < tokens.length) {
+    return `${value} ${tokens.slice(consumed).join(' ')}`
+  }
+  return cleaned
+}
+
 /** Bold the query tokens inside a suggestion, Google-Maps-style. */
 function Highlight({ text, query }: { text: string; query: string }) {
   const tokens = query.trim().split(/\s+/).filter((t) => t.length >= 1)
@@ -132,7 +160,9 @@ export function SearchBar() {
     rec.maxAlternatives = 1
     rec.onresult = (e) => {
       const transcript = Array.from(e.results, (r) => r[0]?.transcript ?? '').join(' ').trim()
-      if (transcript) onChange(transcript)
+      // Normalized ("one hundred gold street" -> "100 gold street") so the
+      // suggestion list fills exactly as if the address had been typed.
+      if (transcript) onChange(normalizeSpoken(transcript))
     }
     rec.onend = () => setListening(false)
     rec.onerror = () => setListening(false)
