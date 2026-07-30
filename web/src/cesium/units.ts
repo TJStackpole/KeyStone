@@ -177,19 +177,29 @@ export class UnitLayer {
         sampled.removeSample(old)
       }
       // Visibility policy can change between updates (GPS toggle, a member
-      // entering/leaving the building) — re-apply it every time.
+      // entering/leaving the building) — re-apply it every time (cheap bool).
       entity.show = show
       // Interior members carry their floor in the label ("E-6/1 · FL 4").
       const labelText = unit.floor && unit.floor > 0 ? `${unit.callsign} · FL ${unit.floor}` : unit.callsign
       if (entity.label && entity.label.text?.getValue(now) !== labelText) {
         entity.label.text = new Cesium.ConstantProperty(labelText)
       }
+      // Only assign properties that actually CHANGED — replacing a
+      // ConstantProperty every update forces Cesium to rebuild the billboard
+      // batch for every unit every 2 s, which shows up as frame hitches.
+      const icon = ICONS[unit.category] ?? ICONS.unknown
       if (entity.billboard) {
-        entity.billboard.image = new Cesium.ConstantProperty(ICONS[unit.category] ?? ICONS.unknown)
-        // Members transition exterior <-> interior; re-clamp accordingly.
-        entity.billboard.heightReference = new Cesium.ConstantProperty(clampRef)
+        if (entity.billboard.image?.getValue(now) !== icon) {
+          entity.billboard.image = new Cesium.ConstantProperty(icon)
+        }
+        if (entity.billboard.heightReference?.getValue(now) !== clampRef) {
+          // Members transition exterior <-> interior; re-clamp accordingly.
+          entity.billboard.heightReference = new Cesium.ConstantProperty(clampRef)
+        }
       }
-      if (entity.label) entity.label.heightReference = new Cesium.ConstantProperty(clampRef)
+      if (entity.label && entity.label.heightReference?.getValue(now) !== clampRef) {
+        entity.label.heightReference = new Cesium.ConstantProperty(clampRef)
+      }
     }
 
     if (unit.category === 'drone') this.updateDroneExtras(unit, show)
@@ -215,11 +225,20 @@ export class UnitLayer {
       this.trails.set(unit.uid, buf)
     }
     const last = buf[buf.length - 1]
+    let grew = false
     if (!last || Math.abs(last[0] - unit.lon) > 1e-6 || Math.abs(last[1] - unit.lat) > 1e-6) {
       buf.push([unit.lon, unit.lat])
       if (buf.length > TRAIL_MAX_POINTS) buf.shift()
+      grew = true
     }
     if (buf.length < 2) return
+    // Ground-clamped polylines rebuild their shadow-volume primitive on every
+    // positions assignment — only pay that when the trail actually changed.
+    const existing = this.source.entities.getById(trailId)
+    if (existing && !grew) {
+      existing.show = show
+      return
+    }
     const color = Cesium.Color.fromCssColorString(TRAIL_COLOR[unit.agency] ?? '#22d3ee')
     const positions = Cesium.Cartesian3.fromDegreesArray(buf.flat())
     let trail = this.source.entities.getById(trailId)

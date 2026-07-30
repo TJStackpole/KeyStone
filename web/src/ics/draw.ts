@@ -27,6 +27,7 @@ export class DrawController {
   private handleSource = new Cesium.CustomDataSource('draw-handles')
   private dragIndex: number | null = null
   private draggingApparatus: string | null = null
+  private lastDragUpdate = 0
   private keyListener = (e: KeyboardEvent) => this.onKey(e)
 
   constructor(private viewer: Cesium.Viewer, private shapes: ShapeLayer) {
@@ -312,6 +313,13 @@ export class DrawController {
   // ---------------------------- vertex editing ------------------------------
 
   private onLeftDown(e: Cesium.ScreenSpaceEventHandler.PositionedEvent): void {
+    // scene.pick costs a pick-pass render + GPU readback. Skip it on the
+    // mousedown that starts every ordinary camera pan: it can only matter
+    // when something draggable exists (zone edit handles or staging pads).
+    const st = getAppState()
+    const hasDraggables =
+      st.selectedShapeId !== null || Object.values(st.shapes).some((s) => s.kind === 'apparatus')
+    if (!hasDraggables) return
     const picked = this.viewer.scene.pick(e.position) as { id?: Cesium.Entity } | undefined
     const entityId = picked?.id?.id
     if (typeof entityId !== 'string') return
@@ -333,6 +341,13 @@ export class DrawController {
   }
 
   private onMouseMove(e: Cesium.ScreenSpaceEventHandler.MotionEvent): void {
+    // Drag updates run pickPosition (pick-pass + readback) plus a store write
+    // and shape re-render — ~30 Hz is indistinguishable from per-event.
+    if (this.draggingApparatus || this.dragIndex !== null) {
+      const t = performance.now()
+      if (t - this.lastDragUpdate < 33) return
+      this.lastDragUpdate = t
+    }
     if (this.draggingApparatus) {
       const shape = getAppState().shapes[this.draggingApparatus]
       if (shape?.kind === 'apparatus') {

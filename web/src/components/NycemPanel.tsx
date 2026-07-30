@@ -34,7 +34,16 @@ function latestPayload(timeline: TimelineEvent[], kind: string): Record<string, 
  * status board. Derived entirely from the live unit registry + event log.
  */
 export function NycemPanel() {
-  const { nycemView, units, incident, timeline, agencyToggles, scenario } = useAppState()
+  // Guard component: the heavy derivation lives in the inner panel so the
+  // (default-hidden) view costs nothing on the ~5 store writes/s of a live
+  // incident. Hooks can't sit below an early return, hence the split.
+  const { nycemView } = useAppState()
+  if (!nycemView) return null
+  return <NycemPanelInner />
+}
+
+function NycemPanelInner() {
+  const { units, incident, timeline, agencyToggles, scenario } = useAppState()
 
   const rollup = useMemo(() => {
     const out = new Map<Agency, { total: number; enroute: number; onScene: number; staged: number }>()
@@ -86,8 +95,6 @@ export function NycemPanel() {
   const unified = latestPayload(timeline, 'command.unified')
   const mci = latestPayload(timeline, 'mci.declared')
   const mciClosed = latestPayload(timeline, 'mci.closed')
-
-  if (!nycemView) return null
 
   return (
     <aside className="nycem-panel glass">

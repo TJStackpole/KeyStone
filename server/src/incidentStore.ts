@@ -34,12 +34,14 @@ function flush(): void {
     flushTimer = null
     try {
       mkdirSync(dirname(DATA_PATH), { recursive: true })
-      writeFileSync(DATA_PATH, JSON.stringify(state, null, 2))
+      // Compact JSON: pretty-printing a multi-MB timeline roughly doubles the
+      // stringify+write cost of every flush.
+      writeFileSync(DATA_PATH, JSON.stringify(state))
     } catch (err) {
       // Persistence failure must never take the incident down — state stays in memory.
       console.error('[incidentStore] failed to write incident.json:', err)
     }
-  }, 400)
+  }, 1500) // sustained track appends make this a steady cadence, not a debounce
   flushTimer.unref?.()
 }
 

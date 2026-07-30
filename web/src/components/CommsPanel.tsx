@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { setAppState, useAppState } from '../state/store'
 import type { CommsChannel, TranscriptLine } from '../types'
 
@@ -50,16 +50,19 @@ function HighlightedText({ line }: { line: TranscriptLine }) {
 }
 
 export function CommsPanel() {
-  const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario } = useAppState()
+  const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario, commsAll } = useAppState()
   const scrollRef = useRef<HTMLDivElement>(null)
   const scenarioMode = !!scenario
 
   // Merged "command view": every scenario channel interleaved by timestamp.
-  const merged: TranscriptLine[] = scenarioMode
-    ? SCENARIO_CHANNELS.flatMap((c) => transcripts[c.id].map((l) => ({ ...l, text: `[${c.label}] ${l.text}` })))
-        .sort((a, b) => a.ts.localeCompare(b.ts))
-        .slice(-200)
-    : []
+  // Memoized AND gated on commsAll — cloning + sorting up to 1200 lines on
+  // every store write (even with the panel collapsed) was pure GC churn.
+  const merged: TranscriptLine[] = useMemo(() => {
+    if (!scenarioMode || !commsAll) return []
+    return SCENARIO_CHANNELS.flatMap((c) => transcripts[c.id].map((l) => ({ ...l, text: `[${c.label}] ${l.text}` })))
+      .sort((a, b) => a.ts.localeCompare(b.ts))
+      .slice(-200)
+  }, [scenarioMode, commsAll, transcripts])
 
   useEffect(() => {
     // fetch channel config once
@@ -71,7 +74,6 @@ export function CommsPanel() {
     }
   }, [commsConfig])
 
-  const { commsAll } = useAppState()
   const lines = scenarioMode && commsAll ? merged : transcripts[commsChannel]
   useEffect(() => {
     const el = scrollRef.current

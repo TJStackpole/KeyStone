@@ -199,6 +199,9 @@ export function getAppState(): AppState {
 
 export function setAppState(patch: Partial<AppState> | ((s: AppState) => Partial<AppState>)): void {
   const next = typeof patch === 'function' ? patch(state) : patch
+  // Empty patch = deliberate no-op (dedupe guards) — don't wake every
+  // subscribed component for nothing.
+  if (!next || Object.keys(next).length === 0) return
   state = { ...state, ...next }
   listeners.forEach((l) => l())
 }

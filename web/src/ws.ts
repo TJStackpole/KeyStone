@@ -40,6 +40,10 @@ interface UnitMsg {
   type: 'unit'
   unit: Unit
 }
+interface UnitsBatchMsg {
+  type: 'units.batch'
+  units: Unit[]
+}
 interface UnitRemoveMsg {
   type: 'unit.remove'
   uid: string
@@ -80,6 +84,7 @@ type ServerMsg =
   | SnapshotMsg
   | IncidentMsg
   | UnitMsg
+  | UnitsBatchMsg
   | UnitRemoveMsg
   | TakStatusMsg
   | ShapeMsg
@@ -184,6 +189,17 @@ function handle(msg: ServerMsg): void {
     case 'unit': {
       setAppState((s) => ({ units: { ...s.units, [msg.unit.uid]: msg.unit } }))
       getUnitLayer()?.upsert(msg.unit, unitMapVisible(msg.unit))
+      break
+    }
+    case 'units.batch': {
+      // One state write (= one React render pass) for the whole window.
+      setAppState((s) => {
+        const units = { ...s.units }
+        for (const u of msg.units) units[u.uid] = u
+        return { units }
+      })
+      const layer = getUnitLayer()
+      for (const u of msg.units) layer?.upsert(u, unitMapVisible(u))
       break
     }
     case 'scenario.status': {

@@ -113,8 +113,12 @@ tak.on('event', (ev) => {
     if (msg) recordChat(msg)
     return
   }
-  // Proof-of-protocol: log genuine CoT XML as it arrives off the TAK server.
-  console.log(`[cot] rx ${(ev.raw ?? '').replace(/\s+/g, ' ').slice(0, 240)}`)
+  // Proof-of-protocol: log genuine CoT as it arrives off the TAK server —
+  // but not the simulator's own echo (20-30 sync stdout writes/s at a
+  // 3rd alarm; real ATAK traffic still logs every event).
+  if (!ev.uid.startsWith('WT-SIM-') && !ev.uid.startsWith('DRILL-')) {
+    console.log(`[cot] rx ${(ev.raw ?? '').replace(/\s+/g, ' ').slice(0, 240)}`)
+  }
   if (isUnitEvent(ev)) registry.upsertFromCot(ev)
 })
 
@@ -145,8 +149,20 @@ app.post('/api/chat', (req, res) => {
 // Compact unit-track sampling for REPLAY: at most one timeline sample per unit
 // per 8 s (plus every status change) keeps incident.json small but animatable.
 const lastTrackSample = new Map<string, { t: number; status?: string }>()
+
+// Unit updates COALESCE into one WS frame per 200 ms window: a 30-unit
+// incident otherwise sends ~15 messages/s, each costing every dashboard a
+// full state write + React render pass. Batching cuts that to <=5/s with the
+// same on-screen freshness (positions interpolate client-side anyway).
+const pendingUnits = new Map<string, ReturnType<typeof registry.all>[number]>()
+setInterval(() => {
+  if (!pendingUnits.size) return
+  broadcast({ type: 'units.batch', units: [...pendingUnits.values()] })
+  pendingUnits.clear()
+}, 200).unref()
+
 registry.on('unit', (unit) => {
-  broadcast({ type: 'unit', unit })
+  pendingUnits.set(unit.uid, unit)
   const prev = lastTrackSample.get(unit.uid)
   const now = Date.now()
   if (!prev || now - prev.t > 8000 || prev.status !== unit.status) {
