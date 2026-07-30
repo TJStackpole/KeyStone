@@ -95,9 +95,9 @@ export class DrawController {
       return
     }
     if (tool === 'ground') {
-      // Drop to eye height at the clicked spot, facing the incident.
-      const inc = getAppState().incident
-      enterGroundView(this.viewer, pos, inc ? { lat: inc.lat, lon: inc.lon } : undefined)
+      // Drop to the selected height at the clicked spot, facing the incident.
+      const { incident, groundViewFt } = getAppState()
+      enterGroundView(this.viewer, pos, incident ? { lat: incident.lat, lon: incident.lon } : undefined, groundViewFt)
       setAppState({ drawTool: null, groundViewActive: true })
       return
     }

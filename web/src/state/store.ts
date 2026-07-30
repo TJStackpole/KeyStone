@@ -69,6 +69,8 @@ export interface AppState {
   viewMode: '3d' | 'topdown'
   /** Street-level camera dropped by the GND tool. */
   groundViewActive: boolean
+  /** Eye height above the clicked surface for ground view, feet (0–50). */
+  groundViewFt: number
 }
 
 const initial: AppState = {
@@ -119,6 +121,7 @@ const initial: AppState = {
   activeIncidentMode: true,
   viewMode: '3d',
   groundViewActive: false,
+  groundViewFt: 6,
 }
 
 let state: AppState = initial

@@ -10,7 +10,7 @@ import {
 import { reverseGeocode } from './api/geosearch'
 import { fetchFootprints, footprintContaining } from './cesium/footprints'
 import { flyToTactical } from './cesium/providers'
-import { exitGroundView, setTopDown } from './cesium/viewmode'
+import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
 import {
   getBoundaryLayer,
   getDrawController,
@@ -171,6 +171,14 @@ export function exitGround(): void {
   const scene = getScene()
   if (scene) exitGroundView(scene.viewer)
   setAppState({ groundViewActive: false })
+}
+
+/** Ground-view eye height (0–50 ft): remembered for the next drop, live while down. */
+export function setGroundHeightFt(ft: number): void {
+  const clamped = Math.min(50, Math.max(0, Math.round(ft)))
+  setAppState({ groundViewFt: clamped })
+  const scene = getScene()
+  if (scene && getAppState().groundViewActive) setGroundViewHeight(scene.viewer, clamped)
 }
 
 // ---------------------------------------------------------------------------

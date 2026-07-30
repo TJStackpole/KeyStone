@@ -115,7 +115,7 @@ export function DrawToolbar() {
                 : drawTool === 'apparatus'
                   ? 'CLICK TO RESERVE TRUCK-SIZE STAGING SPOTS (AUTO-LABELED NEXT-DUE UNITS) · ESC TO STOP'
                   : drawTool === 'ground'
-                    ? 'CLICK ANY SPOT TO DROP TO STREET-LEVEL VIEW · ESC RETURNS TO TACTICAL'
+                    ? 'SET HEIGHT ON THE 0–50 FT SCALE, THEN CLICK ANY SPOT · ESC RETURNS TO TACTICAL'
                     : 'CLICK THE MAP TO PLACE · ESC TO CANCEL'}
         </div>
       )}

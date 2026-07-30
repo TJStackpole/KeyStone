@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import { initScene } from './cesium/providers'
 import { registerScene, unregisterScene } from './cesium/scene'
-import { exitGround, restoreIncident } from './actions'
+import { exitGround, restoreIncident, setGroundHeightFt } from './actions'
 import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
@@ -22,6 +22,31 @@ function GroundViewExit() {
     <button className="ground-exit glass" onClick={exitGround} title="Return to the tactical camera (Esc)">
       ⏏ EXIT GROUND VIEW
     </button>
+  )
+}
+
+/**
+ * Eye-height scale for ground view (0–50 ft AGL): shown while the GND tool is
+ * armed (sets the next drop) and while down (raises/lowers the camera live,
+ * like an aerial-platform mast).
+ */
+function GroundHeightControl() {
+  const { drawTool, groundViewActive, groundViewFt } = useAppState()
+  if (drawTool !== 'ground' && !groundViewActive) return null
+  return (
+    <div className="ground-height glass">
+      <label htmlFor="gnd-ft">HEIGHT AGL</label>
+      <input
+        id="gnd-ft"
+        type="range"
+        min={0}
+        max={50}
+        step={1}
+        value={groundViewFt}
+        onChange={(e) => setGroundHeightFt(Number(e.target.value))}
+      />
+      <b>{groundViewFt} FT</b>
+    </div>
   )
 }
 
@@ -73,6 +98,7 @@ export default function App() {
       <UtilityDock />
       <CommsPanel />
       <GroundViewExit />
+      <GroundHeightControl />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">KEYSTONE</div>
         <div className="status">{bootMsg}</div>

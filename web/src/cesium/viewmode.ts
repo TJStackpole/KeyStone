@@ -78,6 +78,12 @@ export async function setTopDown(scene: SceneHandle, on: boolean, focus?: { lat:
 // ------------------------------ ground view ---------------------------------
 
 let savedGround: { cam: SavedCamera; minZoom: number; collision: boolean } | null = null
+let groundAnchor: { lon: number; lat: number; surfaceHae: number } | null = null
+
+/** Slider feet -> eye meters above the anchored surface (never inside the pavement). */
+function eyeMeters(ft: number): number {
+  return Math.max(0.5, ft * 0.3048)
+}
 
 /** Initial bearing from A to B, degrees true. */
 function bearingDeg(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
@@ -93,6 +99,7 @@ export function enterGroundView(
   viewer: Cesium.Viewer,
   pos: { lat: number; lon: number; hae: number },
   lookAt?: { lat: number; lon: number },
+  heightFt = 6,
 ): void {
   const ctl = viewer.scene.screenSpaceCameraController
   if (!savedGround) {
@@ -120,9 +127,23 @@ export function enterGroundView(
     const surface = viewer.scene.sampleHeight?.(Cesium.Cartographic.fromDegrees(pos.lon, pos.lat))
     hae = surface !== undefined && Number.isFinite(surface) ? surface : -30
   }
+  groundAnchor = { lon: pos.lon, lat: pos.lat, surfaceHae: hae }
   viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, hae + 2.2),
+    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, hae + eyeMeters(heightFt)),
     orientation: { heading, pitch: Cesium.Math.toRadians(4), roll: 0 },
+  })
+}
+
+/** Live height adjust while in ground view — keeps the operator's look direction. */
+export function setGroundViewHeight(viewer: Cesium.Viewer, heightFt: number): void {
+  if (!groundAnchor) return
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(
+      groundAnchor.lon,
+      groundAnchor.lat,
+      groundAnchor.surfaceHae + eyeMeters(heightFt),
+    ),
+    orientation: { heading: viewer.camera.heading, pitch: viewer.camera.pitch, roll: 0 },
   })
 }
 
@@ -133,6 +154,7 @@ export function exitGroundView(viewer: Cesium.Viewer): void {
   ctl.enableCollisionDetection = savedGround.collision
   restoreCamera(viewer, savedGround.cam, 1.4)
   savedGround = null
+  groundAnchor = null
 }
 
 export function groundViewSaved(): boolean {
