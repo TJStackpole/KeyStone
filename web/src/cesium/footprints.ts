@@ -71,6 +71,10 @@ export class FootprintLayer {
   private visible = true
   private targetVisible = true
   private renderSeq = 0
+  // Street level under the CURRENT target, sampled pre-clip. The isolate
+  // tactical model needs this: once the clip is on, ring samples outside the
+  // footprint hit the re-shown globe (ellipsoid 0), not the sunken streets.
+  private targetBasePromise: Promise<number> = Promise.resolve(0)
 
   constructor(viewer: Cesium.Viewer) {
     this.viewer = viewer
@@ -86,6 +90,11 @@ export class FootprintLayer {
   setVisible(show: boolean): void {
     this.visible = show
     this.applyVisibility()
+  }
+
+  /** Street-level height under the current target (resolves with the in-flight render). */
+  targetBase(): Promise<number> {
+    return this.targetBasePromise
   }
 
   /** Fire Bldg chip: the orange target box on its own switch. */
@@ -151,7 +160,10 @@ export class FootprintLayer {
     // Base the target's box at true street level so low-rise highlights hug
     // the building instead of floating (geoid offset on photorealistic tiles).
     const target = targetBin !== undefined ? feats.find((f) => f.bin === targetBin) : undefined
-    const base = target ? await this.sampleGroundBase(target) : 0
+    // Kick the sample and publish the promise synchronously — callers that
+    // fire right after a void render() (isolate self-heal) await the same one.
+    this.targetBasePromise = target ? this.sampleGroundBase(target) : Promise.resolve(0)
+    const base = await this.targetBasePromise
     if (seq !== this.renderSeq) return // superseded by a newer render/clear
 
     for (const f of feats) {

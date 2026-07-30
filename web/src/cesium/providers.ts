@@ -15,6 +15,13 @@ export interface SceneHandle {
 }
 
 /**
+ * Operating envelope: NYC city limits (lon −74.26..−73.70, lat 40.48..40.92)
+ * padded by 50 miles — the map is cropped to this. The camera can't leave it,
+ * and the globe neither renders nor downloads imagery outside it.
+ */
+export const OPS_AREA = Cesium.Rectangle.fromDegrees(-75.22, 39.74, -72.74, 41.65)
+
+/**
  * Provider selection per CLAUDE.md constraint 2 — one function, no code edits to swap:
  *   GOOGLE_MAPS_API_KEY present  -> Google Photorealistic 3D Tiles
  *   CESIUM_ION_TOKEN present     -> Cesium World Terrain + OSM Buildings
@@ -54,6 +61,9 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
   scene.backgroundColor = Cesium.Color.fromCssColorString('#0a0e14')
   scene.globe.baseColor = Cesium.Color.fromCssColorString('#0d1420')
   scene.globe.enableLighting = false
+  // Crop the world to the ops envelope — imagery tiles beyond NYC+50mi are
+  // never requested, so there's simply less map to download.
+  scene.globe.cartographicLimitRectangle = OPS_AREA
   if (scene.skyBox) scene.skyBox.show = false
   if (scene.sun) scene.sun.show = false
   if (scene.moon) scene.moon.show = false
@@ -149,13 +159,12 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
   Cesium.RequestScheduler.requestsByServer['tile.googleapis.com:443'] = 18
   Cesium.RequestScheduler.requestsByServer['tile.openstreetmap.org:443'] = 12
 
-  // Operating envelope: NYC + the tri-state approaches (~30 mi past the city
-  // line for mutual-aid work). The camera can't wander outside it, and zoom is
-  // bounded so the operator can neither fly to space nor clip through streets.
-  const OPS_AREA = Cesium.Rectangle.fromDegrees(-75.5, 39.9, -72.4, 41.65)
+  // Camera stays inside the ops envelope, and zoom is bounded so the operator
+  // can neither fly to space nor clip through streets. 200 km still frames the
+  // whole NYC+50mi rectangle in one view.
   const controller = scene.screenSpaceCameraController
   controller.minimumZoomDistance = 40
-  controller.maximumZoomDistance = 450_000
+  controller.maximumZoomDistance = 200_000
   viewer.camera.moveEnd.addEventListener(() => {
     const pos = viewer.camera.positionCartographic
     const lat = Cesium.Math.toDegrees(pos.latitude)
@@ -168,7 +177,7 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     const clampedLon = Math.min(Math.max(lon, west), east)
     if (clampedLat !== lat || clampedLon !== lon) {
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(clampedLon, clampedLat, Math.min(pos.height, 450_000)),
+        destination: Cesium.Cartesian3.fromDegrees(clampedLon, clampedLat, Math.min(pos.height, 200_000)),
         orientation: {
           heading: viewer.camera.heading,
           pitch: viewer.camera.pitch,

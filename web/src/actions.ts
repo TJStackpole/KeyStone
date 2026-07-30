@@ -10,7 +10,7 @@ import {
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
-import { flyToTactical } from './cesium/providers'
+import { flyToTactical, OPS_AREA } from './cesium/providers'
 import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
 import {
   getBoundaryLayer,
@@ -22,6 +22,7 @@ import {
   getScene,
   getShapeLayer,
   getStreetLayer,
+  getTacticalLayer,
   getTrafficLayer,
   getUnitLayer,
 } from './cesium/scene'
@@ -188,9 +189,13 @@ function boostIsolateVisuals(on: boolean): void {
   const tileset = scene.buildingTileset
   if (on) {
     if (tileset) {
-      tileset.maximumScreenSpaceError = 2 // ultra refinement — one building only
+      // Sharp but convergent: the clip hides everything outside the footprint
+      // yet Cesium still STREAMS those tiles — at SSE 2 with foveation off the
+      // whole (invisible) city refines at ultra detail and the building starves
+      // in the request queue. SSE 4 + default foveation keeps the centered
+      // building razor sharp while the periphery loads coarse.
+      tileset.maximumScreenSpaceError = 4
       tileset.dynamicScreenSpaceError = false // no distance falloff for a lone target
-      tileset.foveatedScreenSpaceError = false // sharpen screen edges too
       tileset.cacheBytes = 1024 * 1024 * 1024
     }
     // Render at native device pixels (Cesium defaults to CSS pixels — soft on
@@ -290,6 +295,58 @@ function applyIsolate(on: boolean): void {
   if (lastFootprints && scene.extrudeFootprints) {
     void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, !on)
   }
+  // The orange target box stays at street level while the building lifts —
+  // in isolate it just reads as a slab under the model, so park it. The Fire
+  // Bldg chip's setting comes back on exit.
+  getFootprintLayer()?.setTargetVisible(on ? false : getAppState().layerToggles.targetbox)
+  // Tactical schematic: floor grid, fire floor, entrances — what crews walk into.
+  void applyTacticalModel(on)
+}
+
+let tacticalSeq = 0
+
+/**
+ * Build (or clear) the ISOLATE tactical schematic wrapped on the isolated
+ * building: a floor ring per storey, the fire floor flagged, and entrance /
+ * estimated-egress marks. Floor data prefers the live dispatch, then PLUTO.
+ */
+async function applyTacticalModel(on: boolean): Promise<void> {
+  const tactical = getTacticalLayer()
+  if (!tactical) return
+  const seq = ++tacticalSeq
+  if (!on) {
+    tactical.clear()
+    return
+  }
+  const inc = getAppState().incident
+  const target = lastFootprints?.feats.find((f) => f.bin === lastFootprints?.targetBin)
+  if (!inc || !target) return
+  // Street level was sampled pre-clip by the footprint render — reuse it; a
+  // fresh sample now would hit the isolate ground plane at the wrong height.
+  const base = (await getFootprintLayer()?.targetBase()) ?? 0
+  const now = getAppState()
+  if (seq !== tacticalSeq || !now.isolateMode || now.incident?.id !== inc.id) return
+  let floors: number | undefined
+  let fireFloor: number | undefined
+  for (let i = now.timeline.length - 1; i >= 0; i--) {
+    const ev = now.timeline[i]
+    if (ev.kind === 'sim.dispatched') {
+      const p = (ev.payload ?? {}) as { fireFloor?: number; floors?: number }
+      floors = p.floors
+      fireFloor = p.fireFloor
+      break
+    }
+  }
+  const heightM = now.targetHeightM ?? target.heightM
+  floors = floors ?? now.intel.pluto?.numFloors ?? Math.max(1, Math.round(heightM / 3.2))
+  tactical.show(target, {
+    base,
+    lift: now.isolateLiftM,
+    heightM,
+    floors,
+    fireFloor,
+    address: { lat: inc.lat, lon: inc.lon },
+  })
 }
 
 /** Shared teardown: ACTIVE INCIDENT off, new incident, or END all clear isolate. */
@@ -619,6 +676,7 @@ export function clearLocalIncident(): void {
   getStreetLayer()?.clear()
   getExposureLayer()?.clear()
   getTrafficLayer()?.clear()
+  getTacticalLayer()?.clear()
   getFocusLayer()?.apply(null, false)
   if (getAppState().groundViewActive) exitGround()
 }
@@ -629,6 +687,40 @@ export function rotateSelectedApparatus(deltaDeg: number): void {
   const shape = s.selectedShapeId ? s.shapes[s.selectedShapeId] : null
   if (!shape || shape.kind !== 'apparatus') return
   void saveShape({ ...shape, heading: (shape.heading + deltaDeg + 360) % 360 })
+}
+
+/** The establishing shot the app opens on — HOME falls back to it. */
+const HOME_VIEW = { lon: -74.0085, lat: 40.6875, height: 2800, pitchDeg: -35 }
+
+/**
+ * HOME: fly back to where you started — the operator's own position when the
+ * browser grants geolocation and it's inside the ops envelope, otherwise the
+ * city-center establishing shot the app opens on.
+ */
+export function goHome(): void {
+  const scene = getScene()
+  if (!scene) return
+  if (getAppState().groundViewActive) exitGround()
+  const fly = (lon: number, lat: number) => {
+    scene.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, HOME_VIEW.height),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(HOME_VIEW.pitchDeg), roll: 0 },
+      duration: 1.8,
+    })
+  }
+  if (!navigator.geolocation) {
+    fly(HOME_VIEW.lon, HOME_VIEW.lat)
+    return
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords
+      const inside = Cesium.Rectangle.contains(OPS_AREA, Cesium.Cartographic.fromDegrees(longitude, latitude))
+      fly(inside ? longitude : HOME_VIEW.lon, inside ? latitude : HOME_VIEW.lat)
+    },
+    () => fly(HOME_VIEW.lon, HOME_VIEW.lat), // denied / unavailable / timed out
+    { timeout: 2000, maximumAge: 300_000 },
+  )
 }
 
 /** Compass click: swing the camera back to north, rotating about the view center. */

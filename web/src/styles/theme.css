@@ -692,6 +692,21 @@ html, body {
 .compass:hover { border-color: var(--cyan); }
 .compass svg { width: 100%; height: 100%; transition: transform 120ms linear; }
 
+.home-btn {
+  position: absolute;
+  left: 14px;
+  bottom: 176px; /* directly under the compass */
+  width: 46px;
+  height: 46px;
+  padding: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 40;
+  border: 1px solid var(--border);
+}
+.home-btn:hover { border-color: var(--cyan); }
+.home-btn svg { width: 100%; height: 100%; }
+
 .staging-picker {
   position: absolute;
   bottom: 252px;

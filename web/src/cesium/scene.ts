@@ -8,6 +8,7 @@ import { ExposureLayer } from './exposures'
 import { IntelMarkerLayer } from './intelMarkers'
 import { ShapeLayer } from './shapes'
 import { StreetLabelLayer } from './streets'
+import { TacticalModelLayer } from './tactical'
 import { TrafficLayer } from './traffic'
 import { UnitLayer } from './units'
 
@@ -26,6 +27,7 @@ let focusLayer: FocusLayer | null = null
 let streetLayer: StreetLabelLayer | null = null
 let exposureLayer: ExposureLayer | null = null
 let trafficLayer: TrafficLayer | null = null
+let tacticalLayer: TacticalModelLayer | null = null
 
 export function registerScene(h: SceneHandle): void {
   handle = h
@@ -39,6 +41,7 @@ export function registerScene(h: SceneHandle): void {
   streetLayer = new StreetLabelLayer(h.viewer)
   exposureLayer = new ExposureLayer(h.viewer)
   trafficLayer = new TrafficLayer(h.viewer)
+  tacticalLayer = new TacticalModelLayer(h.viewer)
   if (import.meta.env.DEV) {
     // Debug handles for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
@@ -60,6 +63,7 @@ export function unregisterScene(): void {
   streetLayer = null
   exposureLayer = null
   trafficLayer = null
+  tacticalLayer = null
 }
 
 export function getTrafficLayer(): TrafficLayer | null {
@@ -104,4 +108,8 @@ export function getScene(): SceneHandle | null {
 
 export function getFootprintLayer(): FootprintLayer | null {
   return footprintLayer
+}
+
+export function getTacticalLayer(): TacticalModelLayer | null {
+  return tacticalLayer
 }
