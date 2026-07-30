@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { runDemoScenario } from '../actions'
+import { runDemoScenario, toggleActiveIncidentMode } from '../actions'
 import { setAppState, useAppState } from '../state/store'
 import { SearchBar } from './SearchBar'
 
@@ -38,7 +38,7 @@ const LAYER_LABEL: Record<string, string> = {
 }
 
 export function TopBar() {
-  const { providerMode, layers, takConnected, utilityTab } = useAppState()
+  const { providerMode, layers, takConnected, utilityTab, incident, activeIncidentMode } = useAppState()
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
@@ -67,6 +67,15 @@ export function TopBar() {
           <span className="chip warn">
             <span className="dot" /> TAK OFFLINE
           </span>
+        )}
+        {incident && (
+          <button
+            className={`chip chip-btn amber${activeIncidentMode ? ' active' : ''}`}
+            onClick={toggleActiveIncidentMode}
+            title="Refine the fire building; de-emphasize beyond ~4 blocks"
+          >
+            <span className="dot" /> ACTIVE INCIDENT
+          </button>
         )}
         <button
           className={`chip chip-btn${utilityTab === 'sitrep' ? ' active' : ''}`}

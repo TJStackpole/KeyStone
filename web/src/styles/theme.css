@@ -583,6 +583,13 @@ html, body {
 .chip-btn { cursor: pointer; background: rgba(7, 12, 20, 0.6); transition: all 120ms; }
 .chip-btn:hover { border-color: var(--border-strong); color: var(--cyan); }
 .chip-btn.active { border-color: var(--border-strong); color: var(--cyan); background: rgba(34, 211, 238, 0.1); }
+.chip-btn.amber.active {
+  border-color: rgba(245, 158, 11, 0.65);
+  color: var(--amber-bright);
+  background: rgba(245, 158, 11, 0.12);
+  box-shadow: var(--glow-amber);
+}
+.chip-btn.amber.active .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
 
 .panel-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
 .panel-head .card-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; }

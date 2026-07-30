@@ -50,6 +50,8 @@ export interface AppState {
   timeline: TimelineEvent[]
   /** Height of the incident building's footprint (drives the collapse-zone tool). */
   targetHeightM: number | null
+  /** ACTIVE INCIDENT focus: refine the fire building, de-emphasize >4 blocks. */
+  activeIncidentMode: boolean
 }
 
 const initial: AppState = {
@@ -96,6 +98,7 @@ const initial: AppState = {
   replay: { active: false, playing: false, t: 0, duration: 0 },
   timeline: [],
   targetHeightM: null,
+  activeIncidentMode: true,
 }
 
 let state: AppState = initial

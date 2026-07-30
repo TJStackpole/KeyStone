@@ -10,6 +10,8 @@ export interface SceneHandle {
    * of those would z-fight, so we only draw the target-highlight outline there.
    */
   extrudeFootprints: boolean
+  /** The 3D-buildings tileset when one exists (Google / OSM Buildings). */
+  buildingTileset?: Cesium.Cesium3DTileset
 }
 
 /**
@@ -64,6 +66,18 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
   // Double-click zoom-to-entity fights the tactical camera; remove it.
   viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
 
+  // Operator-friendly camera mapping: left-drag pans, wheel/pinch zooms, and
+  // RIGHT-DRAG ROTATES/TILTS the map (Cesium's default right-drag zoom is
+  // redundant with the wheel and leaves no obvious rotate on trackpads).
+  const scc = scene.screenSpaceCameraController
+  scc.tiltEventTypes = [
+    Cesium.CameraEventType.RIGHT_DRAG,
+    Cesium.CameraEventType.MIDDLE_DRAG,
+    Cesium.CameraEventType.PINCH,
+    { eventType: Cesium.CameraEventType.LEFT_DRAG, modifier: Cesium.KeyboardEventModifier.CTRL },
+  ]
+  scc.zoomEventTypes = [Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH]
+
   // Background/embedded contexts can suspend requestAnimationFrame, which freezes
   // Cesium's render loop (and with it imagery/tile streaming). Watchdog: if no
   // frame has rendered since the last tick, drive a frame manually and pump the
@@ -92,10 +106,14 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     lastFrame = frameNumber()
   }, 400)
 
+  let buildingTileset: Cesium.Cesium3DTileset | undefined
+
   if (mode === 'ion') {
     try {
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync()
-      scene.primitives.add(await Cesium.createOsmBuildingsAsync())
+      const osmBuildings = await Cesium.createOsmBuildingsAsync()
+      scene.primitives.add(osmBuildings)
+      buildingTileset = osmBuildings
     } catch (err) {
       console.error('[providers] ion upgrade failed, staying keyless:', err)
       return { viewer, mode: 'keyless', extrudeFootprints: true }
@@ -107,6 +125,7 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
         { showCreditsOnScreen: true },
       )
       scene.primitives.add(tileset)
+      buildingTileset = tileset
     } catch (err) {
       console.error('[providers] Google 3D Tiles failed, staying keyless:', err)
       return { viewer, mode: 'keyless', extrudeFootprints: true }
@@ -149,7 +168,7 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     orientation: { heading: 0, pitch: Cesium.Math.toRadians(-35), roll: 0 },
   })
 
-  return { viewer, mode, extrudeFootprints: mode === 'keyless' }
+  return { viewer, mode, extrudeFootprints: mode === 'keyless', buildingTileset }
 }
 
 /** Oblique tactical fly-to: ~45° pitch from ~400 m, camera standing off south of the target. */

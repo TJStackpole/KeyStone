@@ -5,6 +5,7 @@ import { flyToTactical } from './cesium/providers'
 import {
   getBoundaryLayer,
   getDrawController,
+  getFocusLayer,
   getFootprintLayer,
   getIntelLayer,
   getScene,
@@ -43,6 +44,9 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   void loadFootprints(incident)
   void loadSiteIntel(incident)
   void persistIncident(incident)
+
+  // ACTIVE INCIDENT focus: sharpen the fire building, de-emphasize >4 blocks.
+  getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
 
   // Fresh incident, fresh overlay: clear local shapes and suggest the initial
   // 75 m hot zone (server-side shape list was reset by the incident POST).
@@ -120,9 +124,17 @@ export async function restoreIncident(): Promise<void> {
     if (scene) flyToTactical(scene.viewer, body.incident.lat, body.incident.lon)
     void loadFootprints(body.incident)
     void loadSiteIntel(body.incident)
+    getFocusLayer()?.apply(body.incident, getAppState().activeIncidentMode)
   } catch {
     // Server not up yet — fine, the operator can still search.
   }
+}
+
+/** ACTIVE INCIDENT chip: toggle the focus treatment on/off. */
+export function toggleActiveIncidentMode(): void {
+  const next = !getAppState().activeIncidentMode
+  setAppState({ activeIncidentMode: next })
+  getFocusLayer()?.apply(getAppState().incident, next)
 }
 
 // ---------------------------------------------------------------------------
