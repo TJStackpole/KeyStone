@@ -10,7 +10,7 @@ import {
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
-import { flyToTactical, OPS_AREA } from './cesium/providers'
+import { flyToTactical, OPS_AREA, TILE_CACHE_BYTES } from './cesium/providers'
 import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
 import {
   getBoundaryLayer,
@@ -80,7 +80,18 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // reset by the incident POST). Zones are drawn manually by the chief — no
   // auto-suggested perimeter. targetHeightM resets too — a stale height would
   // mis-size the collapse tool until the new footprints load.
-  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null, targetHeightM: null, inspected: null })
+  // The timeline reset also drops the OLD incident's sim.dispatched events —
+  // otherwise the new building's schematic/floors panels inherit a stale fire
+  // floor. stagingPick likewise: a reserved callsign from the old response.
+  setAppState({
+    shapes: {},
+    selectedShapeId: null,
+    drawTool: null,
+    targetHeightM: null,
+    inspected: null,
+    timeline: [],
+    stagingPick: 'auto',
+  })
   getShapeLayer()?.clear()
 }
 
@@ -157,9 +168,14 @@ export function toggleIsolateMode(): void {
   // Street-level camera and isolate framing don't mix — leave ground view
   // first so zoom/collision controller settings restore properly.
   if (on && getAppState().groundViewActive) exitGround()
+  // Same for top-down: exit it so its saved camera restore point and (keyless)
+  // Esri overlay don't linger under the isolate framing.
+  if (on && getAppState().viewMode === 'topdown') {
+    setAppState({ viewMode: '3d' })
+    void setTopDown(scene, false)
+  }
   setAppState({ isolateMode: on })
-  applyIsolate(on)
-  if (on) frameIsolatedBuilding()
+  applyIsolate(on, { frame: on })
 }
 
 if (import.meta.env.DEV) {
@@ -204,7 +220,10 @@ function boostIsolateVisuals(on: boolean): void {
   } else {
     if (tileset) {
       tileset.foveatedScreenSpaceError = true // Cesium default
-      tileset.cacheBytes = 512 * 1024 * 1024 // Cesium default
+      tileset.dynamicScreenSpaceError = true // Cesium default (focus may re-tune below)
+      // The app's own tuned cache size, not the Cesium default — restoring
+      // 512 MB here silently shrank the tile cache for the rest of the session.
+      tileset.cacheBytes = TILE_CACHE_BYTES
     }
     viewer.useBrowserRecommendedResolution = true
     // FocusLayer owns SSE outside isolate — reassert its current policy.
@@ -213,31 +232,35 @@ function boostIsolateVisuals(on: boolean): void {
   }
 }
 
-/** Frame the isolated building at size-up distance, facade filling the view. */
-function frameIsolatedBuilding(): void {
+/**
+ * Frame the isolated building at size-up distance, facade filling the view.
+ * `base` is the PRE-CLIP street level — a fresh sample here would hit the
+ * lifted building's roof (inside the footprint) or the re-shown globe.
+ */
+function frameIsolatedBuilding(base: number): void {
   const scene = getScene()
   const inc = getAppState().incident
   if (!scene || !inc) return
   const h = getAppState().targetHeightM ?? 30
-  const lift = isolateLiftM()
+  // The lift actually applied (0 in keyless — no tileset to translate).
+  const lift = getAppState().isolateLiftM
   const target = lastFootprints?.feats.find((f) => f.bin === lastFootprints?.targetBin)
-  // Horizontal extent from the footprint bbox (fallback: assume a rowhouse).
+  // Horizontal extent from the bbox of EVERY part (fallback: a rowhouse).
   let extentM = 30
-  const outer = target?.polygons[0]?.[0]
-  if (outer?.length) {
-    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
-    for (const [lon, lat] of outer) {
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
+  for (const poly of target?.polygons ?? []) {
+    for (const [lon, lat] of poly[0] ?? []) {
       minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon)
       minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat)
     }
+  }
+  if (Number.isFinite(minLon)) {
     extentM = Math.max(
       (maxLat - minLat) * 111_320,
       (maxLon - minLon) * 111_320 * Math.cos((inc.lat * Math.PI) / 180),
       15,
     )
   }
-  const groundHae = scene.viewer.scene.sampleHeight?.(Cesium.Cartographic.fromDegrees(inc.lon, inc.lat))
-  const base = Number.isFinite(groundHae) ? (groundHae as number) : -30
   const center = Cesium.Cartesian3.fromDegrees(inc.lon, inc.lat, base + lift + h / 2)
   const radius = Math.max(extentM / 2, h / 2) + 12
   scene.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, radius), {
@@ -246,14 +269,51 @@ function frameIsolatedBuilding(): void {
   })
 }
 
-function applyIsolate(on: boolean): void {
+let isolateApplySeq = 0
+
+/**
+ * The ON path is async: it waits for the pre-clip street-level sample before
+ * touching the scene, because mutating clip/lift/globe first would make the
+ * still-pending ring samples resolve against the re-shown globe (~0 HAE)
+ * instead of the sunken photorealistic streets (~-30 m) — floating box and
+ * schematic. The OFF path stays synchronous (incident teardowns rely on it).
+ */
+function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
   const scene = getScene()
   if (!scene) return
+  const seq = ++isolateApplySeq
   const tileset = scene.buildingTileset
-  if (tileset) {
-    if (on && lastFootprints?.targetBin) {
-      const target = lastFootprints.feats.find((f) => f.bin === lastFootprints?.targetBin)
-      const polygons = (target?.polygons ?? []).map(
+
+  if (!on) {
+    if (tileset) {
+      tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
+      tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
+      if (scene.mode === 'google') scene.viewer.scene.globe.show = false
+    }
+    setAppState({ isolateLiftM: 0 })
+    applyUnitVisibility()
+    boostIsolateVisuals(false)
+    // Keyless: bring the neighbor extrusions back.
+    if (lastFootprints && scene.extrudeFootprints) {
+      void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, true)
+    }
+    getFootprintLayer()?.setTargetVisible(getAppState().layerToggles.targetbox)
+    void applyTacticalModel(false)
+    return
+  }
+
+  void (async () => {
+    const incId = getAppState().incident?.id
+    const base = (await getFootprintLayer()?.targetBase()) ?? (scene.mode === 'google' ? -30 : 0)
+    // Stale-guards: isolate may have toggled off, re-toggled, or the incident
+    // may have changed while the sample was in flight.
+    const s = getAppState()
+    if (seq !== isolateApplySeq || !s.isolateMode || s.incident?.id !== incId) return
+    if (!lastFootprints?.targetBin || lastFootprints.incidentId !== incId) return
+    const target = lastFootprints.feats.find((f) => f.bin === lastFootprints?.targetBin)
+
+    if (tileset && target) {
+      const polygons = target.polygons.map(
         (poly) =>
           new Cesium.ClippingPolygon({
             positions: Cesium.Cartesian3.fromDegreesArray(poly[0].flat()),
@@ -264,7 +324,7 @@ function applyIsolate(on: boolean): void {
         // Raise the lone building above the flattened city: translate the
         // (fully clipped) tileset along the local up vector. Only the target
         // survives the clip, so only it visibly lifts.
-        const inc = getAppState().incident
+        const inc = s.incident
         if (inc) {
           const up = Cesium.Cartesian3.normalize(
             Cesium.Cartesian3.fromDegrees(inc.lon, inc.lat),
@@ -279,28 +339,24 @@ function applyIsolate(on: boolean): void {
         // needs it back as the flattened-map ground under the lone building.
         scene.viewer.scene.globe.show = true
       }
-    } else {
-      tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
-      tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
-      setAppState({ isolateLiftM: 0 })
-      if (scene.mode === 'google') scene.viewer.scene.globe.show = false
     }
-  }
-  // Re-place interior members at their (possibly lifted) heights.
-  applyUnitVisibility()
-  // Size-up-quality imagery while isolated; restores itself (and the focus
-  // layer's SSE policy) on the way out.
-  boostIsolateVisuals(on)
-  // Keyless: the neighbors are our own extrusions — just stop drawing them.
-  if (lastFootprints && scene.extrudeFootprints) {
-    void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, !on)
-  }
-  // The orange target box stays at street level while the building lifts —
-  // in isolate it just reads as a slab under the model, so park it. The Fire
-  // Bldg chip's setting comes back on exit.
-  getFootprintLayer()?.setTargetVisible(on ? false : getAppState().layerToggles.targetbox)
-  // Tactical schematic: floor grid, fire floor, entrances — what crews walk into.
-  void applyTacticalModel(on)
+    // Re-place interior members at their (possibly lifted) heights.
+    applyUnitVisibility()
+    // Size-up-quality imagery while isolated; restores itself (and the focus
+    // layer's SSE policy) on the way out.
+    boostIsolateVisuals(true)
+    // Keyless: the neighbors are our own extrusions — just stop drawing them.
+    if (scene.extrudeFootprints) {
+      void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, false)
+    }
+    // Park the street-level orange box ONLY when a real tileset still shows
+    // the building — in keyless mode the extruded box IS the building, so it
+    // must stand alone (the Fire Bldg chip keeps controlling it there).
+    getFootprintLayer()?.setTargetVisible(scene.extrudeFootprints ? getAppState().layerToggles.targetbox : false)
+    // Tactical schematic: floor grid, fire floor, entrances — what crews walk into.
+    void applyTacticalModel(true)
+    if (opts.frame) frameIsolatedBuilding(base)
+  })()
 }
 
 let tacticalSeq = 0
@@ -331,7 +387,10 @@ async function applyTacticalModel(on: boolean): Promise<void> {
   for (let i = now.timeline.length - 1; i >= 0; i--) {
     const ev = now.timeline[i]
     if (ev.kind === 'sim.dispatched') {
-      const p = (ev.payload ?? {}) as { fireFloor?: number; floors?: number }
+      const p = (ev.payload ?? {}) as { fireFloor?: number; floors?: number; incidentId?: string }
+      // Belt-and-suspenders with the timeline resets: never let another
+      // incident's dispatch paint a fabricated fire floor on this building.
+      if (p.incidentId !== inc.id) break
       floors = p.floors
       fireFloor = p.fireFloor
       break
@@ -539,7 +598,13 @@ export function toggleLayer(layer: ToggleLayerId): void {
   const next = !getAppState().layerToggles[layer]
   setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: next } }))
   if (layer === 'footprints') getFootprintLayer()?.setVisible(next)
-  if (layer === 'targetbox') getFootprintLayer()?.setTargetVisible(next)
+  if (layer === 'targetbox') {
+    // While a LIFTED isolate is active the box stays parked — it would sit
+    // 35-80 m below the levitated building as a detached slab. Keyless isolate
+    // has no lift and the box IS the building, so the chip keeps working there.
+    const s = getAppState()
+    getFootprintLayer()?.setTargetVisible(next && !(s.isolateMode && s.isolateLiftM > 0))
+  }
   if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next)
   if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next)
   if (layer === 'streets') getStreetLayer()?.setVisible(next)
@@ -574,6 +639,10 @@ export function adoptIncident(incident: Incident): void {
     targetHeightM: null,
     inspected: null,
     streetViewOpen: false,
+    // The old incident's dispatch events must not feed the new building's
+    // schematic/floors panels (a fabricated fire floor on a stakeholder demo).
+    timeline: [],
+    stagingPick: 'auto', // a reserved callsign from the old response is stale
   })
   getShapeLayer()?.clear()
   const scene = getScene()
@@ -616,6 +685,8 @@ export const playScenario = (): Promise<void> => scenarioPost('play')
 export const pauseScenario = (): Promise<void> => scenarioPost('pause')
 export const setScenarioSpeed = (x: number): Promise<void> => scenarioPost('speed', { x })
 export const jumpScenarioChapter = (id: string): Promise<void> => scenarioPost('chapter', { id })
+/** Progress-bar scrub: seek to an arbitrary scenario second (fwd or back). */
+export const seekScenario = (t: number): Promise<void> => scenarioPost('seek', { t })
 
 export async function stopScenario(): Promise<void> {
   await scenarioPost('stop')
@@ -668,6 +739,7 @@ export function clearLocalIncident(): void {
     units: {},
     intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
     timeline: [],
+    stagingPick: 'auto',
   })
   getShapeLayer()?.clear()
   getUnitLayer()?.clear()
@@ -697,11 +769,27 @@ const HOME_VIEW = { lon: -74.0085, lat: 40.6875, height: 2800, pitchDeg: -35 }
  * browser grants geolocation and it's inside the ops envelope, otherwise the
  * city-center establishing shot the app opens on.
  */
+let goHomeSeq = 0
+
 export function goHome(): void {
   const scene = getScene()
   if (!scene) return
+  const seq = ++goHomeSeq
   if (getAppState().groundViewActive) exitGround()
+  if (getAppState().viewMode === 'topdown') {
+    // Leave top-down properly (Esri overlay + saved camera), but don't let its
+    // restore flight run while we may be waiting on geolocation.
+    setAppState({ viewMode: '3d' })
+    void setTopDown(scene, false)
+    scene.viewer.camera.cancelFlight()
+  }
+  const clickIncident = getAppState().incident?.id
   const fly = (lon: number, lat: number) => {
+    // The geolocation callbacks can fire MINUTES later (the permission prompt
+    // pauses the timeout clock) — never hijack a torn-down viewer, a newer
+    // HOME click, or a board whose incident changed since the click.
+    if (scene.viewer.isDestroyed() || getScene() !== scene) return
+    if (seq !== goHomeSeq || getAppState().incident?.id !== clickIncident) return
     scene.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, HOME_VIEW.height),
       orientation: { heading: 0, pitch: Cesium.Math.toRadians(HOME_VIEW.pitchDeg), roll: 0 },
@@ -728,11 +816,25 @@ export function reorientNorth(): void {
   const scene = getScene()
   if (!scene) return
   const viewer = scene.viewer
+  // Ground view: spin to north IN PLACE. The street camera sits below the
+  // ellipsoid in google mode, where pickEllipsoid returns the ray's exit
+  // point — flying to it would yank the operator out of ground view while
+  // its controller settings (collision off, 2 m zoom floor) stay armed.
+  if (getAppState().groundViewActive) {
+    viewer.camera.setView({
+      destination: viewer.camera.position.clone(),
+      orientation: { heading: 0, pitch: viewer.camera.pitch, roll: 0 },
+    })
+    return
+  }
   const canvas = viewer.scene.canvas
-  const center = viewer.camera.pickEllipsoid(
-    new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
-    viewer.scene.globe.ellipsoid,
-  )
+  const belowEllipsoid = viewer.camera.positionCartographic.height < 0
+  const center = belowEllipsoid
+    ? undefined
+    : viewer.camera.pickEllipsoid(
+        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        viewer.scene.globe.ellipsoid,
+      )
   const pitch = Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-10))
   if (center) {
     const range = Cesium.Cartesian3.distance(viewer.camera.position, center)

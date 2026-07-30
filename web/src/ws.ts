@@ -61,6 +61,10 @@ interface TranscriptMsg {
   channel: CommsChannel
   line: TranscriptLine
 }
+interface TranscriptResetMsg {
+  type: 'transcript.reset'
+  channels: CommsChannel[]
+}
 interface ScenarioStatusMsg {
   type: 'scenario.status'
   scenario: ScenarioStatus
@@ -91,6 +95,7 @@ type ServerMsg =
   | ShapeRemoveMsg
   | TimelineMsg
   | TranscriptMsg
+  | TranscriptResetMsg
   | ScenarioStatusMsg
   | AlertMsg
   | ExposureMsg
@@ -132,7 +137,16 @@ export function connectWs(): void {
 // streams (transcript/chat/tak.status), live emergencies (alert), drill state
 // (scenario.status), incident lifecycle, and the reconnect snapshot (handled
 // replay-aware below).
-const REPLAY_SAFE = new Set(['transcript', 'tak.status', 'incident', 'alert', 'scenario.status', 'chat', 'snapshot'])
+const REPLAY_SAFE = new Set([
+  'transcript',
+  'transcript.reset',
+  'tak.status',
+  'incident',
+  'alert',
+  'scenario.status',
+  'chat',
+  'snapshot',
+])
 
 function handle(msg: ServerMsg): void {
   if (getAppState().replay.active && !REPLAY_SAFE.has(msg.type)) return
@@ -145,8 +159,18 @@ function handle(msg: ServerMsg): void {
       if (!msg.incident && local) clearLocalIncident()
       else if (msg.incident && msg.incident.id !== local?.id) adoptIncident(msg.incident)
       else if (msg.incident) setAppState({ incident: msg.incident })
-      // Drill transport state rides the snapshot too (server restarts).
-      setAppState({ scenario: msg.scenario?.loaded ? msg.scenario : null })
+      // Drill transport state rides the snapshot too (server restarts). A
+      // station that missed the drill's end must also drop the merged comms
+      // view and any scenario-only channel whose tab no longer exists.
+      const scenarioLoaded = !!msg.scenario?.loaded
+      setAppState((s) => ({
+        scenario: scenarioLoaded ? (msg.scenario ?? null) : null,
+        ...(!scenarioLoaded && s.commsAll ? { commsAll: false } : {}),
+        ...(!scenarioLoaded &&
+        (s.commsChannel.includes('-') || s.commsChannel === 'papd' || s.commsChannel === 'interagency')
+          ? { commsChannel: 'fdny' as const }
+          : {}),
+      }))
       // During replay, stop here: the globe/timeline belong to the replay
       // engine; resyncLive() rebuilds them from the server on exit.
       if (getAppState().replay.active) break
@@ -207,9 +231,11 @@ function handle(msg: ServerMsg): void {
       setAppState((s) => ({
         scenario: loaded ? msg.scenario : null,
         // A drill ending must not leave the comms panel on a scenario-only
-        // channel that no longer has a tab.
+        // channel that no longer has a tab — nor stuck in the merged ALL view
+        // (commsAll with a live channel selected highlights no tab at all).
+        ...(!loaded && s.commsAll ? { commsAll: false } : {}),
         ...(!loaded && (s.commsChannel.includes('-') || s.commsChannel === 'papd' || s.commsChannel === 'interagency')
-          ? { commsChannel: 'fdny' as const, commsAll: false }
+          ? { commsChannel: 'fdny' as const }
           : {}),
       }))
       break
@@ -265,14 +291,25 @@ function handle(msg: ServerMsg): void {
         setAppState((s) => ({ timeline: [...s.timeline, msg.event].slice(-600) }))
       }
       break
+    case 'transcript.reset': {
+      // Server-authoritative clear of the drill channels (scenario load, stop,
+      // or a backward seek about to re-broadcast the history without dupes).
+      setAppState((s) => {
+        const transcripts = { ...s.transcripts }
+        for (const ch of msg.channels) if (ch in transcripts) transcripts[ch] = []
+        return { transcripts }
+      })
+      break
+    }
     case 'transcript': {
       const MAX_LINES = 200
       setAppState((s) => {
         const existing = s.transcripts[msg.channel]
         const last = existing[existing.length - 1]
-        // Identical ts+text can only be transport duplication (e.g. a stacked
-        // dev-reload socket) — a real repeat transmission gets a fresh stamp.
-        if (last && last.ts === msg.line.ts && last.text === msg.line.text) return {}
+        // Transport duplication (e.g. a stacked dev-reload socket): same line
+        // id — or, for id-less lines from an older server, identical ts+text.
+        if (last && ((last.id && last.id === msg.line.id) || (last.ts === msg.line.ts && last.text === msg.line.text)))
+          return {}
         return {
           transcripts: {
             ...s.transcripts,

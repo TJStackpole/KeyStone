@@ -36,8 +36,16 @@ const SWEEP_INTERVAL_MS = 5_000
  *
  * Events: 'unit' (Unit upserted), 'remove' (uid: string)
  */
+/** How long an explicit removal suppresses stale CoT echoes for that uid. */
+const TOMBSTONE_MS = 10_000
+
 export class UnitRegistry extends EventEmitter {
   private units = new Map<string, Unit>()
+  // Explicitly removed uids -> removal time. Sim/drill CoT round-trips through
+  // the real TAK server, so an event written to the socket just before a purge
+  // echoes back milliseconds after it — without a tombstone that echo silently
+  // re-adds the unit and it ghosts until the stale sweep (up to ~10 min).
+  private removedAt = new Map<string, number>()
 
   constructor() {
     super()
@@ -48,12 +56,28 @@ export class UnitRegistry extends EventEmitter {
     return [...this.units.values()]
   }
 
-  /** Explicit removal (scenario resets) — emits 'remove' like a stale sweep. */
-  remove(uid: string): void {
-    if (this.units.delete(uid)) this.emit('remove', uid)
+  get(uid: string): Unit | undefined {
+    return this.units.get(uid)
   }
 
-  upsertFromCot(ev: CotEvent): Unit {
+  /** Explicit removal (scenario resets) — emits 'remove' like a stale sweep. */
+  remove(uid: string): void {
+    if (this.units.delete(uid)) {
+      this.removedAt.set(uid, Date.now())
+      this.emit('remove', uid)
+    }
+  }
+
+  upsertFromCot(ev: CotEvent): Unit | null {
+    const removed = this.removedAt.get(ev.uid)
+    if (removed !== undefined) {
+      // Only events STAMPED AFTER the removal are legitimate respawns
+      // (fresh drill restart, an ATAK phone re-announcing). Undated or
+      // pre-removal events are the in-flight echo — drop them.
+      const stamped = Date.parse(ev.time ?? ev.start ?? '')
+      if (!Number.isFinite(stamped) || stamped <= removed) return null
+      this.removedAt.delete(ev.uid)
+    }
     const existing = this.units.get(ev.uid)
     const callsign = ev.callsign ?? existing?.callsign ?? ev.uid
     const category = categorize(callsign, ev.type, ev.role)
@@ -92,6 +116,9 @@ export class UnitRegistry extends EventEmitter {
         this.emit('remove', uid)
         console.log(`[units] ${unit.callsign} (${uid}) went stale — removed`)
       }
+    }
+    for (const [uid, t] of this.removedAt) {
+      if (now - t > TOMBSTONE_MS) this.removedAt.delete(uid)
     }
   }
 }

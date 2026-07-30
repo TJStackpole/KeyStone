@@ -150,7 +150,10 @@ export function CommsPanel() {
         {isSim && <span className="comms-watermark">SIMULATED</span>}
         {lines.length === 0 && <div className="roster-empty">AWAITING TRAFFIC…</div>}
         {lines.map((l) => (
-          <div key={`${l.ts}|${l.text.slice(0, 40)}`} className="comms-line">
+          // Server-minted line id; the ts|full-text fallback only serves lines
+          // from an id-less server during dev HMR. Same-ms same-prefix lines
+          // are routine (whisper bursts), so truncated text must never key.
+          <div key={l.id ?? `${l.ts}|${l.text}`} className="comms-line">
             <span className="line-ts">{hhmmss(l.ts)}</span>
             <span className="line-text">
               <HighlightedText line={l} />

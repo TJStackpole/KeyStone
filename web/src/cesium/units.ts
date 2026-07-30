@@ -138,6 +138,9 @@ export class UnitLayer {
         interpolationAlgorithm: Cesium.LinearApproximation as unknown as Cesium.InterpolationAlgorithm,
       })
       sampled.addSample(now, position)
+      // Track the creation sample too — otherwise the eviction window can
+      // never dislodge it and it anchors interpolation forever.
+      this.sampleTimes.set(unit.uid, [Cesium.JulianDate.clone(now)])
       entity = this.source.entities.add({
         id,
         position: sampled,

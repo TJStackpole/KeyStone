@@ -1,4 +1,4 @@
-import { jumpScenarioChapter, pauseScenario, playScenario, setScenarioSpeed, stopScenario } from '../actions'
+import { jumpScenarioChapter, pauseScenario, playScenario, seekScenario, setScenarioSpeed, stopScenario } from '../actions'
 import { useAppState } from '../state/store'
 
 function fmtClock(s: number): string {
@@ -27,6 +27,22 @@ export function ScenarioBar() {
         {scenario.playing ? '❚❚' : '▶'}
       </button>
       <span className="scn-clock">{fmtClock(scenario.clock)}</span>
+      {scenario.duration > 0 && (
+        <div
+          className="scn-progress"
+          title="Scrub the drill — click to seek forward or back"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+            void seekScenario(frac * scenario.duration)
+          }}
+        >
+          <div className="scn-progress-fill" style={{ width: `${Math.min(100, (scenario.clock / scenario.duration) * 100)}%` }} />
+          {scenario.chapters.map((c) => (
+            <span key={c.id} className="scn-progress-tick" style={{ left: `${(c.t / scenario.duration) * 100}%` }} />
+          ))}
+        </div>
+      )}
       {[1, 4, 10].map((x) => (
         <button
           key={x}

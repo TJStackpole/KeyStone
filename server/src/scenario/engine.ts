@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -102,6 +103,11 @@ export interface EngineDeps {
 }
 
 const SCENARIO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../assets/scenarios')
+
+/** The drill-only comms channels — reset on load/stop/rewind so a previous
+ * run's (or pre-rewind future) radio traffic can't linger in the panel. */
+const SCENARIO_CHANNELS = ['fdny-tac', 'fdny-cmd', 'ems-cw', 'nypd-sod', 'papd', 'interagency']
+
 const TICK_MS = 500
 const MOVE_TX_INTERVAL_S = 2 // scenario seconds between CoT for a moving unit
 const IDLE_TX_INTERVAL_S = 20
@@ -180,17 +186,29 @@ export class ScenarioEngine extends EventEmitter {
       alarmLevel: '10-75',
     } as Incident
     this.deps.createIncident(inc)
+    this.resetTranscripts() // a previous run's radio log is stale, not history
     this.deps.emitTimeline('scenario.loaded', { name: file.name, drill: file.drill })
     this.pushStatus()
+  }
+
+  /** Tell every dashboard to clear the drill-only comms channels. */
+  private resetTranscripts(): void {
+    this.deps.broadcast({ type: 'transcript.reset', channels: SCENARIO_CHANNELS })
+  }
+
+  private ensureTimer(): void {
+    // The tick's paused branch is the keepalive that stops the stale sweep
+    // from emptying a seeked-but-never-played drill board.
+    if (!this.timer && this.file) {
+      this.timer = setInterval(() => this.tick(), TICK_MS)
+      this.timer.unref()
+    }
   }
 
   play(): void {
     if (!this.file) return
     this.playing = true
-    if (!this.timer) {
-      this.timer = setInterval(() => this.tick(), TICK_MS)
-      this.timer.unref()
-    }
+    this.ensureTimer()
     this.pushStatus()
   }
 
@@ -206,22 +224,38 @@ export class ScenarioEngine extends EventEmitter {
 
   /** Jump to a chapter. Backward jumps replay the scenario from T0 silently. */
   async seekChapter(id: string): Promise<void> {
-    if (!this.file) return
-    const ch = this.file.chapters.find((c) => c.id === id)
+    const ch = this.file?.chapters.find((c) => c.id === id)
     if (!ch) return
-    if (ch.t < this.clock) {
+    this.seekTo(ch.t, ch.title)
+  }
+
+  /** Seek to an arbitrary scenario second (progress-bar scrubbing). */
+  seekTo(t: number, label?: string): void {
+    if (!this.file) return
+    const duration = Math.max(...this.file.events.map((e) => e.t))
+    const target = Math.max(0, Math.min(t, duration))
+    const rewind = target < this.clock
+    if (rewind) {
       const name = this.file.name
       const fileRef = this.file
       this.teardown(true)
       this.file = fileRef
-      this.deps.emitTimeline('scenario.rewind', { name, to: ch.title })
+      // The dashboards already hold everything up to the old clock — clear the
+      // drill channels so the silent replay rebuilds them without duplicates.
+      this.resetTranscripts()
+      this.deps.emitTimeline('scenario.rewind', { name, to: label ?? `T+${Math.round(target)}s` })
     }
-    this.catchUp(ch.t)
+    this.catchUp(target, rewind)
+    // catchUp just transmitted every unit; start the keepalive clock from now
+    // and make sure the tick timer exists even if play was never pressed.
+    this.lastKeepalive = Date.now()
+    this.ensureTimer()
     this.pushStatus()
   }
 
   stop(): void {
     this.teardown()
+    this.resetTranscripts()
     this.pushStatus()
   }
 
@@ -267,11 +301,16 @@ export class ScenarioEngine extends EventEmitter {
     if (this.clock > duration + 10) this.pause()
   }
 
-  /** Fast-forward to `t`, applying every due event instantly. */
-  private catchUp(t: number): void {
+  /**
+   * Fast-forward to `t`, applying every due event instantly. `rewind` marks a
+   * silent replay after a backward seek: every replayed event was ALREADY
+   * recorded on the live pass, so timeline milestones are suppressed (radio
+   * lines still broadcast — the rewind cleared the drill channels first).
+   */
+  private catchUp(t: number, rewind = false): void {
     this.clock = t
     this.pendingAlert = null
-    this.processDue(true)
+    this.processDue(true, rewind)
     this.moveUnits()
     // Net alert state after the seek: an unresolved mayday shows, a resolved
     // (or absent) one clears whatever overlay was up before the jump.
@@ -283,19 +322,22 @@ export class ScenarioEngine extends EventEmitter {
     })
   }
 
-  private processDue(catchUp: boolean): void {
+  private processDue(catchUp: boolean, rewind = false): void {
     if (!this.file) return
     while (this.cursor < this.file.events.length && this.file.events[this.cursor].t <= this.clock) {
       const ev = this.file.events[this.cursor++]
       try {
-        this.apply(ev, catchUp)
+        this.apply(ev, catchUp, rewind)
       } catch (err) {
         console.error('[scenario] event failed:', ev.kind, err)
       }
     }
   }
 
-  private apply(ev: ScenarioEvent, catchUp: boolean): void {
+  private apply(ev: ScenarioEvent, catchUp: boolean, rewind = false): void {
+    // On a rewind replay every event is by construction already in the
+    // persisted timeline — re-emitting would duplicate SITREP milestones.
+    const emitTimeline = rewind ? () => undefined : this.deps.emitTimeline
     switch (ev.kind) {
       case 'unit_spawn': {
         const d = ev.unit!
@@ -331,12 +373,13 @@ export class ScenarioEngine extends EventEmitter {
         if (ev.floor !== undefined) u.floor = ev.floor
         if (ev.bio !== undefined) u.bio = ev.bio
         this.txUnit(u)
-        this.deps.emitTimeline('unit.status', { callsign: u.callsign, status: u.status, drill: true })
+        emitTimeline('unit.status', { callsign: u.callsign, status: u.status, drill: true })
         break
       }
       case 'radio_tx': {
         const text = ev.from ? `${ev.from}: ${ev.text}` : (ev.text ?? '')
         const line: TranscriptLine = {
+          id: `rtx-${randomUUID()}`,
           ts: new Date().toISOString(),
           text,
           keywords: extractKeywords(text),
@@ -365,16 +408,16 @@ export class ScenarioEngine extends EventEmitter {
       }
       case 'alarm_level': {
         this.deps.setAlarm(ev.level!)
-        this.deps.emitTimeline('alarm', { level: ev.level, drill: true })
+        emitTimeline('alarm', { level: ev.level, drill: true })
         break
       }
       case 'exposure': {
         this.deps.broadcast({ type: 'exposure', labels: ev.labels ?? [] })
-        this.deps.emitTimeline('exposures.set', { count: ev.labels?.length ?? 0 })
+        emitTimeline('exposures.set', { count: ev.labels?.length ?? 0 })
         break
       }
       case 'timeline': {
-        this.deps.emitTimeline(ev.event ?? 'scenario.note', { ...(ev.payload ?? {}), drill: true })
+        emitTimeline(ev.event ?? 'scenario.note', { ...(ev.payload ?? {}), drill: true })
         break
       }
       case 'alert': {
@@ -384,7 +427,7 @@ export class ScenarioEngine extends EventEmitter {
         // During a chapter seek, only the FINAL alert state matters — firing
         // every historical mayday live would strobe the full-screen overlay.
         if (!catchUp) this.deps.broadcast({ type: 'alert', alert: this.pendingAlert })
-        this.deps.emitTimeline(`alert.${ev.alert!.kind}`, { callsign: ev.alert?.callsign, text: ev.alert?.text })
+        emitTimeline(`alert.${ev.alert!.kind}`, { callsign: ev.alert?.callsign, text: ev.alert?.text })
         break
       }
       case 'aar': {

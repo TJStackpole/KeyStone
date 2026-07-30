@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { pointInRing } from '../lib/geo'
 import type { Footprint } from './footprints'
 import { crispTextImage } from './streets'
 
@@ -32,8 +33,11 @@ export interface TacticalModelOpts {
   address: { lat: number; lon: number }
 }
 
-/** Closest point on the ring (lon/lat pairs) to `p`, plus that edge's index. */
-function closestOnRing(ring: number[][], p: { lat: number; lon: number }): { lat: number; lon: number; edge: number } {
+/** Closest point on the ring (lon/lat pairs) to `p`, plus that edge's index and squared distance. */
+function closestOnRing(
+  ring: number[][],
+  p: { lat: number; lon: number },
+): { lat: number; lon: number; edge: number; d2: number } {
   const cosLat = Math.cos((p.lat * Math.PI) / 180)
   let best = { lat: ring[0][1], lon: ring[0][0], edge: 0, d2: Infinity }
   for (let i = 0; i < ring.length - 1; i++) {
@@ -64,8 +68,24 @@ export class TacticalModelLayer {
 
   show(target: Footprint, opts: TacticalModelOpts): void {
     this.clear()
-    const outer = target.polygons[0]?.[0]
-    if (!outer || outer.length < 3) return
+    // Multi-part footprints (bridged wings, complexes): the clip isolates
+    // EVERY part, so wrap the part the address actually fronts — the one
+    // containing the geocoded point, else the one with the nearest edge
+    // (PAD points often sit on the sidewalk just outside every ring).
+    const rings = target.polygons.map((poly) => poly[0]).filter((r) => r && r.length >= 3)
+    if (!rings.length) return
+    let outer = rings.find((r) => pointInRing(opts.address.lon, opts.address.lat, r))
+    if (!outer) {
+      let bestD2 = Infinity
+      for (const r of rings) {
+        const c = closestOnRing(r, opts.address)
+        if (c.d2 < bestD2) {
+          bestD2 = c.d2
+          outer = r
+        }
+      }
+    }
+    if (!outer) return
     const last = outer[outer.length - 1]
     const closed = outer[0][0] === last[0] && outer[0][1] === last[1]
     const ring = closed ? outer : [...outer, outer[0]]

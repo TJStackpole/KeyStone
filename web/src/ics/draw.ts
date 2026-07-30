@@ -254,13 +254,20 @@ export class DrawController {
    * line rigs up a street by looking down it.
    */
   private async placeApparatus(pos: { lat: number; lon: number; hae: number }): Promise<void> {
-    const pick = getAppState().stagingPick
+    const s = getAppState()
+    const pick = s.stagingPick
+    // A pick only counts if that unit is still part of the CURRENT response —
+    // teardowns reset it, but validate anyway so a stale reservation can't
+    // label a pad with a unit from a previous incident.
+    const pickValid =
+      pick && pick !== 'auto' && Object.values(s.units).some((u) => u.callsign === pick)
     let callsign = `E-${200 + Math.floor(Math.random() * 90)}`
-    if (pick && pick !== 'auto') {
+    if (pickValid) {
       // Chief chose a specific responding unit from the picker.
       callsign = pick
       setAppState({ stagingPick: 'auto' }) // next placement reverts to next-due
     } else {
+      if (pick !== 'auto') setAppState({ stagingPick: 'auto' }) // disarm the stale pick
       try {
         const res = await fetch('/api/staging/next')
         if (res.ok) callsign = ((await res.json()) as { callsign: string }).callsign

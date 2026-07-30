@@ -22,6 +22,12 @@ export interface SceneHandle {
 export const OPS_AREA = Cesium.Rectangle.fromDegrees(-75.22, 39.74, -72.74, 41.65)
 
 /**
+ * Tile cache for the 3D-buildings tileset (google/ion). One constant so the
+ * isolate boost's restore path can't drift from the creation-time tuning.
+ */
+export const TILE_CACHE_BYTES = 768 * 1024 * 1024
+
+/**
  * Provider selection per CLAUDE.md constraint 2 — one function, no code edits to swap:
  *   GOOGLE_MAPS_API_KEY present  -> Google Photorealistic 3D Tiles
  *   CESIUM_ION_TOKEN present     -> Cesium World Terrain + OSM Buildings
@@ -54,7 +60,21 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     infoBox: false,
     selectionIndicator: false,
     msaaSamples: 4,
+    // Unit markers are SampledPositionProperties evaluated at clock time —
+    // without an animating clock every marker renders pinned at its first
+    // sample forever while trails/roster show the true positions.
+    shouldAnimate: true,
   })
+
+  // Track the wall clock exactly — unit samples are stamped with real time,
+  // so a clock that merely ticks from page-load renders every marker a few
+  // seconds in the past. (Setter also forces shouldAnimate/multiplier.)
+  viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK
+  // The Viewer resets clock.canAnimate every frame to "are all data sources
+  // done building?" — meant for buffered CZML playback. Our constantly-growing
+  // trails/labels keep that false much of the time, which would FREEZE unit
+  // interpolation. We play no time-dynamic data; pin the gate open.
+  Object.defineProperty(viewer.clock, 'canAnimate', { get: () => true, set: () => undefined })
 
   // Tactical console mood: kill the daylight sim, dim the basemap toward the theme.
   const scene = viewer.scene
@@ -122,6 +142,7 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     try {
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync()
       const osmBuildings = await Cesium.createOsmBuildingsAsync()
+      osmBuildings.cacheBytes = TILE_CACHE_BYTES // match the restore path in isolate's boost
       scene.primitives.add(osmBuildings)
       buildingTileset = osmBuildings
     } catch (err) {
@@ -137,7 +158,11 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
       // Stream tiles for the destination DURING camera flights — the address
       // fly-in arrives with imagery already sharpening instead of all-blur.
       tileset.preloadFlightDestinations = true
-      tileset.cacheBytes = 768 * 1024 * 1024
+      // Keep requesting tiles WHILE the camera pans/orbits (default culls them
+      // above a speed threshold) — otherwise every gesture ends in a blur that
+      // only then starts loading. These are immutable CDN tiles; cheap.
+      tileset.cullRequestsWhileMoving = false
+      tileset.cacheBytes = TILE_CACHE_BYTES
       scene.primitives.add(tileset)
       buildingTileset = tileset
       // CRITICAL: hide the ellipsoid globe. Photorealistic streets sit BELOW

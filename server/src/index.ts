@@ -100,7 +100,12 @@ function recordChat(msg: ChatMsg): void {
   if (seenChatIds.has(msg.id)) return
   seenChatIds.add(msg.id)
   chatLog.push(msg)
-  if (chatLog.length > 200) chatLog.shift()
+  if (chatLog.length > 200) {
+    // Keep the dedupe set bounded to the retained window — it only needs to
+    // catch the TAK fan-out echo, which arrives within a round-trip.
+    const evicted = chatLog.shift()
+    if (evicted) seenChatIds.delete(evicted.id)
+  }
   broadcast({ type: 'chat', msg })
 }
 
@@ -157,8 +162,11 @@ const lastTrackSample = new Map<string, { t: number; status?: string }>()
 const pendingUnits = new Map<string, ReturnType<typeof registry.all>[number]>()
 setInterval(() => {
   if (!pendingUnits.size) return
-  broadcast({ type: 'units.batch', units: [...pendingUnits.values()] })
+  // Drop anything removed from the registry since it was queued — belt to the
+  // remove-handler purge (covers bulk purges that bypass the remove event).
+  const live = [...pendingUnits.values()].filter((u) => registry.get(u.uid))
   pendingUnits.clear()
+  if (live.length) broadcast({ type: 'units.batch', units: live })
 }, 200).unref()
 
 registry.on('unit', (unit) => {
@@ -180,7 +188,14 @@ registry.on('unit', (unit) => {
     })
   }
 })
-registry.on('remove', (uid) => broadcast({ type: 'unit.remove', uid }))
+registry.on('remove', (uid) => {
+  // Purge the coalescer buffer FIRST: a queued update flushed after this
+  // remove would resurrect the unit on every dashboard as a permanent ghost
+  // (the registry no longer knows it, so no further remove ever arrives).
+  pendingUnits.delete(uid)
+  lastTrackSample.delete(uid)
+  broadcast({ type: 'unit.remove', uid })
+})
 
 tak.start()
 simTak.start()
@@ -196,7 +211,13 @@ export function publishCot(xml: string): boolean {
 const simulator = new FirstAlarmSimulator(
   (xml) => publishCot(xml),
   (kind, payload) => {
-    const ev = appendTimeline(kind, payload)
+    // Tag sim events with the incident they belong to — clients must never
+    // apply a stale dispatch (fire floor, floor count) to a newer incident.
+    const tagged =
+      payload && typeof payload === 'object'
+        ? { ...(payload as Record<string, unknown>), incidentId: getState().incident?.id }
+        : payload
+    const ev = appendTimeline(kind, tagged)
     broadcast({ type: 'timeline', event: ev })
   },
 )
@@ -576,6 +597,14 @@ app.post('/api/scenario/chapter', async (req, res) => {
   const { id } = req.body as { id?: string }
   if (!id) return res.status(400).json({ error: 'id required' })
   await scenario.seekChapter(id)
+  res.json(scenario.status())
+})
+
+// Progress-bar scrubbing: seek to an arbitrary scenario second.
+app.post('/api/scenario/seek', (req, res) => {
+  const { t } = req.body as { t?: number }
+  if (typeof t !== 'number' || !Number.isFinite(t)) return res.status(400).json({ error: 't (seconds) required' })
+  scenario.seekTo(t)
   res.json(scenario.status())
 })
 

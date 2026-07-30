@@ -149,13 +149,15 @@ export class FootprintLayer {
   /**
    * @param extrudeNeighbors false when an upgraded provider already renders buildings —
    *        then only the target footprint highlight is drawn.
+   *
+   * Two-stage: the neighbor extrusions (which always base at 0) go up
+   * IMMEDIATELY; only the target's fill/outline waits for the street-level
+   * sample — on photorealistic tiles that sample streams max-detail tiles and
+   * can take seconds, and it must not gate the whole keyless cityscape.
    */
   async render(feats: Footprint[], targetBin: string | undefined, extrudeNeighbors: boolean): Promise<void> {
     this.clear()
     const seq = this.renderSeq
-    const neighborFillInstances: Cesium.GeometryInstance[] = []
-    const targetFillInstances: Cesium.GeometryInstance[] = []
-    const outlineInstances: Cesium.GeometryInstance[] = []
 
     // Base the target's box at true street level so low-rise highlights hug
     // the building instead of floating (geoid offset on photorealistic tiles).
@@ -163,56 +165,71 @@ export class FootprintLayer {
     // Kick the sample and publish the promise synchronously — callers that
     // fire right after a void render() (isolate self-heal) await the same one.
     this.targetBasePromise = target ? this.sampleGroundBase(target) : Promise.resolve(0)
-    const base = await this.targetBasePromise
-    if (seq !== this.renderSeq) return // superseded by a newer render/clear
 
-    for (const f of feats) {
-      const isTarget = targetBin !== undefined && f.bin === targetBin
-      if (!isTarget && !extrudeNeighbors) continue
-      const h0 = isTarget ? base : 0
-      for (let i = 0; i < f.polygons.length; i++) {
-        const hierarchy = ringToHierarchy(f.polygons[i])
-        ;(isTarget ? targetFillInstances : neighborFillInstances).push(
-          new Cesium.GeometryInstance({
-            id: `footprint:${f.bin}:${i}`,
-            geometry: new Cesium.PolygonGeometry({
-              polygonHierarchy: hierarchy,
-              height: h0,
-              extrudedHeight: h0 + f.heightM,
-              vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-            }),
-            attributes: {
-              color: Cesium.ColorGeometryInstanceAttribute.fromColor(isTarget ? TARGET_FILL : NEIGHBOR_FILL),
-            },
-          }),
-        )
-        if (isTarget) {
-          outlineInstances.push(
+    if (extrudeNeighbors) {
+      const neighborFillInstances: Cesium.GeometryInstance[] = []
+      for (const f of feats) {
+        if (targetBin !== undefined && f.bin === targetBin) continue
+        for (let i = 0; i < f.polygons.length; i++) {
+          neighborFillInstances.push(
             new Cesium.GeometryInstance({
-              id: `footprint-outline:${f.bin}:${i}`,
-              geometry: new Cesium.PolygonOutlineGeometry({
-                polygonHierarchy: hierarchy,
-                height: h0,
-                extrudedHeight: h0 + f.heightM,
+              id: `footprint:${f.bin}:${i}`,
+              geometry: new Cesium.PolygonGeometry({
+                polygonHierarchy: ringToHierarchy(f.polygons[i]),
+                height: 0,
+                extrudedHeight: f.heightM,
+                vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
               }),
-              attributes: {
-                color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_OUTLINE),
-              },
+              attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(NEIGHBOR_FILL) },
             }),
           )
         }
       }
+      if (neighborFillInstances.length) {
+        const fill = new Cesium.Primitive({
+          geometryInstances: neighborFillInstances,
+          appearance: new Cesium.PerInstanceColorAppearance({ translucent: true, closed: true }),
+          asynchronous: true,
+        })
+        this.viewer.scene.primitives.add(fill)
+        this.primitives.push(fill)
+      }
+      this.applyVisibility()
     }
 
-    if (neighborFillInstances.length) {
-      const fill = new Cesium.Primitive({
-        geometryInstances: neighborFillInstances,
-        appearance: new Cesium.PerInstanceColorAppearance({ translucent: true, closed: true }),
-        asynchronous: true,
-      })
-      this.viewer.scene.primitives.add(fill)
-      this.primitives.push(fill)
+    if (!target) return
+    const base = await this.targetBasePromise
+    if (seq !== this.renderSeq) return // superseded by a newer render/clear
+
+    const targetFillInstances: Cesium.GeometryInstance[] = []
+    const outlineInstances: Cesium.GeometryInstance[] = []
+    for (let i = 0; i < target.polygons.length; i++) {
+      const hierarchy = ringToHierarchy(target.polygons[i])
+      targetFillInstances.push(
+        new Cesium.GeometryInstance({
+          id: `footprint:${target.bin}:${i}`,
+          geometry: new Cesium.PolygonGeometry({
+            polygonHierarchy: hierarchy,
+            height: base,
+            extrudedHeight: base + target.heightM,
+            vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+          }),
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_FILL) },
+        }),
+      )
+      outlineInstances.push(
+        new Cesium.GeometryInstance({
+          id: `footprint-outline:${target.bin}:${i}`,
+          geometry: new Cesium.PolygonOutlineGeometry({
+            polygonHierarchy: hierarchy,
+            height: base,
+            extrudedHeight: base + target.heightM,
+          }),
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_OUTLINE) },
+        }),
+      )
     }
+
     // Target fill + outline live in their own primitives so the orange box
     // can be toggled independently of the neighbor extrusions (Fire Bldg chip).
     if (targetFillInstances.length) {

@@ -31,6 +31,7 @@ export function SearchBar() {
   const abortRef = useRef<AbortController | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -46,6 +47,15 @@ export function SearchBar() {
   useEffect(() => {
     if (!searchPrefill) return
     setAppState({ searchPrefill: null })
+    // Drop the previous query's results BEFORE focusing — onFocus reopens the
+    // dropdown from `hits`, and stale rows would make Enter (during the fetch
+    // window) stand up an incident at the WRONG address.
+    setHits([])
+    setOpen(false)
+    setActive(0)
+    // Keyboard must work without a mouse trip: the Enter handler lives on the
+    // input, and a click on the globe leaves focus on the Cesium canvas.
+    inputRef.current?.focus()
     onChange(searchPrefill)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchPrefill])
@@ -55,6 +65,9 @@ export function SearchBar() {
     setFailed(false)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (value.trim().length < 2) {
+      // Abort any in-flight request too — its late resolution would reopen
+      // the dropdown with results for text the operator already deleted.
+      abortRef.current?.abort()
       setHits([])
       setOpen(false)
       return
@@ -65,6 +78,7 @@ export function SearchBar() {
       abortRef.current = ac
       try {
         const results = await autocompleteAddress(value, ac.signal)
+        if (ac.signal.aborted) return
         setHits(results)
         setActive(0)
         setOpen(true)
@@ -125,6 +139,10 @@ export function SearchBar() {
     recRef.current = rec
     rec.start()
     setListening(true)
+    // Keep the keyboard armed for the spoken results: without this, focus
+    // stays on the mic button and Enter re-toggles the mic instead of
+    // selecting the highlighted address.
+    inputRef.current?.focus()
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -150,6 +168,7 @@ export function SearchBar() {
         <path d="m21 21-4.3-4.3" />
       </svg>
       <input
+        ref={inputRef}
         className="search-input"
         value={query}
         placeholder="SEARCH NYC ADDRESS — e.g. 100 Gold Street"

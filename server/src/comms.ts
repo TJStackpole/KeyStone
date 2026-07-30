@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import WebSocket from 'ws'
 
@@ -31,6 +32,9 @@ export interface TranscriptKeyword {
 }
 
 export interface TranscriptLine {
+  /** Unique per line — same-millisecond lines are routine (whisper bursts,
+   * scenario seeks), so ts+text can NOT identify a line. */
+  id: string
   ts: string
   text: string
   keywords: TranscriptKeyword[]
@@ -103,6 +107,7 @@ export class WhisperLink extends EventEmitter {
         const msg = JSON.parse(String(raw)) as { text?: string; live?: boolean }
         if (!msg.text) return
         const line: TranscriptLine = {
+          id: `wl-${randomUUID()}`,
           ts: new Date().toISOString(),
           text: msg.text,
           keywords: extractKeywords(msg.text),
@@ -167,6 +172,7 @@ export class SimComms extends EventEmitter {
         for (const item of script) {
           setTimeout(() => {
             const line: TranscriptLine = {
+              id: `sim-${randomUUID()}`,
               ts: new Date().toISOString(),
               text: item.text,
               keywords: extractKeywords(item.text),

@@ -99,6 +99,9 @@ export interface TranscriptKeyword {
 }
 
 export interface TranscriptLine {
+  /** Unique per line (same-ms lines are routine). Optional only so a stale
+   * dev server without ids degrades gracefully during HMR. */
+  id?: string
   ts: string
   text: string
   keywords: TranscriptKeyword[]
