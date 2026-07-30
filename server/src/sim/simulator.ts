@@ -1,4 +1,4 @@
-import { bearingDeg, destination, Polyline, type PathPoint } from '../lib/geo.js'
+import { bearingDeg, destination, haversineMeters, Polyline, type PathPoint } from '../lib/geo.js'
 import { countWetSamples } from '../nyc.js'
 import { buildCotXml, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
 import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
@@ -101,6 +101,7 @@ export class FirstAlarmSimulator {
   private units: SimUnit[] = []
   private personnel: SimPerson[] = []
   private timer: ReturnType<typeof setInterval> | null = null
+  private dispatchGen = 0
   private incident: { lat: number; lon: number } | null = null
   /** Incident building profile (from PLUTO/footprints via dispatch). */
   private building: { floors: number; fireFloor: number } = { floors: 6, fireFloor: 3 }
@@ -124,6 +125,10 @@ export class FirstAlarmSimulator {
     building?: { floors?: number },
   ): Promise<{ callsigns: string[] }> {
     this.stop()
+    // Generation token: a concurrent dispatch (or a stop) during the awaits
+    // below invalidates this run — without it the older call overwrites
+    // this.timer AFTER the newer one set it, leaking an interval forever.
+    const gen = ++this.dispatchGen
     this.incident = { lat, lon }
     const floors = Math.max(1, Math.min(120, Math.round(building?.floors ?? 6)))
     // Scenario fire floor ~40% of building height (10-story 100 Gold -> floor 4,
@@ -132,8 +137,11 @@ export class FirstAlarmSimulator {
     this.building = { floors, fireFloor }
 
     const specs = await buildFirstAlarm(lat, lon)
-    this.units = await Promise.all(specs.map((spec) => this.buildSimUnit(spec, lat, lon)))
+    const units = await Promise.all(specs.map((spec) => this.buildSimUnit(spec, lat, lon)))
+    if (gen !== this.dispatchGen) return { callsigns: [] } // superseded mid-build
+    this.units = units
 
+    if (this.timer) clearInterval(this.timer)
     this.timer = setInterval(() => this.tick(), TICK_MS)
     this.tick() // first positions immediately
 
@@ -161,6 +169,7 @@ export class FirstAlarmSimulator {
   }
 
   stop(): void {
+    this.dispatchGen++ // invalidate any dispatch still awaiting its build
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     this.units = []
@@ -353,7 +362,17 @@ export class FirstAlarmSimulator {
         }
         const coords = body.routes?.[0]?.geometry?.coordinates
         if (coords && coords.length >= 2) {
-          return new Polyline(coords.map(([lon, lat]) => ({ lat, lon })))
+          const line = new Polyline(coords.map(([lon, lat]) => ({ lat, lon })))
+          // Snapping can produce absurd detours — a perimeter hold snapped
+          // onto a bridge carriageway routes via the far borough (observed:
+          // PD unit sent over the Manhattan Bridge and back across the
+          // Brooklyn Bridge for a 1 km run). Reject routes wildly longer
+          // than crow-flies and use the water-aware grid path instead.
+          const directM = haversineMeters(origin.lat, origin.lon, dest.lat, dest.lon)
+          if (line.totalM <= directM * 2.5 + 300) return line
+          console.warn(
+            `[sim] rejecting OSRM detour: ${Math.round(line.totalM)} m routed for ${Math.round(directM)} m direct`,
+          )
         }
       }
     } catch {

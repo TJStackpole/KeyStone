@@ -52,17 +52,27 @@ const UNIT_PREFIX: Record<string, string> = {
   pd: 'PD',
 }
 
-const UNIT_RE = /\b(engine|ladder|battalion|rescue|squad|ems|pd|e|l|bc|sq|r)[- ]?(\d+)\b/gi
+// Digits may be spoken split-style ("Engine 3-4") — capture hyphenated groups
+// so the keyword callsign matches the roster's literal designator (E-3-4).
+const UNIT_RE = /\b(engine|ladder|battalion|rescue|squad|ems|pd|e|l|bc|sq|r)[- ]?(\d+(?:-\d+)?)\b/gi
 const CODE_RE =
   /\b(10[- ]?75|10[- ]?60|10[- ]?45|all hands|second alarm|2nd alarm|third alarm|3rd alarm|mayday|MCI|PAR|exposure [1-4])\b/gi
 const URGENT_RE = /\b(urgent|mayday|evacuate|collapse|CNG)\b/gi
-const ADDRESS_RE = /\b\d{1,4} [A-Z][a-zA-Z]+ (Street|Avenue|Place|Road|Boulevard|Broadway|Plaza|Lane)\b/g
+// Accepts named streets ("100 Gold Street") AND numbered ones ("625 8 Avenue",
+// "241 West 40 Street") — the majority of Manhattan addresses are numbered.
+const ADDRESS_RE =
+  /\b\d{1,4} (?:(?:West|East|North|South) )?(?:[A-Z][a-zA-Z]+|\d{1,3}(?:st|nd|rd|th)?) (Street|Avenue|Place|Road|Boulevard|Broadway|Plaza|Lane)\b/g
 
 export function extractKeywords(text: string): TranscriptKeyword[] {
   const out: TranscriptKeyword[] = []
   for (const m of text.matchAll(UNIT_RE)) {
     const prefix = UNIT_PREFIX[m[1].toLowerCase()]
-    if (prefix) out.push({ kind: 'unit', text: m[0], callsign: `${prefix}-${Number(m[2])}` })
+    if (prefix) {
+      // "3-4" stays hyphenated to match the drill roster; plain digits still
+      // normalize (leading zeros dropped).
+      const digits = m[2].includes('-') ? m[2] : String(Number(m[2]))
+      out.push({ kind: 'unit', text: m[0], callsign: `${prefix}-${digits}` })
+    }
   }
   for (const m of text.matchAll(CODE_RE)) out.push({ kind: 'code', text: m[0] })
   for (const m of text.matchAll(URGENT_RE)) out.push({ kind: 'urgent', text: m[0] })

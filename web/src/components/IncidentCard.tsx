@@ -14,6 +14,9 @@ function EndIncidentButton() {
   return (
     <button
       className={`end-incident${armed ? ' armed' : ''}`}
+      aria-pressed={armed}
+      aria-live="polite"
+      aria-label={armed ? 'Confirm ending the incident — this clears the board' : 'End incident (two-step confirm)'}
       onClick={(e) => {
         e.stopPropagation()
         if (armed) void endIncident()

@@ -147,8 +147,8 @@ export function CommsPanel() {
       <div className={`comms-scroll${isSim ? ' sim' : ''}`} ref={scrollRef}>
         {isSim && <span className="comms-watermark">SIMULATED</span>}
         {lines.length === 0 && <div className="roster-empty">AWAITING TRAFFIC…</div>}
-        {lines.map((l, i) => (
-          <div key={`${l.ts}-${i}`} className="comms-line">
+        {lines.map((l) => (
+          <div key={`${l.ts}|${l.text.slice(0, 40)}`} className="comms-line">
             <span className="line-ts">{hhmmss(l.ts)}</span>
             <span className="line-text">
               <HighlightedText line={l} />

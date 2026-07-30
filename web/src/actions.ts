@@ -53,7 +53,10 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
 
   const scene = getScene()
   // A stale top-down/ground camera would fight the tactical fly-in; the
-  // exits restore controller settings, then the tactical flight wins.
+  // exits restore controller settings, then the tactical flight wins. A
+  // running replay of the OLD incident must end too, or its engine keeps
+  // painting historical tracks over the new board.
+  if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
   lastFootprints = null
   getTrafficLayer()?.clear() // stale polylines from the previous location
@@ -150,6 +153,9 @@ export function toggleIsolateMode(): void {
     )
     return
   }
+  // Street-level camera and isolate framing don't mix — leave ground view
+  // first so zoom/collision controller settings restore properly.
+  if (on && getAppState().groundViewActive) exitGround()
   setAppState({ isolateMode: on })
   applyIsolate(on)
   if (on) frameIsolatedBuilding()
@@ -259,8 +265,10 @@ function applyIsolate(on: boolean): void {
             Cesium.Cartesian3.fromDegrees(inc.lon, inc.lat),
             new Cesium.Cartesian3(),
           )
-          const lift = Cesium.Cartesian3.multiplyByScalar(up, isolateLiftM(), new Cesium.Cartesian3())
+          const liftM = isolateLiftM()
+          const lift = Cesium.Cartesian3.multiplyByScalar(up, liftM, new Cesium.Cartesian3())
           tileset.modelMatrix = Cesium.Matrix4.fromTranslation(lift)
+          setAppState({ isolateLiftM: liftM }) // interior members ride the lift
         }
         // The globe is hidden in google mode (clamp correctness) — isolate
         // needs it back as the flattened-map ground under the lone building.
@@ -269,9 +277,12 @@ function applyIsolate(on: boolean): void {
     } else {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
       tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
+      setAppState({ isolateLiftM: 0 })
       if (scene.mode === 'google') scene.viewer.scene.globe.show = false
     }
   }
+  // Re-place interior members at their (possibly lifted) heights.
+  applyUnitVisibility()
   // Size-up-quality imagery while isolated; restores itself (and the focus
   // layer's SSE policy) on the way out.
   boostIsolateVisuals(on)
@@ -494,6 +505,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
  * local treatment as an operator search: fly-in, footprints, intel, focus.
  */
 export function adoptIncident(incident: Incident): void {
+  if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
   lastFootprints = null
   getTrafficLayer()?.clear() // stale polylines from the previous location
@@ -551,7 +563,8 @@ export const jumpScenarioChapter = (id: string): Promise<void> => scenarioPost('
 export async function stopScenario(): Promise<void> {
   await scenarioPost('stop')
   getExposureLayer()?.clear()
-  setAppState({ scenario: null, alert: null, aarOpen: false })
+  // Leave no scenario-only comms channel selected — its tab disappears.
+  setAppState({ scenario: null, alert: null, aarOpen: false, commsChannel: 'fdny', commsAll: false })
 }
 
 /**
@@ -593,6 +606,8 @@ export function clearLocalIncident(): void {
     aarOpen: false,
     nycemView: false,
     streetViewOpen: false,
+    commsChannel: 'fdny',
+    commsAll: false,
     units: {},
     intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
     timeline: [],
@@ -776,6 +791,9 @@ export function unitMapVisible(u: Unit): boolean {
 
 /** Re-run the visibility policy over every unit on the picture. */
 export function applyUnitVisibility(): void {
+  // During REPLAY the globe shows historical positions — injecting live unit
+  // state would corrupt the playback. resyncLive() re-applies policy on exit.
+  if (getAppState().replay.active) return
   const layer = getUnitLayer()
   if (!layer) return
   for (const u of Object.values(getAppState().units)) layer.upsert(u, unitMapVisible(u))
@@ -851,6 +869,8 @@ export function deleteSelectedShape(): void {
  * stand up the incident (fly-in, intel, auto-perimeter), then dispatch.
  * Comms channels are always rolling.
  */
+let demoDispatchTimer: ReturnType<typeof setTimeout> | null = null
+
 export async function runDemoScenario(): Promise<void> {
   try {
     const { autocompleteAddress } = await import('./api/geosearch')
@@ -858,8 +878,14 @@ export async function runDemoScenario(): Promise<void> {
     const hit = hits.find((h) => h.borough === 'Manhattan') ?? hits[0]
     if (!hit) throw new Error('geocoder returned nothing for 100 Gold Street')
     await standUpIncident(hit, 'Structural Fire')
-    // Let the fly-in land and the perimeter draw before units start rolling.
-    setTimeout(() => void dispatchAssignment(), 4000)
+    const armedFor = getAppState().incident?.id
+    // Let the fly-in land before units start rolling — but only dispatch if
+    // THIS demo's incident is still current when the timer fires.
+    if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
+    demoDispatchTimer = setTimeout(() => {
+      demoDispatchTimer = null
+      if (armedFor && getAppState().incident?.id === armedFor) void dispatchAssignment()
+    }, 4000)
   } catch (err) {
     console.error('[demo] scenario failed:', err)
   }

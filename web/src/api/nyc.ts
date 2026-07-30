@@ -302,11 +302,14 @@ export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500)
     const len = Number(r.segmentlength ?? 0)
     const prev = best.get(name)
     if (prev && prev.len >= len) continue
-    const mid = Math.floor(line.length / 2)
-    const [mLon, mLat] = line[mid]
-    // Local direction from the vertices bracketing the anchor.
-    const [aLon, aLat] = line[Math.max(0, mid - 1)]
-    const [bLon, bLat] = line[Math.min(line.length - 1, mid + 1)]
+    // True geometric midpoint of the middle segment — line[floor(n/2)] on a
+    // 2-vertex segment is the END vertex, putting labels at intersections.
+    const i2 = Math.ceil((line.length - 1) / 2)
+    const i1 = Math.max(0, i2 - 1)
+    const [aLon, aLat] = line[i1]
+    const [bLon, bLat] = line[i2]
+    const mLat = (aLat + bLat) / 2
+    const mLon = (aLon + bLon) / 2
     const bearingDeg =
       (Math.atan2((bLon - aLon) * Math.cos((mLat * Math.PI) / 180), bLat - aLat) * 180) / Math.PI
     best.set(name, { len, lat: mLat, lon: mLon, bearingDeg: (bearingDeg + 360) % 360 })
@@ -360,10 +363,16 @@ export async function fetchTrafficLinks(lat: number, lon: number, radiusM = 2500
   const rows = (await res.json()) as TrafficRow[]
   const seen = new Set<string>()
   const out: TrafficLink[] = []
+  // Freshness cutoff: a halted sensor's last reading stays "newest" for its
+  // link forever — don't paint half-hour-old speeds as live traffic.
+  const cutoffMs = 30 * 60 * 1000
+  const now = Date.now()
   for (const r of rows) {
     const linkId = r.link_id ?? r.link_name ?? ''
     if (seen.has(linkId)) continue // rows are newest-first; keep the latest per link
     seen.add(linkId)
+    const asOf = Date.parse(r.data_as_of ?? '')
+    if (Number.isFinite(asOf) && now - asOf > cutoffMs) continue
     const speed = Number(r.speed)
     if (!Number.isFinite(speed) || speed <= 0 || Number(r.status ?? 0) < 0) continue
     const positions: [number, number][] = []

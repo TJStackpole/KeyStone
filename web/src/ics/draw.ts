@@ -133,7 +133,7 @@ export class DrawController {
       }
     }
     if (typeof entityId === 'string' && entityId.startsWith('unit:')) {
-      const uid = entityId.replace(/^unit:/, '').replace(/:(proj|cone)$/, '')
+      const uid = entityId.replace(/^unit:/, '').replace(/:(proj|cone|trail)$/, '')
       const unit = getAppState().units[uid]
       // Tap a unit to toggle its callsign label (labels are hidden by default).
       // dynamic import: scene.ts owns this controller, so a static import would cycle
@@ -184,12 +184,19 @@ export class DrawController {
 
   private finishZone(): void {
     const tool = getAppState().drawTool
-    if (!tool || !ZONES.includes(tool as ZoneKind) || this.draft.length < 3) return
+    // Double-click close delivers two LEFT_CLICKs first — drop coincident
+    // trailing vertices (< ~1 m apart) so the saved polygon stays clean.
+    const positions = this.draft.filter((p, i, arr) => {
+      if (i === 0) return true
+      const prev = arr[i - 1]
+      return Math.abs(p.lat - prev.lat) > 9e-6 || Math.abs(p.lon - prev.lon) > 9e-6
+    })
+    if (!tool || !ZONES.includes(tool as ZoneKind) || positions.length < 3) return
     const shape: IcsShape = {
       id: newShapeId(`ZONE-${tool.toUpperCase()}`),
       kind: 'zone',
       zone: tool as ZoneKind,
-      positions: [...this.draft],
+      positions,
       createdAt: new Date().toISOString(),
     }
     void saveShape(shape)

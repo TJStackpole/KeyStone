@@ -137,6 +137,8 @@ export class ScenarioEngine extends EventEmitter {
   private shapeIds = new Set<string>()
   private timer: ReturnType<typeof setInterval> | null = null
   private lastStatusPush = 0
+  private pendingAlert: Record<string, unknown> | null = null
+  private lastKeepalive = 0
 
   constructor(private deps: EngineDeps) {
     super()
@@ -247,7 +249,16 @@ export class ScenarioEngine extends EventEmitter {
   }
 
   private tick(): void {
-    if (!this.file || !this.playing) return
+    if (!this.file) return
+    if (!this.playing) {
+      // Paused drills still keep their units alive — CoT staleness would
+      // otherwise sweep the whole board after ~10 minutes of pause.
+      if (Date.now() - this.lastKeepalive > 60_000) {
+        this.lastKeepalive = Date.now()
+        for (const u of this.units.values()) this.txUnit(u)
+      }
+      return
+    }
     this.clock += (TICK_MS / 1000) * this.speed
     this.processDue(false)
     this.moveUnits()
@@ -259,8 +270,17 @@ export class ScenarioEngine extends EventEmitter {
   /** Fast-forward to `t`, applying every due event instantly. */
   private catchUp(t: number): void {
     this.clock = t
+    this.pendingAlert = null
     this.processDue(true)
     this.moveUnits()
+    // Net alert state after the seek: an unresolved mayday shows, a resolved
+    // (or absent) one clears whatever overlay was up before the jump.
+    // (processDue mutates pendingAlert — TS control flow can't see that.)
+    const net = this.pendingAlert as Record<string, unknown> | null
+    this.deps.broadcast({
+      type: 'alert',
+      alert: net && net.kind !== 'clear' ? net : { kind: 'clear' },
+    })
   }
 
   private processDue(catchUp: boolean): void {
@@ -360,17 +380,22 @@ export class ScenarioEngine extends EventEmitter {
       case 'alert': {
         const alert = { ...ev.alert!, at: new Date().toISOString() }
         const u = ev.alert?.callsign ? this.units.get(ev.alert.callsign) : undefined
-        this.deps.broadcast({ type: 'alert', alert: { ...alert, uid: u?.uid, lat: u?.lat, lon: u?.lon } })
+        this.pendingAlert = { ...alert, uid: u?.uid, lat: u?.lat, lon: u?.lon }
+        // During a chapter seek, only the FINAL alert state matters — firing
+        // every historical mayday live would strobe the full-screen overlay.
+        if (!catchUp) this.deps.broadcast({ type: 'alert', alert: this.pendingAlert })
         this.deps.emitTimeline(`alert.${ev.alert!.kind}`, { callsign: ev.alert?.callsign, text: ev.alert?.text })
         break
       }
       case 'aar': {
-        this.deps.broadcast({ type: 'scenario.aar' })
-        this.deps.emitTimeline('scenario.aar', { name: this.file?.name })
+        // Never auto-open the report while rewinding through history.
+        if (!catchUp) {
+          this.deps.broadcast({ type: 'scenario.aar' })
+          this.deps.emitTimeline('scenario.aar', { name: this.file?.name })
+        }
         break
       }
     }
-    void catchUp
   }
 
   private moveUnits(): void {

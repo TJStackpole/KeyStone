@@ -62,7 +62,12 @@ export class BoundaryLayer {
       return
     }
     if (!this.sources[kind]) {
-      this.loading[kind] ??= this.load(kind)
+      // Don't cache a REJECTED load forever — one transient SODA failure
+      // would permanently disable the layer for the session.
+      this.loading[kind] ??= this.load(kind).catch((err) => {
+        this.loading[kind] = undefined
+        throw err
+      })
       await this.loading[kind]
     }
     const src = this.sources[kind]

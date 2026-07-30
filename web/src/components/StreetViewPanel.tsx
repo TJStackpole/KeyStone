@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadStreetViewLib } from '../lib/gmaps'
-import { setAppState, useAppState } from '../state/store'
+import { getAppState, setAppState, useAppState } from '../state/store'
 
 // ---------------------------------------------------------------------------
 // Photographic street view of the incident address (Google Street View via
@@ -25,21 +25,37 @@ function bearingDeg(fromLat: number, fromLon: number, toLat: number, toLon: numb
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
 }
 
+// ONE panorama instance for the app's lifetime, re-parented into the panel on
+// open. The Maps JS API has no destroy() — recreating a panorama per open
+// leaked a WebGL context each time until the browser killed the Cesium globe.
+interface PanoInstance {
+  setPosition: (p: { lat: number; lng: number }) => void
+  setPov: (p: { heading: number; pitch: number }) => void
+  setVisible: (v: boolean) => void
+}
+let panoEl: HTMLDivElement | null = null
+let pano: PanoInstance | null = null
+
 export function StreetViewPanel() {
   const { streetViewOpen, incident } = useAppState()
   const [state, setState] = useState<'loading' | 'ready' | 'nocover' | 'apifail'>('loading')
   const holder = useRef<HTMLDivElement>(null)
 
   const key = (import.meta.env.GOOGLE_MAPS_API_KEY ?? '').trim()
+  const incidentId = incident?.id
 
   useEffect(() => {
-    if (!streetViewOpen || !incident || !key) return
+    if (!streetViewOpen || !incidentId || !key) return
+    // Re-read the incident here: depending on the id (not the object) means
+    // alarm/type re-broadcasts don't tear the panorama down mid-look.
+    const inc = getAppState().incident
+    if (!inc) return
     let dead = false
     setState('loading')
     void (async () => {
       try {
         const [meta, lib] = await Promise.all([
-          fetch(`/api/streetview/meta?lat=${incident.lat}&lon=${incident.lon}`)
+          fetch(`/api/streetview/meta?lat=${inc.lat}&lon=${inc.lon}`)
             .then((r) => r.json() as Promise<Meta>)
             .catch(() => ({ status: 'ERROR' }) as Meta),
           loadStreetViewLib(key),
@@ -51,19 +67,28 @@ export function StreetViewPanel() {
         }
         const heading =
           meta.status === 'OK' && meta.lat !== undefined && meta.lon !== undefined
-            ? bearingDeg(meta.lat, meta.lon, incident.lat, incident.lon)
+            ? bearingDeg(meta.lat, meta.lon, inc.lat, inc.lon)
             : 0
-        holder.current.innerHTML = ''
-        new lib.StreetViewPanorama(holder.current, {
-          position: { lat: incident.lat, lng: incident.lon },
-          pov: { heading, pitch: 5 },
-          zoom: 0.7,
-          addressControl: false,
-          fullscreenControl: false,
-          motionTracking: false,
-          motionTrackingControl: false,
-          showRoadLabels: true,
-        })
+        if (!panoEl) {
+          panoEl = document.createElement('div')
+          panoEl.style.width = '100%'
+          panoEl.style.height = '100%'
+          pano = new lib.StreetViewPanorama(panoEl, {
+            position: { lat: inc.lat, lng: inc.lon },
+            pov: { heading, pitch: 5 },
+            zoom: 0.7,
+            addressControl: false,
+            fullscreenControl: false,
+            motionTracking: false,
+            motionTrackingControl: false,
+            showRoadLabels: true,
+          }) as unknown as PanoInstance
+        } else {
+          pano?.setPosition({ lat: inc.lat, lng: inc.lon })
+          pano?.setPov({ heading, pitch: 5 })
+        }
+        holder.current.appendChild(panoEl)
+        pano?.setVisible(true)
         setState('ready')
       } catch (err) {
         console.error('[streetview] JS API failed:', err)
@@ -72,9 +97,10 @@ export function StreetViewPanel() {
     })()
     return () => {
       dead = true
-      if (holder.current) holder.current.innerHTML = ''
+      pano?.setVisible(false)
+      if (panoEl?.parentElement) panoEl.parentElement.removeChild(panoEl)
     }
-  }, [streetViewOpen, incident, key])
+  }, [streetViewOpen, incidentId, key])
 
   if (!streetViewOpen || !incident) return null
 

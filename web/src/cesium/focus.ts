@@ -49,7 +49,11 @@ export class FocusLayer {
     if (!incident || !enabled) {
       if (tileset && this.tilesetTouched) {
         tileset.maximumScreenSpaceError = DEFAULT_SSE
-        tileset.dynamicScreenSpaceError = false
+        // Restore Cesium's DEFAULTS (dynamic SSE is on by default in 1.143) —
+        // forcing it off stripped the distance-LOD optimization permanently.
+        tileset.dynamicScreenSpaceError = true
+        tileset.dynamicScreenSpaceErrorDensity = 2.0e-4
+        tileset.dynamicScreenSpaceErrorFactor = 24.0
         this.tilesetTouched = false
       }
       return

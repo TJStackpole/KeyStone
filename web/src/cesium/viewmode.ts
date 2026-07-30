@@ -46,6 +46,9 @@ export async function setTopDown(scene: SceneHandle, on: boolean, focus?: { lat:
         const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
           'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
         )
+        // The toggle may have flipped OFF during the await — stranding a
+        // bright satellite layer over the tactical basemap. Check first.
+        if (savedTopDown === null) return
         esriLayer = viewer.imageryLayers.addImageryProvider(provider)
       } catch (err) {
         console.warn('[viewmode] satellite imagery unavailable, keeping OSM basemap:', err)

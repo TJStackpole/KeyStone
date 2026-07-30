@@ -22,6 +22,7 @@ interface SnapshotMsg {
   timeline?: TimelineEvent[]
   takConnected?: boolean
   chats?: ChatMsg[]
+  scenario?: ScenarioStatus
 }
 interface ShapeMsg {
   type: 'shape'
@@ -122,26 +123,28 @@ export function connectWs(): void {
   open()
 }
 
+// Message types that must flow even while REPLAY owns the globe: history-safe
+// streams (transcript/chat/tak.status), live emergencies (alert), drill state
+// (scenario.status), incident lifecycle, and the reconnect snapshot (handled
+// replay-aware below).
+const REPLAY_SAFE = new Set(['transcript', 'tak.status', 'incident', 'alert', 'scenario.status', 'chat', 'snapshot'])
+
 function handle(msg: ServerMsg): void {
-  // During REPLAY the globe belongs to the replay engine — hold live mutations
-  // (transcripts still flow; they're history-safe). Incident lifecycle changes
-  // (END from any station, a new stand-up) must NOT be dropped — they exit
-  // replay via adopt/clear rather than leaving a dead board on this station.
-  if (
-    getAppState().replay.active &&
-    msg.type !== 'transcript' &&
-    msg.type !== 'tak.status' &&
-    msg.type !== 'incident'
-  ) {
-    return
-  }
+  if (getAppState().replay.active && !REPLAY_SAFE.has(msg.type)) return
   switch (msg.type) {
     case 'snapshot': {
       // Reconcile the incident FIRST — a station that was disconnected when
-      // END or a new stand-up happened only learns about it here.
+      // END or a new stand-up happened only learns about it here. Same-id
+      // snapshots still refresh mutable fields (alarm level, type).
       const local = getAppState().incident
       if (!msg.incident && local) clearLocalIncident()
       else if (msg.incident && msg.incident.id !== local?.id) adoptIncident(msg.incident)
+      else if (msg.incident) setAppState({ incident: msg.incident })
+      // Drill transport state rides the snapshot too (server restarts).
+      setAppState({ scenario: msg.scenario?.loaded ? msg.scenario : null })
+      // During replay, stop here: the globe/timeline belong to the replay
+      // engine; resyncLive() rebuilds them from the server on exit.
+      if (getAppState().replay.active) break
       // Authoritative rebuild — clears units/shapes that changed while
       // disconnected (e.g. server restart swept the registry).
       getUnitLayer()?.clear()
@@ -183,9 +186,18 @@ function handle(msg: ServerMsg): void {
       getUnitLayer()?.upsert(msg.unit, unitMapVisible(msg.unit))
       break
     }
-    case 'scenario.status':
-      setAppState({ scenario: msg.scenario.loaded ? msg.scenario : null })
+    case 'scenario.status': {
+      const loaded = msg.scenario.loaded
+      setAppState((s) => ({
+        scenario: loaded ? msg.scenario : null,
+        // A drill ending must not leave the comms panel on a scenario-only
+        // channel that no longer has a tab.
+        ...(!loaded && (s.commsChannel.includes('-') || s.commsChannel === 'papd' || s.commsChannel === 'interagency')
+          ? { commsChannel: 'fdny' as const, commsAll: false }
+          : {}),
+      }))
       break
+    }
     case 'alert': {
       if (msg.alert.kind === 'clear') {
         setAppState({ alert: null })

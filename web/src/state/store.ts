@@ -92,6 +92,8 @@ export interface AppState {
   activeIncidentMode: boolean
   /** ISOLATE: clip away every building/tree except the incident building. */
   isolateMode: boolean
+  /** Meters the isolated building is lifted — interior members ride along. */
+  isolateLiftM: number
   /** Camera mode: tactical 3D or straight-down satellite-style view. */
   viewMode: '3d' | 'topdown'
   /** Street-level camera dropped by the GND tool. */
@@ -181,6 +183,7 @@ const initial: AppState = {
   targetHeightM: null,
   activeIncidentMode: true,
   isolateMode: false,
+  isolateLiftM: 0,
   viewMode: '3d',
   groundViewActive: false,
   groundViewFt: 6,

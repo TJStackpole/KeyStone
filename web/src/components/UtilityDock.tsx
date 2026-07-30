@@ -197,10 +197,12 @@ function VideoContent() {
       <div className="intel-section-title">BODY-CAM · FIRST-DUE CREWS</div>
       <div className="bodycam-grid">
         {crews.length === 0 && <div className="roster-empty">NO FDNY UNITS ON THE PICTURE</div>}
-        {crews.map((u, i) => (
+        {crews.map((u) => (
           <VideoTile
             key={u.uid}
-            stream={`bodycam${(i % 2) + 1}`}
+            // Stable per-unit stream: index-based assignment reshuffled every
+            // tile (tearing down WebRTC sessions) each time a new unit arrived.
+            stream={`bodycam${(u.uid.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 2) + 1}`}
             label={u.callsign}
             chip={u.agency}
             selected={selectedUnitUid === u.uid}

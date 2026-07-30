@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { getAppState } from '../state/store'
 import type { Unit, UnitCategory } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -77,10 +78,15 @@ const TRAIL_COLOR: Record<string, string> = {
 const TRAIL_MAX_POINTS = 40
 const VEHICLE_TRAIL_EXEMPT = new Set(['ff', 'officer', 'medic', 'drone'])
 
+const MAX_POSITION_SAMPLES = 120 // ~4 minutes at the 2 s CoT cadence
+
 export class UnitLayer {
   private source = new Cesium.CustomDataSource('units')
   /** Recent enroute positions per vehicle — the live response trail. */
   private trails = new Map<string, [number, number][]>()
+  /** Sample timestamps per unit, so old SampledPositionProperty samples can
+   *  be evicted — unbounded growth would leak memory over a long incident. */
+  private sampleTimes = new Map<string, Cesium.JulianDate[]>()
   /** Callsign labels are hidden until the operator taps a unit (declutter). */
   private labeledUids = new Set<string>()
 
@@ -107,7 +113,11 @@ export class UnitLayer {
 
   upsert(unit: Unit, show = true): void {
     const id = `unit:${unit.uid}`
-    const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae)
+    // Interior members ride the ISOLATE lift so they stay inside the raised
+    // building instead of hovering below it.
+    const interior = unit.category === 'ff' && (unit.floor ?? 0) >= 1
+    const lift = interior ? getAppState().isolateLiftM : 0
+    const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae + lift)
     const now = Cesium.JulianDate.now()
     // Street-level units clamp to the scene surface (CoT hae 0 floats above
     // photorealistic-tile streets); drones fly true altitude and interior
@@ -153,7 +163,19 @@ export class UnitLayer {
       })
       entity.show = show
     } else {
-      ;(entity.position as Cesium.SampledPositionProperty).addSample(now, position)
+      const sampled = entity.position as Cesium.SampledPositionProperty
+      sampled.addSample(now, position)
+      // Window the samples: evict everything older than the newest N.
+      let times = this.sampleTimes.get(unit.uid)
+      if (!times) {
+        times = []
+        this.sampleTimes.set(unit.uid, times)
+      }
+      times.push(Cesium.JulianDate.clone(now))
+      while (times.length > MAX_POSITION_SAMPLES) {
+        const old = times.shift()!
+        sampled.removeSample(old)
+      }
       // Visibility policy can change between updates (GPS toggle, a member
       // entering/leaving the building) — re-apply it every time.
       entity.show = show
@@ -254,6 +276,7 @@ export class UnitLayer {
     this.source.entities.removeById(`unit:${uid}:cone`)
     this.source.entities.removeById(`unit:${uid}:trail`)
     this.trails.delete(uid)
+    this.sampleTimes.delete(uid)
   }
 
   /** Transcript mention: pulse the unit's marker for ~3 s (F6/F7 spec). */
@@ -263,8 +286,15 @@ export class UnitLayer {
     entity.billboard.scale = new Cesium.ConstantProperty(1.8)
     if (entity.label) entity.label.fillColor = new Cesium.ConstantProperty(Cesium.Color.fromCssColorString('#fbbf24'))
     setTimeout(() => {
-      if (entity.billboard) entity.billboard.scale = new Cesium.ConstantProperty(1)
-      if (entity.label) entity.label.fillColor = new Cesium.ConstantProperty(LABEL_FILL)
+      // Restore to the unit's CURRENT idle state — a hard reset here used to
+      // clobber the selected-unit highlight applied while the flash ran.
+      const selected = getAppState().selectedUnitUid === uid
+      if (entity.billboard) entity.billboard.scale = new Cesium.ConstantProperty(selected ? 1.5 : 1)
+      if (entity.label) {
+        entity.label.fillColor = new Cesium.ConstantProperty(
+          selected ? Cesium.Color.fromCssColorString('#fbbf24') : LABEL_FILL,
+        )
+      }
     }, 3000)
   }
 
@@ -299,5 +329,6 @@ export class UnitLayer {
   clear(): void {
     this.source.entities.removeAll()
     this.trails.clear()
+    this.sampleTimes.clear()
   }
 }

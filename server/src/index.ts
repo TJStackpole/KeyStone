@@ -64,6 +64,9 @@ wss.on('connection', (socket) => {
       units: registry.all(),
       takConnected: tak.connected,
       chats: chatLog.slice(-100),
+      // Reconnecting dashboards learn drill state here — a server restart
+      // mid-drill otherwise leaves a stale "playing" DRILL bar forever.
+      scenario: scenario.status(),
     }),
   )
 })
@@ -232,7 +235,10 @@ app.get('/api/staging/next', async (_req, res) => {
       for (const f of houses) {
         for (const n of pool.nums(f)) {
           const callsign = `${pool.prefix}-${n}`
-          if (!taken.has(callsign)) {
+          // Check issuedStaging LIVE — `taken` was snapshotted before the
+          // await, so two concurrent dashboards could otherwise get the
+          // same company.
+          if (!taken.has(callsign) && !issuedStaging.has(callsign)) {
             issuedStaging.add(callsign)
             return res.json({ callsign })
           }
@@ -243,7 +249,7 @@ app.get('/api/staging/next', async (_req, res) => {
     // Open Data down — synthetic fallback below
   }
   let n = 200 + issuedStaging.size
-  while (taken.has(`E-${n}`)) n++
+  while (taken.has(`E-${n}`) || issuedStaging.has(`E-${n}`)) n++
   const callsign = `E-${n}`
   issuedStaging.add(callsign)
   res.json({ callsign })
@@ -288,9 +294,19 @@ app.put('/api/shapes/:id', (req, res) => {
   ) {
     return res.status(400).json({ error: 'apparatus needs callsign, lat, lon, heading' })
   }
+  // Build the CoT FIRST: if the shape is malformed in a way validation
+  // missed, we must find out BEFORE persisting/broadcasting it — a poisoned
+  // shape in the store would crash every future snapshot consumer.
+  let cot: string
+  try {
+    cot = shapeToCot(shape)
+  } catch (err) {
+    console.error('[shapes] rejected unencodable shape:', err)
+    return res.status(400).json({ error: 'shape could not be encoded' })
+  }
   upsertShape(shape)
   broadcast({ type: 'shape', shape })
-  publishCot(shapeToCot(shape))
+  publishCot(cot)
   res.json(shape)
 })
 
@@ -429,9 +445,11 @@ app.post('/api/incident', (req, res) => {
     createdAt: b.createdAt ?? new Date().toISOString(),
   }
   // A new incident supersedes the old picture — stop any convergence in
-  // progress, including a running scenario drill.
+  // progress, including a running scenario drill, and purge the old sim
+  // units immediately (stale-sweep would leave ghosts for ~2.5 minutes).
   scenario.stop()
   simulator.stop()
+  for (const u of registry.all()) if (u.uid.startsWith('WT-SIM-')) registry.remove(u.uid)
   issuedStaging.clear()
   stagingFlip = 0
   const state = createIncident(incident)
@@ -460,7 +478,14 @@ app.delete('/api/incident', (_req, res) => {
 app.patch('/api/incident', (req, res) => {
   const state = getState()
   if (!state.incident) return res.status(404).json({ error: 'no active incident' })
-  const updated = updateIncident(req.body as Partial<Incident>)
+  // Whitelist: PATCH exists for the type chips and alarm ladder only —
+  // merging arbitrary body fields let corrupt lat/lon poison dispatch + CoT.
+  const b = req.body as Partial<Incident>
+  const patch: Partial<Incident> = {}
+  if (typeof b.type === 'string') patch.type = b.type
+  if (typeof b.alarmLevel === 'string') patch.alarmLevel = b.alarmLevel
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'only type/alarmLevel are patchable' })
+  const updated = updateIncident(patch)
   broadcast({ type: 'incident', incident: updated.incident })
   res.json(updated)
 })

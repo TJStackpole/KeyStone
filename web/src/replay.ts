@@ -1,6 +1,7 @@
+import { clearLocalIncident, unitMapVisible } from './actions'
 import { getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
-import type { IcsShape, Unit } from './types'
+import type { IcsShape, Incident, Unit } from './types'
 
 // ---------------------------------------------------------------------------
 // REPLAY (Phase 8): re-runs the incident timeline from incident.json at 4x.
@@ -30,7 +31,21 @@ class ReplayEngine {
   private timer: ReturnType<typeof setInterval> | null = null
   private cursor = 0 // events applied so far (index into this.events)
 
+  private starting = false
+
   async start(): Promise<void> {
+    // Re-entrancy guard: replay.active only flips after the fetch resolves,
+    // so a double-click would otherwise stack two tick intervals.
+    if (this.starting || getAppState().replay.active) return
+    this.starting = true
+    try {
+      await this.startInner()
+    } finally {
+      this.starting = false
+    }
+  }
+
+  private async startInner(): Promise<void> {
     const res = await fetch('/api/incident')
     if (!res.ok) return
     const body = (await res.json()) as { timeline: RawEvent[] }
@@ -116,8 +131,18 @@ class ReplayEngine {
     getShapeLayer()?.clear()
     try {
       const [incidentRes, unitsRes] = await Promise.all([fetch('/api/incident'), fetch('/api/units')])
-      const incidentBody = (await incidentRes.json()) as { shapes?: IcsShape[] }
+      const incidentBody = (await incidentRes.json()) as {
+        incident?: Incident | null
+        shapes?: IcsShape[]
+        timeline?: { t: string; kind: string; payload?: unknown }[]
+      }
       const unitsBody = (await unitsRes.json()) as { units?: Unit[] }
+      // Incident may have ENDED or changed while replay held the gate closed.
+      const local = getAppState().incident
+      if (!incidentBody.incident && local) {
+        clearLocalIncident()
+        return
+      }
       const shapes: Record<string, IcsShape> = {}
       for (const s of incidentBody.shapes ?? []) {
         shapes[s.id] = s
@@ -126,9 +151,18 @@ class ReplayEngine {
       const units: Record<string, Unit> = {}
       for (const u of unitsBody.units ?? []) {
         units[u.uid] = u
-        getUnitLayer()?.upsert(u, getAppState().unitToggles[u.category] ?? true)
+        // The ONE visibility policy — not raw category toggles. Bypassing it
+        // here violated the GPS switch and the interior-FF-only member rule.
+        getUnitLayer()?.upsert(u, unitMapVisible(u))
       }
-      setAppState({ shapes, units })
+      // Milestones that broadcast during replay were gated out — recover them.
+      const timeline = (incidentBody.timeline ?? []).filter((e) => e.kind !== 'unit.track').slice(-400)
+      setAppState({
+        shapes,
+        units,
+        timeline,
+        ...(incidentBody.incident ? { incident: incidentBody.incident } : {}),
+      })
     } catch (err) {
       console.error('[replay] live resync failed:', err)
     }
