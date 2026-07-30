@@ -474,3 +474,40 @@ export async function fetchTaxLots(lat: number, lon: number, radiusM: number, si
     .filter((r) => r.bbl && r.the_geom?.type === 'MultiPolygon' && r.the_geom.coordinates?.length)
     .map((r) => ({ bbl: r.bbl!, polygons: r.the_geom!.coordinates }))
 }
+
+// ---------------------------------------------------------------------------
+// NYC Facilities Database (FacDB) — citywide facility points for the OVERLAYS
+// menu: every firehouse, official FDNY buildings, NYPD precinct houses,
+// hospitals, NYCEM offices.
+// ---------------------------------------------------------------------------
+
+const FACDB = 'https://data.cityofnewyork.us/resource/ji82-xba5.json'
+
+export interface Facility {
+  name: string
+  lat: number
+  lon: number
+}
+
+interface FacilityRow {
+  facname?: string
+  latitude?: string
+  longitude?: string
+}
+
+/** Citywide facility points matching a SoQL predicate. */
+export async function fetchFacilities(where: string, signal?: AbortSignal): Promise<Facility[]> {
+  maybeFailNyc()
+  const params = new URLSearchParams({
+    $select: 'facname,latitude,longitude',
+    $where: `(${where}) AND latitude IS NOT NULL`,
+    $limit: '500',
+  })
+  const res = await fetch(`${FACDB}?${params}`, { signal })
+  if (!res.ok) throw new Error(`FacDB SODA ${res.status}`)
+  const rows = (await res.json()) as FacilityRow[]
+  return rows
+    .filter((r) => r.facname && r.latitude && r.longitude)
+    .map((r) => ({ name: r.facname!, lat: Number(r.latitude), lon: Number(r.longitude) }))
+    .filter((f) => Number.isFinite(f.lat) && Number.isFinite(f.lon))
+}

@@ -18,6 +18,11 @@ const OVERLAYS: { id: ToggleLayerId; label: string; hint: string }[] = [
   { id: 'battalions', label: 'FDNY Battalions', hint: 'Battalion boundary lines' },
   { id: 'divisions', label: 'FDNY Divisions', hint: 'Division boundary lines' },
   { id: 'lots', label: 'Address grid', hint: 'Tax-lot borders — click inside one to load its address' },
+  { id: 'poiFirehouses', label: 'All firehouses', hint: 'Every FDNY firehouse citywide (Facilities DB)' },
+  { id: 'poiFdny', label: 'FDNY buildings', hint: 'Official FDNY buildings — HQ, offices, training, EMS stations' },
+  { id: 'poiPrecincts', label: 'NYPD precincts', hint: 'Precinct station houses citywide' },
+  { id: 'poiHospitals', label: 'Major hospitals', hint: 'Hospitals and acute-care hospitals citywide' },
+  { id: 'poiNycem', label: 'NYCEM HQ', hint: 'NYC Emergency Management headquarters and offices' },
 ]
 
 function OverlaysMenu() {

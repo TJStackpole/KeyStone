@@ -11,6 +11,7 @@ import {
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
+import type { PoiKind } from './cesium/poi'
 import { flyToTactical, OPS_AREA, TILE_CACHE_BYTES } from './cesium/providers'
 import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
 import {
@@ -22,6 +23,7 @@ import {
   getExposureLayer,
   getScene,
   getLotLayer,
+  getPoiLayer,
   getShapeLayer,
   getStreetLayer,
   getTacticalLayer,
@@ -657,6 +659,10 @@ export function toggleLayer(layer: ToggleLayerId): void {
   if (layer === 'lots') {
     getLotLayer()?.setVisible(next)
     if (next) void refreshLots(true)
+  }
+  if (layer.startsWith('poi')) {
+    // Citywide facility overlays (FacDB) — lazy-loaded on first enable.
+    getPoiLayer()?.setEnabled(layer as PoiKind, next)
   }
   if (layer === 'battalions' || layer === 'divisions') {
     getBoundaryLayer()

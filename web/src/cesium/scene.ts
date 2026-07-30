@@ -7,6 +7,7 @@ import { FootprintLayer } from './footprints'
 import { ExposureLayer } from './exposures'
 import { IntelMarkerLayer } from './intelMarkers'
 import { LotLayer } from './lots'
+import { PoiLayer } from './poi'
 import { ShapeLayer } from './shapes'
 import { StreetLabelLayer } from './streets'
 import { TacticalModelLayer } from './tactical'
@@ -30,6 +31,7 @@ let exposureLayer: ExposureLayer | null = null
 let trafficLayer: TrafficLayer | null = null
 let tacticalLayer: TacticalModelLayer | null = null
 let lotLayer: LotLayer | null = null
+let poiLayer: PoiLayer | null = null
 
 export function registerScene(h: SceneHandle): void {
   handle = h
@@ -45,6 +47,7 @@ export function registerScene(h: SceneHandle): void {
   trafficLayer = new TrafficLayer(h.viewer)
   tacticalLayer = new TacticalModelLayer(h.viewer)
   lotLayer = new LotLayer(h.viewer)
+  poiLayer = new PoiLayer(h.viewer)
   if (import.meta.env.DEV) {
     // Debug handles for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
@@ -68,6 +71,7 @@ export function unregisterScene(): void {
   trafficLayer = null
   tacticalLayer = null
   lotLayer = null
+  poiLayer = null
 }
 
 export function getTrafficLayer(): TrafficLayer | null {
@@ -120,4 +124,8 @@ export function getTacticalLayer(): TacticalModelLayer | null {
 
 export function getLotLayer(): LotLayer | null {
   return lotLayer
+}
+
+export function getPoiLayer(): PoiLayer | null {
+  return poiLayer
 }

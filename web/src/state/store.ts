@@ -130,6 +130,11 @@ const initial: AppState = {
     lots: true, // draws only when zoomed in — see refreshLots' height gate
     battalions: false,
     divisions: false,
+    poiFirehouses: false,
+    poiFdny: false,
+    poiPrecincts: false,
+    poiHospitals: false,
+    poiNycem: false,
   },
   units: {},
   takConnected: null,

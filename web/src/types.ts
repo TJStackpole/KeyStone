@@ -35,6 +35,11 @@ export type ToggleLayerId =
   | 'lots'
   | 'battalions'
   | 'divisions'
+  | 'poiFirehouses'
+  | 'poiFdny'
+  | 'poiPrecincts'
+  | 'poiHospitals'
+  | 'poiNycem'
 
 export interface GeoHit {
   label: string
