@@ -75,22 +75,24 @@ export class PoiLayer {
 
   constructor(private viewer: Cesium.Viewer) {}
 
-  /** Toggle a facility overlay; the first enable fetches + renders it. */
-  setEnabled(kind: PoiKind, on: boolean): void {
+  /**
+   * Toggle a facility overlay; the first enable fetches + renders it. The
+   * returned promise REJECTS on fetch failure so the caller can revert the
+   * checkbox — a checked box over an empty layer would lie about state.
+   */
+  setEnabled(kind: PoiKind, on: boolean): Promise<void> {
     this.desired.set(kind, on)
     const existing = this.sources.get(kind)
     if (existing) existing.show = on
-    if (!on || this.loaded.has(kind) || this.loading.has(kind)) return
+    if (!on || this.loaded.has(kind) || this.loading.has(kind)) return Promise.resolve()
     this.loading.add(kind)
-    fetchFacilities(POI[kind].where)
+    return fetchFacilities(POI[kind].where)
       .then((facilities) => {
-        this.loading.delete(kind)
         this.loaded.add(kind)
         this.render(kind, facilities)
       })
-      .catch((err) => {
+      .finally(() => {
         this.loading.delete(kind)
-        console.error(`[poi] ${kind} unavailable:`, err) // degrade, never crash
       })
   }
 

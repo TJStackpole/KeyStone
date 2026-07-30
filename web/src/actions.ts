@@ -310,6 +310,8 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
       void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, true)
     }
     getFootprintLayer()?.setTargetVisible(getAppState().layerToggles.targetbox)
+    // Lot borders were parked during isolate (they'd classify the facade).
+    getLotLayer()?.setVisible(getAppState().layerToggles.lots)
     void applyTacticalModel(false)
     return
   }
@@ -362,6 +364,9 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     if (scene.extrudeFootprints) {
       void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, false)
     }
+    // Ground-classified lot borders would paint the lifted facade — park
+    // them for the whole isolate session (both views).
+    getLotLayer()?.setVisible(false)
     // MODEL/LIVE appearance: tileset visibility, imagery boost, target-box
     // park, and the schematic itself all key off the selected view.
     isolateApplied = true
@@ -449,6 +454,27 @@ async function applyTacticalModel(on: boolean): Promise<void> {
     address: { lat: inc.lat, lon: inc.lon },
     view: now.isolateView,
   })
+}
+
+/**
+ * The provider upgrade (google/ion tileset) attaches in the BACKGROUND after
+ * boot. Anything that sampled heights during the window resolved against the
+ * still-visible globe (~0 HAE) instead of the sunken photorealistic streets —
+ * re-bake it now: fresh footprint render (new pre-clip street sample), then
+ * isolate on top of the corrected base.
+ */
+export function reconcileProviderUpgrade(): void {
+  const scene = getScene()
+  if (!scene) return
+  setAppState({ providerMode: scene.mode })
+  if (lastFootprints) {
+    void getFootprintLayer()?.render(
+      lastFootprints.feats,
+      lastFootprints.targetBin,
+      scene.extrudeFootprints && !getAppState().isolateMode,
+    )
+  }
+  if (getAppState().isolateMode) applyIsolate(true)
 }
 
 /** Shared teardown: ACTIVE INCIDENT off, new incident, or END all clear isolate. */
@@ -657,12 +683,20 @@ export function toggleLayer(layer: ToggleLayerId): void {
     if (next) void refreshTraffic()
   }
   if (layer === 'lots') {
-    getLotLayer()?.setVisible(next)
+    // Parked during isolate — the stored toggle still updates and the
+    // isolate OFF path re-applies it.
+    getLotLayer()?.setVisible(next && !getAppState().isolateMode)
     if (next) void refreshLots(true)
   }
   if (layer.startsWith('poi')) {
-    // Citywide facility overlays (FacDB) — lazy-loaded on first enable.
-    getPoiLayer()?.setEnabled(layer as PoiKind, next)
+    // Citywide facility overlays (FacDB) — lazy-loaded on first enable. A
+    // failed fetch reverts the checkbox so it never lies (and retries clean).
+    getPoiLayer()
+      ?.setEnabled(layer as PoiKind, next)
+      .catch((err) => {
+        console.error(`[poi] ${layer} unavailable:`, err)
+        setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: false } }))
+      })
   }
   if (layer === 'battalions' || layer === 'divisions') {
     getBoundaryLayer()
@@ -932,12 +966,17 @@ export async function refreshLots(force = false): Promise<void> {
   const scene = getScene()
   const layer = getLotLayer()
   if (!scene || !layer || !getAppState().layerToggles.lots) return
+  // ISOLATE studies ONE building — ground-classified lot lines would paint
+  // cyan borders up the levitated facade (facades sit exactly on lot lines).
+  if (getAppState().isolateMode) return
   const viewer = scene.viewer
   const cam = viewer.camera.positionCartographic
   if (cam.height > LOT_MAX_CAMERA_M) return // parcel lines are street-scale detail
   // Center on what the operator is LOOKING at, not the camera's own foot.
-  let lat = Cesium.Math.toDegrees(cam.latitude)
-  let lon = Cesium.Math.toDegrees(cam.longitude)
+  const footLat = Cesium.Math.toDegrees(cam.latitude)
+  const footLon = Cesium.Math.toDegrees(cam.longitude)
+  let lat = footLat
+  let lon = footLon
   if (cam.height > 0) {
     const canvas = viewer.scene.canvas
     const center = viewer.camera.pickEllipsoid(
@@ -946,8 +985,18 @@ export async function refreshLots(force = false): Promise<void> {
     )
     if (center) {
       const c = Cesium.Cartographic.fromCartesian(center)
-      lat = Cesium.Math.toDegrees(c.latitude)
-      lon = Cesium.Math.toDegrees(c.longitude)
+      const pLat = Cesium.Math.toDegrees(c.latitude)
+      const pLon = Cesium.Math.toDegrees(c.longitude)
+      // Horizon-grazing pitches put the center ray kilometers out — clamp the
+      // pick along its bearing so a tilt toward the skyline doesn't fetch (and
+      // replace the grid with) some far-off empty patch.
+      const maxM = Math.min(Math.max(cam.height * 3, 800), 2500)
+      const dLatM = (pLat - footLat) * 111_320
+      const dLonM = (pLon - footLon) * 111_320 * Math.cos((footLat * Math.PI) / 180)
+      const dist = Math.hypot(dLatM, dLonM)
+      const k = dist > maxM ? maxM / dist : 1
+      lat = footLat + ((pLat - footLat) * k)
+      lon = footLon + (pLon - footLon) * k
     }
   }
   const radiusM = Math.min(900, Math.max(300, cam.height * 0.7))
@@ -960,7 +1009,9 @@ export async function refreshLots(force = false): Promise<void> {
   try {
     const lots = await fetchTaxLots(lat, lon, radiusM)
     if (seq !== lotSeq || !getAppState().layerToggles.lots) return
-    lastLotFetch = { lat, lon, radiusM }
+    // Empty results keep the old grid (render no-ops) — and must not poison
+    // the movement gate, or the next pan would never refetch.
+    if (lots.length) lastLotFetch = { lat, lon, radiusM }
     layer.render(lots)
   } catch (err) {
     console.error('[lots] layer unavailable:', err) // degrade, never crash
@@ -1123,8 +1174,12 @@ export function unitMapVisible(u: Unit): boolean {
 /** Re-run the visibility policy over every unit on the picture. */
 export function applyUnitVisibility(): void {
   // During REPLAY the globe shows historical positions — injecting live unit
-  // state would corrupt the playback. resyncLive() re-applies policy on exit.
-  if (getAppState().replay.active) return
+  // state would corrupt the playback. Instead, rebuild the CURRENT historical
+  // picture so the GPS/category/agency toggles keep working mid-replay.
+  if (getAppState().replay.active) {
+    replayEngine.reapplyVisibility()
+    return
+  }
   const layer = getUnitLayer()
   if (!layer) return
   for (const u of Object.values(getAppState().units)) layer.upsert(u, unitMapVisible(u))

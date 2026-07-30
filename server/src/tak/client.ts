@@ -85,7 +85,11 @@ export class TakClient extends EventEmitter {
       this.emit('status', true)
     })
 
-    socket.on('data', (chunk) => this.onData(chunk.toString('utf8')))
+    // setEncoding routes chunks through Node's StringDecoder, which buffers
+    // multi-byte UTF-8 sequences split across TCP chunks — a manual
+    // chunk.toString would corrupt them.
+    socket.setEncoding('utf8')
+    socket.on('data', (chunk: string) => this.onData(chunk))
 
     const onDown = (why: string) => {
       if (this.socket !== socket) return
@@ -122,7 +126,9 @@ export class TakClient extends EventEmitter {
     for (;;) {
       const start = this.buffer.indexOf('<event')
       if (start === -1) {
-        this.buffer = ''
+        // Keep a possible partial '<event' prefix — a chunk boundary inside
+        // the 6-byte literal would otherwise drop the split event entirely.
+        this.buffer = this.buffer.slice(-5)
         return
       }
       const endTag = this.buffer.indexOf('</event>', start)

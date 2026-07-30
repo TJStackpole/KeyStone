@@ -18,15 +18,54 @@ const NUM_WORDS: Record<string, number> = {
 function normalizeSpoken(text: string): string {
   const cleaned = text.replace(/[.,!?]+\s*$/, '').trim()
   const tokens = cleaned.split(/\s+/).flatMap((t) => t.split('-'))
-  let value = 0
+  // Spoken house numbers are POSITIONAL, not additive: "one twenty three" is
+  // 123 (not 1+20+3=24) and "one oh five" is 105. Parse standard number
+  // GROUPS ("twenty six" = 26, "six hundred forty two" = 642, "two thousand
+  // five hundred" = 2500) and digit-CONCATENATE across group restarts.
+  const groups: string[] = []
+  let cur = 0 // current group value (units/tens/teens under multipliers)
+  let total = 0 // current group total (thousands/hundreds folded in)
+  let open = false
+  let lastMag: 'unit' | 'teen' | 'tens' | 'mult' | 'oh' | null = null
+  const closeGroup = () => {
+    if (!open) return
+    groups.push(String(total + cur))
+    cur = 0
+    total = 0
+    open = false
+    lastMag = null
+  }
   let consumed = 0
   for (const tok of tokens) {
     const n = NUM_WORDS[tok.toLowerCase()]
     if (n === undefined) break
-    value = n === 100 || n === 1000 ? Math.max(1, value) * n : value + n
     consumed++
+    if (n === 0) {
+      // "oh"/"zero" is a literal digit placeholder — its own group.
+      closeGroup()
+      groups.push('0')
+      continue
+    }
+    if (n === 100 || n === 1000) {
+      cur = Math.max(1, cur) * n
+      total += cur
+      cur = 0
+      open = true
+      lastMag = 'mult'
+      continue
+    }
+    const mag: 'unit' | 'teen' | 'tens' = n < 10 ? 'unit' : n < 20 ? 'teen' : 'tens'
+    // Group RESTART: a unit can only follow tens within a group; anything
+    // else after a completed word starts a new positional group.
+    const extendsGroup = !open || lastMag === 'mult' || (lastMag === 'tens' && mag === 'unit')
+    if (!extendsGroup) closeGroup()
+    cur += n
+    open = true
+    lastMag = mag
   }
-  if (consumed > 0 && value > 0 && consumed < tokens.length) {
+  closeGroup()
+  const value = groups.join('')
+  if (consumed > 0 && value.length > 0 && Number(value) > 0 && consumed < tokens.length) {
     return `${value} ${tokens.slice(consumed).join(' ')}`
   }
   return cleaned

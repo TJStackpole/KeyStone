@@ -462,14 +462,20 @@ interface TaxLotRow {
 /** Tax lots within `radiusM` of a point (SODA within_circle). */
 export async function fetchTaxLots(lat: number, lon: number, radiusM: number, signal?: AbortSignal): Promise<TaxLot[]> {
   maybeFailNyc()
+  // Dense residential areas hold 3000+ lots per 900 m (live-counted in the
+  // East Village) — an unordered low limit silently drops a DETERMINISTIC
+  // half of the grid, and clicks in dropped lots fall back to the
+  // wrong-neighbor geocode this feature exists to fix. Order + high cap.
   const params = new URLSearchParams({
     $select: 'bbl,the_geom',
     $where: `within_circle(the_geom, ${lat}, ${lon}, ${Math.round(radiusM)})`,
-    $limit: '1500',
+    $order: 'bbl',
+    $limit: '4000',
   })
   const res = await fetch(`${TAX_LOTS}?${params}`, { signal })
   if (!res.ok) throw new Error(`tax lots SODA ${res.status}`)
   const rows = (await res.json()) as TaxLotRow[]
+  if (rows.length === 4000) console.warn('[lots] grid truncated at 4000 lots — zoom in for full coverage')
   return rows
     .filter((r) => r.bbl && r.the_geom?.type === 'MultiPolygon' && r.the_geom.coordinates?.length)
     .map((r) => ({ bbl: r.bbl!, polygons: r.the_geom!.coordinates }))

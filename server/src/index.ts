@@ -52,7 +52,13 @@ export function broadcast(message: unknown): void {
   }
 }
 
+// One malformed frame from ANY client (flaky proxy, buggy EUD, port scan)
+// raises 'error' on the socket — unlistened, that is an uncaught exception
+// that kills the entire server mid-demo. ws closes the connection itself.
+wss.on('error', (err) => console.warn('[ws] server error:', err.message))
+
 wss.on('connection', (socket) => {
+  socket.on('error', (err) => console.warn('[ws] client error:', err.message))
   const state = getState()
   socket.send(
     JSON.stringify({
@@ -318,9 +324,16 @@ app.post('/api/alarm', async (req, res) => {
   const updated = updateIncident({ alarmLevel: level as Incident['alarmLevel'] })
   broadcast({ type: 'incident', incident: updated.incident })
   let added: string[] = []
-  if (level !== '10-75') {
-    const result = await simulator.escalate(level as 'all-hands' | '2nd' | '3rd')
-    added = result.added
+  try {
+    if (level !== '10-75') {
+      const result = await simulator.escalate(level as 'all-hands' | '2nd' | '3rd')
+      added = result.added
+    }
+  } catch (err) {
+    // The alarm LEVEL is already applied/broadcast — report the escalation
+    // shortfall instead of dying (Express 4 + Node's fail-fast rejections).
+    console.error('[alarm] escalation failed:', err)
+    return res.json({ level, added: [], warning: 'escalation units unavailable' })
   }
   res.json({ level, added })
 })
@@ -615,7 +628,14 @@ app.post('/api/scenario/speed', (req, res) => {
 app.post('/api/scenario/chapter', async (req, res) => {
   const { id } = req.body as { id?: string }
   if (!id) return res.status(400).json({ error: 'id required' })
-  await scenario.seekChapter(id)
+  try {
+    await scenario.seekChapter(id)
+  } catch (err) {
+    // Express 4 never forwards async rejections — one throw inside a seek
+    // would otherwise take the whole process down (Node fail-fast default).
+    console.error('[scenario] chapter seek failed:', err)
+    return res.status(500).json({ error: 'seek failed' })
+  }
   res.json(scenario.status())
 })
 
@@ -630,6 +650,12 @@ app.post('/api/scenario/seek', (req, res) => {
 app.post('/api/scenario/stop', (_req, res) => {
   scenario.stop()
   res.json(scenario.status())
+})
+
+// Node's default kills the process on any unhandled rejection — for a
+// long-running demo server, log LOUDLY and keep serving instead.
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] UNHANDLED REJECTION (kept alive):', reason)
 })
 
 httpServer.listen(PORT, () => {

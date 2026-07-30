@@ -66,6 +66,10 @@ export class LotLayer {
 
   render(lots: TaxLot[]): void {
     this.renderSeq++
+    // Empty result (screen center drifted over water / out of the city):
+    // KEEP the grid that's still on screen — wiping it would also kill the
+    // click hit-test for lots the operator can plainly see.
+    if (!lots.length) return
     this.clearPrimitive()
     this.lots = lots
     const instances: Cesium.GeometryInstance[] = []
@@ -101,8 +105,15 @@ export class LotLayer {
   /** The BBL of the lot whose border contains the point, if any is loaded. */
   lotAt(lon: number, lat: number): string | null {
     for (const lot of this.lots) {
-      for (const poly of lot.polygons) {
-        if (poly[0] && pointInRing(lon, lat, poly[0])) return lot.bbl
+      polygon: for (const poly of lot.polygons) {
+        if (!poly[0] || !pointInRing(lon, lat, poly[0])) continue
+        // Interior rings are HOLES — typically another lot enclosed by this
+        // one (donut parcels). A point in the hole is NOT in this lot; keep
+        // scanning so the enclosed lot (when loaded) wins deterministically.
+        for (let r = 1; r < poly.length; r++) {
+          if (poly[r] && pointInRing(lon, lat, poly[r])) continue polygon
+        }
+        return lot.bbl
       }
     }
     return null

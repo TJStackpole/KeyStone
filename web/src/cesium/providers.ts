@@ -35,7 +35,11 @@ export const TILE_CACHE_BYTES = 768 * 1024 * 1024
  *   neither (default)            -> keyless: OSM imagery + ellipsoid terrain,
  *                                   buildings extruded from NYC Building Footprints
  */
-export async function initScene(container: HTMLElement): Promise<SceneHandle> {
+export async function initScene(
+  container: HTMLElement,
+  /** Fired once the background provider upgrade attaches (or falls back). */
+  onProviderSettled?: (handle: SceneHandle) => void,
+): Promise<SceneHandle> {
   const googleKey = (import.meta.env.GOOGLE_MAPS_API_KEY ?? '').trim()
   const ionToken = (import.meta.env.CESIUM_ION_TOKEN ?? '').trim()
   const mode: ProviderMode = googleKey ? 'google' : ionToken ? 'ion' : 'keyless'
@@ -137,54 +141,6 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     lastFrame = frameNumber()
   }, 400)
 
-  let buildingTileset: Cesium.Cesium3DTileset | undefined
-
-  if (mode === 'ion') {
-    try {
-      viewer.terrainProvider = await Cesium.createWorldTerrainAsync()
-      const osmBuildings = await Cesium.createOsmBuildingsAsync()
-      osmBuildings.cacheBytes = TILE_CACHE_BYTES // match the restore path in isolate's boost
-      osmBuildings.enableCollision = true
-      scene.primitives.add(osmBuildings)
-      buildingTileset = osmBuildings
-    } catch (err) {
-      console.error('[providers] ion upgrade failed, staying keyless:', err)
-      return { viewer, mode: 'keyless', extrudeFootprints: true }
-    }
-  } else if (mode === 'google') {
-    try {
-      const tileset = await Cesium.Cesium3DTileset.fromUrl(
-        `https://tile.googleapis.com/v1/3dtiles/root.json?key=${googleKey}`,
-        { showCreditsOnScreen: true },
-      )
-      // Stream tiles for the destination DURING camera flights — the address
-      // fly-in arrives with imagery already sharpening instead of all-blur.
-      tileset.preloadFlightDestinations = true
-      // Keep requesting tiles WHILE the camera pans/orbits (default culls them
-      // above a speed threshold) — otherwise every gesture ends in a blur that
-      // only then starts loading. These are immutable CDN tiles; cheap.
-      tileset.cullRequestsWhileMoving = false
-      // With the globe hidden, this is what arms camera-vs-mesh collision —
-      // the flat -26 m floor only covers the geoid-sunken NYC core, not the
-      // Palisades/Westchester hills inside the 50-mile envelope. (ISOLATE
-      // turns it off: clipped-away buildings still register as "mesh".)
-      tileset.enableCollision = true
-      tileset.cacheBytes = TILE_CACHE_BYTES
-      scene.primitives.add(tileset)
-      buildingTileset = tileset
-      // CRITICAL: hide the ellipsoid globe. Photorealistic streets sit BELOW
-      // ellipsoid zero (geoid offset), so the invisible globe surface above
-      // them is what CLAMP_TO_GROUND and sampleHeight hit first — the root
-      // cause of "floating" hydrants/units at oblique angles. The tileset
-      // covers the earth; nothing is lost. (ISOLATE re-shows it for the
-      // flattened-map ground and hides it again on exit.)
-      scene.globe.show = false
-    } catch (err) {
-      console.error('[providers] Google 3D Tiles failed, staying keyless:', err)
-      return { viewer, mode: 'keyless', extrudeFootprints: true }
-    }
-  }
-
   // More parallel tile/data requests — Cesium's defaults leave bandwidth idle
   // and the blur lingers. These hosts serve immutable tiles; hammering is fine.
   Cesium.RequestScheduler.maximumRequestsPerServer = 18
@@ -247,7 +203,67 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
     orientation: { heading: 0, pitch: Cesium.Math.toRadians(-35), roll: 0 },
   })
 
-  return { viewer, mode, extrudeFootprints: mode === 'keyless', buildingTileset }
+  const handle: SceneHandle = { viewer, mode, extrudeFootprints: mode === 'keyless' }
+
+  // Provider UPGRADE runs in the background: the boot veil used to sit on
+  // this network await (google root.json ~0.5-2.5 s, ion two REST trips)
+  // while a perfectly renderable OSM map existed behind it. The handle is
+  // MUTATED when the upgrade lands (every buildingTileset consumer already
+  // null-guards); onProviderSettled lets the app re-bake anything that
+  // sampled heights against the still-visible globe in the window.
+  if (mode !== 'keyless') {
+    void (async () => {
+      try {
+        if (mode === 'ion') {
+          const [terrain, osmBuildings] = await Promise.all([
+            Cesium.createWorldTerrainAsync(),
+            Cesium.createOsmBuildingsAsync(),
+          ])
+          if (viewer.isDestroyed()) return
+          viewer.terrainProvider = terrain
+          osmBuildings.cacheBytes = TILE_CACHE_BYTES // match isolate's restore path
+          osmBuildings.enableCollision = true
+          scene.primitives.add(osmBuildings)
+          handle.buildingTileset = osmBuildings
+        } else {
+          const tileset = await Cesium.Cesium3DTileset.fromUrl(
+            `https://tile.googleapis.com/v1/3dtiles/root.json?key=${googleKey}`,
+            { showCreditsOnScreen: true },
+          )
+          if (viewer.isDestroyed()) return
+          // Stream tiles for the destination DURING camera flights — the
+          // address fly-in arrives with imagery already sharpening.
+          tileset.preloadFlightDestinations = true
+          // Keep requesting tiles WHILE the camera pans/orbits (default culls
+          // them above a speed threshold) — otherwise every gesture ends in a
+          // blur that only then starts loading. Immutable CDN tiles; cheap.
+          tileset.cullRequestsWhileMoving = false
+          // With the globe hidden, this is what arms camera-vs-mesh collision —
+          // the flat -26 m floor only covers the geoid-sunken NYC core, not
+          // Palisades-class hills inside the 50-mile envelope. (ISOLATE turns
+          // it off: clipped-away buildings still register as "mesh".)
+          tileset.enableCollision = true
+          tileset.cacheBytes = TILE_CACHE_BYTES
+          scene.primitives.add(tileset)
+          handle.buildingTileset = tileset
+          // CRITICAL: hide the ellipsoid globe. Photorealistic streets sit
+          // BELOW ellipsoid zero (geoid offset) — the invisible globe surface
+          // above them is what CLAMP_TO_GROUND/sampleHeight hit first, the
+          // root cause of "floating" markers. (ISOLATE re-shows it as its
+          // flat ground and hides it again on exit.)
+          scene.globe.show = false
+        }
+      } catch (err) {
+        console.error(`[providers] ${mode} upgrade failed, staying keyless:`, err)
+        if (viewer.isDestroyed()) return
+        handle.mode = 'keyless'
+        handle.extrudeFootprints = true
+      }
+      onProviderSettled?.(handle)
+    })()
+  }
+
+  return handle
 }
 
 /** Oblique tactical fly-to: ~45° pitch from ~400 m, camera standing off south of the target. */

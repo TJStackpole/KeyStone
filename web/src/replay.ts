@@ -73,6 +73,17 @@ class ReplayEngine {
     void this.resyncLive()
   }
 
+  /**
+   * A visibility toggle flipped mid-replay: redraw the CURRENT historical
+   * picture under the new policy (same path as a seek — historical events
+   * only, never frozen live state).
+   */
+  reapplyVisibility(): void {
+    const s = getAppState()
+    if (!s.replay.active || !this.events.length) return
+    this.rebuildAt(s.replay.t)
+  }
+
   setPlaying(playing: boolean): void {
     setAppState((s) => ({ replay: { ...s.replay, playing } }))
   }

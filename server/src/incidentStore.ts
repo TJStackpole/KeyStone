@@ -28,21 +28,40 @@ function load(): IncidentFile {
 // append would thrash the disk. Coalesce writes on a short trailing debounce.
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 
+/** Synchronous write — shared by the debounce timer and the exit hooks. */
+function flushNow(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+  try {
+    mkdirSync(dirname(DATA_PATH), { recursive: true })
+    // Compact JSON: pretty-printing a multi-MB timeline roughly doubles the
+    // stringify+write cost of every flush.
+    writeFileSync(DATA_PATH, JSON.stringify(state))
+  } catch (err) {
+    // Persistence failure must never take the incident down — state stays in memory.
+    console.error('[incidentStore] failed to write incident.json:', err)
+  }
+}
+
 function flush(): void {
   if (flushTimer) return
-  flushTimer = setTimeout(() => {
-    flushTimer = null
-    try {
-      mkdirSync(dirname(DATA_PATH), { recursive: true })
-      // Compact JSON: pretty-printing a multi-MB timeline roughly doubles the
-      // stringify+write cost of every flush.
-      writeFileSync(DATA_PATH, JSON.stringify(state))
-    } catch (err) {
-      // Persistence failure must never take the incident down — state stays in memory.
-      console.error('[incidentStore] failed to write incident.json:', err)
-    }
-  }, 1500) // sustained track appends make this a steady cadence, not a debounce
+  flushTimer = setTimeout(flushNow, 1500) // sustained appends = steady cadence
   flushTimer.unref?.()
+}
+
+// A restart inside the 1.5 s window (tsx watch fires on every file save)
+// otherwise loses writes the client already saw acknowledged. Signals skip
+// 'exit' handlers, so SIGINT/SIGTERM flush explicitly and re-raise.
+process.on('exit', () => {
+  if (flushTimer) flushNow()
+})
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(sig, () => {
+    if (flushTimer) flushNow()
+    process.kill(process.pid, sig)
+  })
 }
 
 export function getState(): IncidentFile {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import { initScene } from './cesium/providers'
 import { registerScene, unregisterScene } from './cesium/scene'
-import { exitGround, refreshLots, restoreIncident, setGroundHeightFt } from './actions'
+import { exitGround, reconcileProviderUpgrade, refreshLots, restoreIncident, setGroundHeightFt } from './actions'
 import { setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
@@ -67,7 +67,12 @@ export default function App() {
     let viewer: Viewer | undefined
     if (!globeRef.current) return
 
-    initScene(globeRef.current)
+    performance.mark('keystone:init-scene-start')
+    initScene(globeRef.current, () => {
+      // Background provider upgrade landed (or fell back to keyless) —
+      // refresh the chip and re-bake globe-window height samples.
+      if (!disposed) reconcileProviderUpgrade()
+    })
       .then((handle) => {
         if (disposed) {
           handle.viewer.destroy()
@@ -75,6 +80,7 @@ export default function App() {
         }
         viewer = handle.viewer
         registerScene(handle)
+        performance.mark('keystone:scene-ready')
         setAppState({ sceneReady: true, providerMode: handle.mode })
         connectWs()
         void restoreIncident()
