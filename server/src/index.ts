@@ -575,7 +575,7 @@ const scenario = new ScenarioEngine({
   },
   upsertShape,
   removeShape,
-  removeUnit: (uid) => registry.remove(uid),
+  removeUnit: (uid, opts) => registry.remove(uid, opts?.tombstone !== false),
   setAlarm: (level) => {
     const updated = updateIncident({ alarmLevel: level })
     broadcast({ type: 'incident', incident: updated.incident })

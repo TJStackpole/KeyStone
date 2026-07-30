@@ -60,10 +60,20 @@ export class UnitRegistry extends EventEmitter {
     return this.units.get(uid)
   }
 
-  /** Explicit removal (scenario resets) — emits 'remove' like a stale sweep. */
-  remove(uid: string): void {
+  /**
+   * Explicit removal (scenario resets) — emits 'remove' like a stale sweep.
+   * Tombstones apply ONLY to uids the server itself publishes (sim/drill):
+   * they exist to swallow our own in-flight TAK echo, and both timestamps
+   * share the server clock there. Real EUDs stamp CoT with the PHONE's clock
+   * (often skewed), and they have no server-written events to echo — never
+   * tombstone them. `tombstone: false` is for the rewind respawn path, where
+   * the same units are re-announced in the same millisecond.
+   */
+  remove(uid: string, tombstone = true): void {
     if (this.units.delete(uid)) {
-      this.removedAt.set(uid, Date.now())
+      if (tombstone && (uid.startsWith('WT-SIM-') || uid.startsWith('DRILL-'))) {
+        this.removedAt.set(uid, Date.now())
+      }
       this.emit('remove', uid)
     }
   }

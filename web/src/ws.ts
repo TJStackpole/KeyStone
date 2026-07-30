@@ -306,10 +306,11 @@ function handle(msg: ServerMsg): void {
       setAppState((s) => {
         const existing = s.transcripts[msg.channel]
         const last = existing[existing.length - 1]
-        // Transport duplication (e.g. a stacked dev-reload socket): same line
-        // id — or, for id-less lines from an older server, identical ts+text.
-        if (last && ((last.id && last.id === msg.line.id) || (last.ts === msg.line.ts && last.text === msg.line.text)))
-          return {}
+        // Transport duplication (e.g. stacked dev-reload sockets): the copies
+        // can arrive INTERLEAVED (1,2,1,2), so check ids across the whole
+        // window — plus the adjacent ts+text check for id-less older servers.
+        if (msg.line.id && existing.some((l) => l.id === msg.line.id)) return {}
+        if (last && last.ts === msg.line.ts && last.text === msg.line.text) return {}
         return {
           transcripts: {
             ...s.transcripts,

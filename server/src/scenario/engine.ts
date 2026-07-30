@@ -98,7 +98,9 @@ export interface EngineDeps {
   createIncident: (incident: Incident) => void
   upsertShape: (shape: IcsShape) => void
   removeShape: (id: string) => boolean
-  removeUnit: (uid: string) => void
+  /** `tombstone: false` on rewinds — the unit respawns in the same ms and a
+   *  tombstone would swallow the respawn's TAK echo (empty drill board). */
+  removeUnit: (uid: string, opts?: { tombstone?: boolean }) => void
   setAlarm: (level: Incident['alarmLevel']) => void
 }
 
@@ -145,6 +147,9 @@ export class ScenarioEngine extends EventEmitter {
   private lastStatusPush = 0
   private pendingAlert: Record<string, unknown> | null = null
   private lastKeepalive = 0
+  /** High-water event INDEX whose milestones were already emitted — events
+   *  replayed below it (after a rewind) must not re-append to the timeline. */
+  private maxEmittedCursor = 0
 
   constructor(private deps: EngineDeps) {
     super()
@@ -235,6 +240,9 @@ export class ScenarioEngine extends EventEmitter {
     const duration = Math.max(...this.file.events.map((e) => e.t))
     const target = Math.max(0, Math.min(t, duration))
     const rewind = target < this.clock
+    // Scrub direction must not change transport state — teardown(true)
+    // forces playing=false, so remember and restore it.
+    const wasPlaying = this.playing
     if (rewind) {
       const name = this.file.name
       const fileRef = this.file
@@ -246,6 +254,7 @@ export class ScenarioEngine extends EventEmitter {
       this.deps.emitTimeline('scenario.rewind', { name, to: label ?? `T+${Math.round(target)}s` })
     }
     this.catchUp(target, rewind)
+    this.playing = wasPlaying
     // catchUp just transmitted every unit; start the keepalive clock from now
     // and make sure the tick timer exists even if play was never pressed.
     this.lastKeepalive = Date.now()
@@ -265,7 +274,8 @@ export class ScenarioEngine extends EventEmitter {
       clearInterval(this.timer)
       this.timer = null
     }
-    for (const u of this.units.values()) this.deps.removeUnit(u.uid)
+    // keepIncident === rewind: the same units respawn within this millisecond.
+    for (const u of this.units.values()) this.deps.removeUnit(u.uid, { tombstone: !keepIncident })
     for (const id of this.shapeIds) {
       if (this.deps.removeShape(id)) {
         this.deps.broadcast({ type: 'shape.remove', id })
@@ -279,7 +289,10 @@ export class ScenarioEngine extends EventEmitter {
     this.clock = 0
     this.cursor = 0
     this.playing = false
-    if (!keepIncident) this.file = null
+    if (!keepIncident) {
+      this.file = null
+      this.maxEmittedCursor = 0 // rewinds keep it — that's its whole purpose
+    }
   }
 
   private tick(): void {
@@ -325,19 +338,25 @@ export class ScenarioEngine extends EventEmitter {
   private processDue(catchUp: boolean, rewind = false): void {
     if (!this.file) return
     while (this.cursor < this.file.events.length && this.file.events[this.cursor].t <= this.clock) {
+      const idx = this.cursor
       const ev = this.file.events[this.cursor++]
+      // "Replayed" = this exact event already emitted its milestone on an
+      // earlier pass (we rewound below it). Covers both the silent catch-up
+      // AND live playback re-crossing the (target, old-clock] span.
+      const replayed = idx < this.maxEmittedCursor
       try {
-        this.apply(ev, catchUp, rewind)
+        this.apply(ev, catchUp, rewind, replayed)
       } catch (err) {
         console.error('[scenario] event failed:', ev.kind, err)
       }
+      if (!replayed) this.maxEmittedCursor = idx + 1
     }
   }
 
-  private apply(ev: ScenarioEvent, catchUp: boolean, rewind = false): void {
-    // On a rewind replay every event is by construction already in the
-    // persisted timeline — re-emitting would duplicate SITREP milestones.
-    const emitTimeline = rewind ? () => undefined : this.deps.emitTimeline
+  private apply(ev: ScenarioEvent, catchUp: boolean, rewind = false, replayed = false): void {
+    // A rewound/replayed event is by construction already in the persisted
+    // timeline — re-emitting would duplicate SITREP milestones.
+    const emitTimeline = rewind || replayed ? () => undefined : this.deps.emitTimeline
     switch (ev.kind) {
       case 'unit_spawn': {
         const d = ev.unit!
@@ -431,8 +450,9 @@ export class ScenarioEngine extends EventEmitter {
         break
       }
       case 'aar': {
-        // Never auto-open the report while rewinding through history.
-        if (!catchUp) {
+        // Never auto-open the report while rewinding through history, nor
+        // re-open (and re-log) it when live playback re-crosses it post-rewind.
+        if (!catchUp && !replayed) {
           this.deps.broadcast({ type: 'scenario.aar' })
           this.deps.emitTimeline('scenario.aar', { name: this.file?.name })
         }

@@ -144,6 +144,7 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync()
       const osmBuildings = await Cesium.createOsmBuildingsAsync()
       osmBuildings.cacheBytes = TILE_CACHE_BYTES // match the restore path in isolate's boost
+      osmBuildings.enableCollision = true
       scene.primitives.add(osmBuildings)
       buildingTileset = osmBuildings
     } catch (err) {
@@ -163,6 +164,11 @@ export async function initScene(container: HTMLElement): Promise<SceneHandle> {
       // above a speed threshold) — otherwise every gesture ends in a blur that
       // only then starts loading. These are immutable CDN tiles; cheap.
       tileset.cullRequestsWhileMoving = false
+      // With the globe hidden, this is what arms camera-vs-mesh collision —
+      // the flat -26 m floor only covers the geoid-sunken NYC core, not the
+      // Palisades/Westchester hills inside the 50-mile envelope. (ISOLATE
+      // turns it off: clipped-away buildings still register as "mesh".)
+      tileset.enableCollision = true
       tileset.cacheBytes = TILE_CACHE_BYTES
       scene.primitives.add(tileset)
       buildingTileset = tileset

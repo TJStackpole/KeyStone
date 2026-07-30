@@ -289,6 +289,7 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
       tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons: [] })
       tileset.modelMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY)
       tileset.show = true // MODEL view hides it — never leave the city hidden
+      tileset.enableCollision = true // camera-vs-mesh guard back on
       if (scene.mode === 'google') scene.viewer.scene.globe.show = false
     }
     setAppState({ isolateLiftM: 0 })
@@ -322,6 +323,10 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
       )
       if (polygons.length) {
         tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({ polygons, inverse: true })
+        // Mesh collision samples heights of CLIPPED-AWAY buildings too — it
+        // would shove the camera over invisible towers. The globe + floor
+        // clamp guard the flattened ground instead.
+        tileset.enableCollision = false
         // Raise the lone building above the flattened city: translate the
         // (fully clipped) tileset along the local up vector. Only the target
         // survives the clip, so only it visibly lifts.

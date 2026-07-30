@@ -47,15 +47,15 @@ export function SearchBar() {
   useEffect(() => {
     if (!searchPrefill) return
     setAppState({ searchPrefill: null })
-    // Drop the previous query's results BEFORE focusing — onFocus reopens the
-    // dropdown from `hits`, and stale rows would make Enter (during the fetch
-    // window) stand up an incident at the WRONG address.
+    // Focus FIRST: the focus event dispatches synchronously into the current
+    // render's onFocus (which still sees the old hits) — queuing its stale
+    // setOpen(true) BEFORE the clears below means the clears win the batch.
+    inputRef.current?.focus()
+    // Drop the previous query's results — stale rows would make Enter (during
+    // the fetch window) stand up an incident at the WRONG address.
     setHits([])
     setOpen(false)
     setActive(0)
-    // Keyboard must work without a mouse trip: the Enter handler lives on the
-    // input, and a click on the globe leaves focus on the Cesium canvas.
-    inputRef.current?.focus()
     onChange(searchPrefill)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchPrefill])

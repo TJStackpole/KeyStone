@@ -101,6 +101,8 @@ export class UnitLayer {
   private sampleTimes = new Map<string, Cesium.JulianDate[]>()
   /** Callsign labels are hidden until the operator taps a unit (declutter). */
   private labeledUids = new Set<string>()
+  /** Agency captured in each pulse ring's color closure — recreate on change. */
+  private pulseAgency = new Map<string, string>()
 
   constructor(viewer: Cesium.Viewer) {
     void viewer.dataSources.add(this.source)
@@ -235,13 +237,25 @@ export class UnitLayer {
     clampRef: Cesium.HeightReference,
   ): void {
     const pulseId = `unit:${unit.uid}:pulse`
-    const enroute = !unit.status || unit.status === 'Enroute'
+    // EXPLICIT Enroute only: real ATAK phones never carry the status
+    // extension, and a status-less phone sitting at the command post must not
+    // pulse as "actively responding" for its whole stale window. The pulse is
+    // also a LIVE cue — a paused replay's frozen picture gets none.
+    const enroute = unit.status === 'Enroute' && !getAppState().replay.active
     if (VEHICLE_TRAIL_EXEMPT.has(unit.category) || !enroute) {
       this.source.entities.removeById(pulseId)
+      this.pulseAgency.delete(unit.uid)
       return
     }
     let pulse = this.source.entities.getById(pulseId)
+    // Units re-classify as richer CoT detail resolves (TAK -> FDNY) — the
+    // ring must not keep the creation-time tint under a recolored marker.
+    if (pulse && this.pulseAgency.get(unit.uid) !== unit.agency) {
+      this.source.entities.removeById(pulseId)
+      pulse = undefined
+    }
     if (!pulse) {
+      this.pulseAgency.set(unit.uid, unit.agency)
       const base = Cesium.Color.fromCssColorString(TRAIL_COLOR[unit.agency] ?? '#22d3ee')
       const scratch = new Cesium.Color()
       pulse = this.source.entities.add({
@@ -360,6 +374,7 @@ export class UnitLayer {
     this.source.entities.removeById(`unit:${uid}:pulse`)
     this.trails.delete(uid)
     this.sampleTimes.delete(uid)
+    this.pulseAgency.delete(uid)
   }
 
   /** Transcript mention: pulse the unit's marker for ~3 s (F6/F7 spec). */
@@ -413,5 +428,6 @@ export class UnitLayer {
     this.source.entities.removeAll()
     this.trails.clear()
     this.sampleTimes.clear()
+    this.pulseAgency.clear()
   }
 }
