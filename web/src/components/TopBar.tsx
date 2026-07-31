@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  activateInspectedIncident,
   loadScenario,
   runDemoScenario,
   setIsolateScale,
@@ -107,6 +108,7 @@ export function TopBar() {
     takConnected,
     utilityTab,
     incident,
+    inspected,
     activeIncidentMode,
     isolateMode,
     isolateView,
@@ -171,15 +173,26 @@ export function TopBar() {
             <span className="dot" /> TAK OFFLINE
           </span>
         )}
-        {incident && (
-          <button
-            className={`chip chip-btn amber${activeIncidentMode ? ' active' : ''}`}
-            onClick={toggleActiveIncidentMode}
-            title="Refine the fire building; de-emphasize beyond ~4 blocks"
-          >
-            <span className="dot" /> ACTIVE INCIDENT
-          </button>
-        )}
+        <button
+          className={`chip chip-btn amber${incident && activeIncidentMode ? ' active' : ''}${!incident && !inspected ? ' disabled' : ''}`}
+          aria-disabled={!incident && !inspected}
+          onClick={() => {
+            // aria-disabled keeps the chip keyboard-reachable (its title is
+            // the only arming instruction); activateInspectedIncident is a
+            // no-op without an inspected hit, so the inert state is safe.
+            if (incident) toggleActiveIncidentMode()
+            else void activateInspectedIncident()
+          }}
+          title={
+            incident
+              ? 'Refine the fire building; de-emphasize beyond ~4 blocks'
+              : inspected
+                ? `Stand up the active incident at ${inspected.hit.label} — unlocks ISOLATE + MODEL/LIVE`
+                : 'Click a building or address on the map first — then this stands up the incident there'
+          }
+        >
+          <span className="dot" /> ACTIVE INCIDENT
+        </button>
         {incident && activeIncidentMode && (
           <button
             className={`chip chip-btn amber${isolateMode ? ' active' : ''}`}

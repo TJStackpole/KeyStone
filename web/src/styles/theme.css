@@ -1320,6 +1320,14 @@ html, body {
 /* ---------- video: tiles, drone panel, bodycam wall ---------- */
 .chip-btn { cursor: pointer; background: rgba(7, 12, 20, 0.6); transition: all 120ms; }
 .chip-btn:hover { border-color: var(--border-strong); color: var(--cyan); }
+.chip-btn:disabled,
+.chip-btn.disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+  border-color: transparent;
+}
+.chip-btn:disabled:hover,
+.chip-btn.disabled:hover { color: var(--text-dim); border-color: transparent; }
 .chip-btn.active { border-color: var(--border-strong); color: var(--cyan); background: rgba(34, 211, 238, 0.1); }
 .chip-btn.amber.active {
   border-color: rgba(245, 158, 11, 0.65);
@@ -1489,6 +1497,32 @@ html, body {
 }
 .tab-badge.live { border-color: rgba(248, 113, 113, 0.7); color: #f87171; animation: pulse 1.6s infinite; }
 .tab-badge.sim { border-color: rgba(245, 158, 11, 0.55); color: var(--amber-bright); }
+/* SIM / LIVE source selector — LIVE arms only when a real feed is attached. */
+.comms-source {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 10px;
+  padding: 2px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 4px;
+}
+.source-btn {
+  height: 18px;
+  padding: 0 8px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.source-btn.on { background: rgba(245, 158, 11, 0.16); color: var(--amber-bright); }
+.source-btn:last-child.on { background: rgba(248, 113, 113, 0.16); color: #f87171; }
+.source-btn:disabled,
+.source-btn.disabled { cursor: not-allowed; opacity: 0.35; }
 .comms-audio { margin-left: auto; height: 26px; max-width: 300px; filter: invert(0.85) hue-rotate(180deg); }
 .comms-tabs .panel-close { margin-left: 8px; }
 

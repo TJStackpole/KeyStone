@@ -654,6 +654,22 @@ export function toggleActiveIncidentMode(): void {
   if (!next) resetIsolate() // ISOLATE rides on active-incident focus
 }
 
+/**
+ * ACTIVE INCIDENT from a tapped address: the chip is enabled the moment the
+ * operator clicks a building/address on the map — clicking it promotes the
+ * inspected building to the active incident (full stand-up: camera,
+ * footprints, intel, focus), which unlocks ISOLATE and MODEL/LIVE.
+ */
+export async function activateInspectedIncident(): Promise<void> {
+  const s = getAppState()
+  const hit = s.inspected?.hit
+  if (!hit || s.incident) return
+  // Focus treatment ON is the point of the button — a previously toggled-off
+  // state must not stand up a dimmed, isolate-less incident.
+  if (!s.activeIncidentMode) setAppState({ activeIncidentMode: true })
+  await standUpIncident(hit)
+}
+
 /** Provider chip: cycle the camera between tactical 3D and top-down satellite. */
 export async function toggleTopDownView(): Promise<void> {
   const scene = getScene()

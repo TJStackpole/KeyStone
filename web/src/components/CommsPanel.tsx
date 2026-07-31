@@ -50,7 +50,8 @@ function HighlightedText({ line }: { line: TranscriptLine }) {
 }
 
 export function CommsPanel() {
-  const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario, commsAll } = useAppState()
+  const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario, commsAll, commsSource } =
+    useAppState()
   const scrollRef = useRef<HTMLDivElement>(null)
   const scenarioMode = !!scenario
 
@@ -65,16 +66,31 @@ export function CommsPanel() {
   }, [scenarioMode, commsAll, transcripts])
 
   useEffect(() => {
-    // fetch channel config once
+    // fetch channel config once; a real attached feed defaults the source
+    // selector to LIVE, keyless installs default to SIMULATED.
     if (!commsConfig) {
       fetch('/api/comms/config')
         .then((r) => r.json())
-        .then((cfg) => setAppState({ commsConfig: cfg }))
+        .then((cfg: { live: boolean; audioUrl: string }) =>
+          setAppState({ commsConfig: cfg, commsSource: cfg.live ? 'live' : 'sim' }),
+        )
         .catch(() => undefined)
     }
   }, [commsConfig])
 
-  const lines = scenarioMode && commsAll ? merged : transcripts[commsChannel]
+  // Live playback requires BOTH: the operator selected LIVE and the server
+  // actually has a feed attached. Keyless installs are always simulated.
+  const liveAttached = commsConfig?.live ?? false
+  const liveSelected = commsSource === 'live' && liveAttached
+  // SIM mode shows only simulated content: live-transcribed lines are
+  // filtered out rather than mislabeled under the SIMULATED watermark.
+  // (Keyless installs are unaffected — all their lines are non-live.)
+  const lines =
+    scenarioMode && commsAll
+      ? merged
+      : commsChannel === 'fdny' && !liveSelected
+        ? transcripts.fdny.filter((l) => !l.live)
+        : transcripts[commsChannel]
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -89,13 +105,15 @@ export function CommsPanel() {
     )
   }
 
-  const isSim = commsChannel !== 'fdny'
   // Honest badge: trust what the transcription pipeline actually delivers
   // (the sidecar falls back to the bundled recording if the live URL fails).
   const fdnyLines = transcripts.fdny
-  const fdnyActuallyLive = fdnyLines.length
-    ? fdnyLines[fdnyLines.length - 1].live
-    : (commsConfig?.live ?? false)
+  const fdnyActuallyLive = fdnyLines.length ? fdnyLines[fdnyLines.length - 1].live : liveAttached
+  // SIMULATED watermark covers the scripted channels always, and FDNY unless
+  // the operator selected LIVE *and* the lines on screen are actually live —
+  // a sidecar that fell back to the bundled recording stays watermarked.
+  const isSim = commsChannel !== 'fdny' || !liveSelected || !fdnyActuallyLive
+  const audioSrc = liveSelected ? commsConfig!.audioUrl : '/api/audio/fdny-dispatch-demo.mp3'
 
   return (
     <section className="comms-panel glass">
@@ -110,8 +128,8 @@ export function CommsPanel() {
             {scenarioMode ? (
               <i className="tab-badge sim">DRILL</i>
             ) : c.id === 'fdny' ? (
-              <i className={`tab-badge${fdnyActuallyLive ? ' live' : ''}`}>
-                {fdnyActuallyLive ? 'LIVE' : 'AS-LIVE'}
+              <i className={`tab-badge${liveSelected && fdnyActuallyLive ? ' live' : ' sim'}`}>
+                {liveSelected ? (fdnyActuallyLive ? 'LIVE' : 'AS-LIVE') : 'SIM'}
               </i>
             ) : (
               <i className="tab-badge sim">SIM</i>
@@ -127,19 +145,54 @@ export function CommsPanel() {
             ALL
           </button>
         )}
+        {!scenarioMode && (
+          <span className="comms-source" aria-label="Comms source">
+            <button
+              className={`source-btn${!liveSelected ? ' on' : ''}`}
+              aria-pressed={!liveSelected}
+              onClick={() => setAppState({ commsSource: 'sim' })}
+              title="Simulated comms for demos and training — bundled dispatch recording replayed as-if-live, scripted mutual-aid channels"
+            >
+              SIM
+            </button>
+            {/* aria-disabled (not disabled) keeps the button keyboard-reachable
+                so its explanation is discoverable; the onClick guard makes it
+                inert. */}
+            <button
+              className={`source-btn${liveSelected ? ' on' : ''}${liveAttached ? '' : ' disabled'}`}
+              aria-pressed={liveSelected}
+              aria-disabled={!liveAttached}
+              onClick={() => {
+                if (liveAttached) setAppState({ commsSource: 'live' })
+              }}
+              title={
+                liveAttached
+                  ? 'Live radio feed attached — play the real stream'
+                  : 'No live feed attached — set BROADCASTIFY_URL in .env to enable'
+              }
+            >
+              LIVE
+            </button>
+          </span>
+        )}
         {commsChannel === 'fdny' && commsConfig && (
           <audio
+            // Remount on source change — browsers don't reliably reload an
+            // <audio> element when only its src attribute swaps.
+            key={audioSrc}
             className="comms-audio"
             controls
-            loop={!fdnyActuallyLive}
-            src={fdnyActuallyLive ? commsConfig.audioUrl : '/api/audio/fdny-dispatch-demo.mp3'}
-            onError={() =>
-              setAppState((s) => ({
-                commsConfig: s.commsConfig
-                  ? { ...s.commsConfig, live: false, audioUrl: '/api/audio/fdny-dispatch-demo.mp3' }
-                  : s.commsConfig,
-              }))
-            }
+            loop={!liveSelected}
+            src={audioSrc}
+            onError={() => {
+              // A LIVE playback failure falls back to the simulated source —
+              // but commsConfig.live stays true: the feed being ATTACHED is a
+              // server fact, and one transient 502 must not grey out LIVE for
+              // the whole session. Re-selecting LIVE simply retries the
+              // stream. (A hiccup on the bundled demo file changes nothing.)
+              if (!liveSelected) return
+              setAppState({ commsSource: 'sim' })
+            }}
           />
         )}
         <button className="panel-close" onClick={() => setAppState({ commsOpen: false })}>
@@ -148,7 +201,13 @@ export function CommsPanel() {
       </div>
       <div className={`comms-scroll${isSim ? ' sim' : ''}`} ref={scrollRef}>
         {isSim && <span className="comms-watermark">SIMULATED</span>}
-        {lines.length === 0 && <div className="roster-empty">AWAITING TRAFFIC…</div>}
+        {lines.length === 0 && (
+          <div className="roster-empty">
+            {commsChannel === 'fdny' && !liveSelected && liveAttached && transcripts.fdny.length > 0
+              ? 'TRANSCRIBER IS ON THE LIVE FEED — SIM MODE PLAYS THE DEMO AUDIO ONLY'
+              : 'AWAITING TRAFFIC…'}
+          </div>
+        )}
         {lines.map((l) => (
           // Server-minted line id; the ts|full-text fallback only serves lines
           // from an id-less server during dev HMR. Same-ms same-prefix lines

@@ -72,6 +72,12 @@ export interface AppState {
   transcripts: Record<CommsChannel, TranscriptLine[]>
   /** Merged multi-channel command view in the comms panel. */
   commsAll: boolean
+  /**
+   * FDNY comms source: 'sim' replays the bundled dispatch recording as-live
+   * (demo mode, watermarked SIMULATED); 'live' plays the attached radio feed
+   * — selectable only when the server reports one configured.
+   */
+  commsSource: 'sim' | 'live'
   /** Scenario playback (Prompt 8A) — null until a scenario is loaded. */
   scenario: ScenarioStatus | null
   /** Active full-screen alert (mayday etc.) — null when clear. */
@@ -200,6 +206,7 @@ const initial: AppState = {
     interagency: [],
   },
   commsAll: false,
+  commsSource: 'sim',
   scenario: null,
   alert: null,
   nycemView: false,
