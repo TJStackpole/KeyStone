@@ -7,19 +7,31 @@ import type {
   CommsConfig,
   DataLayerId,
   DrawTool,
+  EocChange,
+  EocLevel,
+  ExerciseSession,
   FeedIncident,
   GeoHit,
   IcsShape,
   Incident,
+  InteragencyRequest,
   LayerStatus,
   MapAlert,
+  NwsAlert,
+  PlanActivation,
+  PortfolioIncident,
   ProviderMode,
+  RequestPriority,
   ScenarioStatus,
+  TickerEvent,
   TimelineEvent,
   ToggleLayerId,
   TranscriptLine,
+  TriggerRule,
+  TriggerSuggestion,
   Unit,
   UnitCategory,
+  WeatherObsNycem,
 } from '../types'
 
 export interface SiteIntel {
@@ -93,6 +105,23 @@ export interface AppState {
   dispatchFeed: FeedIncident[]
   /** Feed entry the board is currently focused on (null = none/manual). */
   focusedFeedId: string | null
+  // ------------------- Prompt 11: NYCEM coordination layer -------------------
+  /** Watch Command mode: the citywide multi-incident portfolio view. */
+  watchCommand: boolean
+  portfolio: PortfolioIncident[]
+  /** Portfolio marker the operator is hovering (drives the hover card). */
+  portfolioHoverId: string | null
+  tickerFeed: TickerEvent[]
+  eoc: { level: EocLevel; history: EocChange[] }
+  planActivations: PlanActivation[]
+  interagencyRequests: InteragencyRequest[]
+  requestThresholds: Record<RequestPriority, number>
+  weatherAlerts: NwsAlert[]
+  weatherObs: WeatherObsNycem | null
+  triggerSuggestions: TriggerSuggestion[]
+  triggerRules: TriggerRule[]
+  /** Facilitator review screen for a finished exercise (M8). */
+  exerciseReview: ExerciseSession | null
   /** IC view <-> NYCEM Watch Command coordination view. */
   nycemView: boolean
   /** After-action report overlay (auto-opens at scenario end). */
@@ -230,6 +259,19 @@ const initial: AppState = {
   alert: null,
   dispatchFeed: [],
   focusedFeedId: null,
+  watchCommand: false,
+  portfolio: [],
+  portfolioHoverId: null,
+  tickerFeed: [],
+  eoc: { level: 4, history: [] },
+  planActivations: [],
+  interagencyRequests: [],
+  requestThresholds: { immediate: 120_000, urgent: 300_000, routine: 1_800_000 },
+  weatherAlerts: [],
+  weatherObs: null,
+  triggerSuggestions: [],
+  triggerRules: [],
+  exerciseReview: null,
   nycemView: false,
   aarOpen: false,
   chats: [],

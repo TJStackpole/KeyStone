@@ -8,6 +8,9 @@ data/incident.json
 # derived from it and stay local for the same reason.
 server/data/doctrine/
 server/data/tactics/
+# Runtime coordination state (NYCEM EOC/requests/ticker) + saved exercise AARs
+server/data/nycem-state.json
+server/data/exercises/
 .DS_Store
 *.log
 *.tsbuildinfo

@@ -35,6 +35,22 @@ interface SpawnDef {
   bio?: BioTelemetry
 }
 
+/** Prompt 11: a scripted SECONDARY incident — a portfolio entry the Watch
+ *  Command view tracks alongside the primary drill (counts + ticker, no CoT
+ *  unit stream of its own). CIMS labels are explicit, never inferred. */
+export interface SecondaryIncidentDef {
+  id: string
+  address: string
+  borough: string
+  lat: number
+  lon: number
+  type: string
+  primaryAgency: string
+  supportingAgencies?: string[]
+  severity: number
+  unitsByAgency?: Record<string, number>
+}
+
 export interface ScenarioEvent {
   t: number
   kind:
@@ -49,6 +65,13 @@ export interface ScenarioEvent {
     | 'timeline'
     | 'alert'
     | 'aar'
+    // Prompt 11 (NYCEM coordination layer):
+    | 'incident_spawn'
+    | 'incident_update'
+    | 'incident_close'
+    | 'request'
+    | 'request_transition'
+    | 'nws_mock'
   unit?: SpawnDef
   callsign?: string
   path?: [number, number][]
@@ -67,6 +90,32 @@ export interface ScenarioEvent {
   event?: string
   payload?: Record<string, unknown>
   alert?: { kind: string; callsign?: string; text?: string }
+  // Prompt 11 payloads:
+  incident?: SecondaryIncidentDef
+  incidentId?: string
+  update?: { severity?: number; unitsByAgency?: Record<string, number>; note?: string }
+  request?: {
+    refId: string
+    incidentId?: string | null // 'primary' targets the drill board
+    requestingAgency: string
+    assignedAgency: string
+    description: string
+    priority: 'routine' | 'urgent' | 'immediate'
+    createdBy: string
+  }
+  refId?: string
+  state?: string
+  by?: string
+  reason?: string
+  nws?: {
+    id: string
+    event: string
+    headline: string
+    severity: string
+    endsInMin?: number
+    areaDesc: string
+    polygons?: [number, number][][]
+  }
 }
 
 interface ScenarioFile {
@@ -102,6 +151,12 @@ export interface EngineDeps {
    *  tombstone would swallow the respawn's TAK echo (empty drill board). */
   removeUnit: (uid: string, opts?: { tombstone?: boolean }) => void
   setAlarm: (level: Incident['alarmLevel']) => void
+  // Prompt 11 — NYCEM coordination layer hooks (all optional so older
+  // single-incident scenarios keep running untouched):
+  portfolioChanged?: () => void
+  openRequest?: (req: NonNullable<ScenarioEvent['request']>, incidentId: string | null) => string | null
+  transitionRequest?: (id: string, state: string, by: string, reason?: string) => void
+  injectNws?: (nws: NonNullable<ScenarioEvent['nws']>) => void
 }
 
 const SCENARIO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../assets/scenarios')
@@ -151,12 +206,26 @@ export class ScenarioEngine extends EventEmitter {
    *  replayed below it (after a rewind) must not re-append to the timeline. */
   private maxEmittedCursor = 0
 
+  // Prompt 11 — coordination-layer state carried by the scenario:
+  /** Scripted SECONDARY incidents (portfolio entries beside the drill board). */
+  private secondary = new Map<string, SecondaryIncidentDef & { startedAt: string; closed?: boolean }>()
+  /** Scenario request refIds -> real request-store ids. */
+  private requestIds = new Map<string, string>()
+  /** Exercise mode: participants interact live while the script drives. */
+  exercise = false
+  exerciseStartedAt: string | null = null
+
   constructor(private deps: EngineDeps) {
     super()
   }
 
   get loaded(): boolean {
     return this.file !== null
+  }
+
+  /** Watch Command portfolio: the scripted secondary incidents still open. */
+  secondaryIncidents(): (SecondaryIncidentDef & { startedAt: string })[] {
+    return [...this.secondary.values()].filter((s) => !s.closed)
   }
 
   status(): Record<string, unknown> {
@@ -169,7 +238,14 @@ export class ScenarioEngine extends EventEmitter {
       clock: Math.round(this.clock),
       duration: this.file ? Math.max(...this.file.events.map((e) => e.t)) : 0,
       chapters: this.file?.chapters ?? [],
+      exercise: this.exercise,
     }
+  }
+
+  /** Exercise mode flag (M8): set at load; recorded into the session AAR. */
+  setExercise(on: boolean): void {
+    this.exercise = on
+    this.exerciseStartedAt = on ? new Date().toISOString() : null
   }
 
   async load(name: string): Promise<void> {
@@ -308,9 +384,19 @@ export class ScenarioEngine extends EventEmitter {
     this.clock = 0
     this.cursor = 0
     this.playing = false
+    // Prompt 11: scripted secondary incidents leave the portfolio with the
+    // scenario (rewinds respawn them via catchUp). Requests persist — they
+    // are the accountability record the AAR slices by session window.
+    if (this.secondary.size) {
+      this.secondary.clear()
+      this.requestIds.clear()
+      this.deps.portfolioChanged?.()
+    }
     if (!keepIncident) {
       this.file = null
       this.maxEmittedCursor = 0 // rewinds keep it — that's its whole purpose
+      this.exercise = false
+      this.exerciseStartedAt = null
     }
   }
 
@@ -475,6 +561,51 @@ export class ScenarioEngine extends EventEmitter {
         // so a rewound re-crossing can't log it twice.
         if (!catchUp) this.deps.broadcast({ type: 'scenario.aar' })
         emitTimeline('scenario.aar', { name: this.file?.name ?? '' })
+        break
+      }
+      // ------------------- Prompt 11: coordination layer -------------------
+      case 'incident_spawn': {
+        const def = ev.incident!
+        this.secondary.set(def.id, { ...def, startedAt: new Date().toISOString() })
+        emitTimeline('portfolio.incident', { id: def.id, address: def.address, primaryAgency: def.primaryAgency })
+        this.deps.portfolioChanged?.()
+        break
+      }
+      case 'incident_update': {
+        const s = ev.incidentId ? this.secondary.get(ev.incidentId) : undefined
+        if (!s || !ev.update) break
+        if (ev.update.severity !== undefined) s.severity = ev.update.severity
+        if (ev.update.unitsByAgency) s.unitsByAgency = ev.update.unitsByAgency
+        if (ev.update.note) emitTimeline('portfolio.update', { id: s.id, note: ev.update.note })
+        this.deps.portfolioChanged?.()
+        break
+      }
+      case 'incident_close': {
+        const s = ev.incidentId ? this.secondary.get(ev.incidentId) : undefined
+        if (!s) break
+        s.closed = true
+        emitTimeline('portfolio.closed', { id: s.id, address: s.address })
+        this.deps.portfolioChanged?.()
+        break
+      }
+      case 'request': {
+        const r = ev.request!
+        // Replays/rewinds must not double-open scripted requests.
+        if (this.requestIds.has(r.refId)) break
+        const incidentId = r.incidentId === 'primary' ? '__PRIMARY__' : (r.incidentId ?? null)
+        const realId = this.deps.openRequest?.(r, incidentId)
+        if (realId) this.requestIds.set(r.refId, realId)
+        break
+      }
+      case 'request_transition': {
+        const realId = ev.refId ? this.requestIds.get(ev.refId) : undefined
+        if (realId && ev.state) this.deps.transitionRequest?.(realId, ev.state, ev.by ?? 'scenario', ev.reason)
+        break
+      }
+      case 'nws_mock': {
+        // Synthetic product through the REAL trigger-evaluation path; fires
+        // once (the weather engine dedupes by rule|product id on replays).
+        if (ev.nws) this.deps.injectNws?.(ev.nws)
         break
       }
     }

@@ -32,6 +32,8 @@ import { ManualsPanel } from './components/ManualsPanel'
 import { TacticsPanel } from './components/TacticsPanel'
 import { WindAdvisory } from './components/WindAdvisory'
 import { TakChatPanel, TakLinkButton } from './components/TakChatPanel'
+import { WatchCommandPanel } from './components/WatchCommandPanel'
+import { ExerciseReviewPanel } from './components/ExerciseReviewPanel'
 
 /** Floating escape hatch while the camera is at street level. */
 function GroundViewExit() {
@@ -156,6 +158,8 @@ export default function App() {
       <StreetViewPanel />
       <TakChatPanel />
       <TakLinkButton />
+      <WatchCommandPanel />
+      <ExerciseReviewPanel />
       <ManualsPanel />
       <TacticsPanel />
       <WindAdvisory />

@@ -24,6 +24,7 @@ import {
   getFocusLayer,
   getFootprintLayer,
   getIntelLayer,
+  getPortfolioLayer,
   getExposureLayer,
   getScene,
   getHazardLayer,
@@ -736,6 +737,184 @@ export async function restoreIncident(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Prompt 11 — NYCEM coordination layer (Watch Command, requests, weather,
+// exercises). KeyStone is a neutral read-and-coordinate layer: these actions
+// record and suggest; they never claim command authority for NYCEM.
+// ---------------------------------------------------------------------------
+
+/** NYC citywide framing for the Watch Command portfolio view. */
+const WATCH_VIEW = { lon: -73.94, lat: 40.55, height: 62_000, pitchDeg: -55 }
+
+export function enterWatchCommand(): void {
+  const scene = getScene()
+  if (!scene) return
+  if (getAppState().groundViewActive) exitGround()
+  if (getAppState().viewMode === 'topdown') {
+    setAppState({ viewMode: '3d' })
+    void setTopDown(scene, false)
+  }
+  setAppState({ watchCommand: true })
+  const now = getAppState()
+  getPortfolioLayer()?.setIncidents(now.portfolio)
+  getPortfolioLayer()?.setWeather(now.weatherAlerts)
+  getPortfolioLayer()?.setActive(true, (id) => focusPortfolioIncident(id))
+  scene.viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(WATCH_VIEW.lon, WATCH_VIEW.lat, WATCH_VIEW.height),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(WATCH_VIEW.pitchDeg), roll: 0 },
+    duration: 1.8,
+  })
+}
+
+export function exitWatchCommand(): void {
+  setAppState({ watchCommand: false, portfolioHoverId: null })
+  getPortfolioLayer()?.setActive(false)
+  // Breadcrumb behavior: return to the tactical board if one is up.
+  const inc = getAppState().incident
+  const scene = getScene()
+  if (inc && scene) flyToTactical(scene.viewer, inc.lat, inc.lon)
+}
+
+/**
+ * Click-through from the citywide view: the portfolio and the tactical view
+ * share the same incident objects — the board incident just exits to its
+ * tactical view; a feed box focuses the board on it (existing flow); a
+ * scripted secondary flies there WITHOUT killing the running drill (it is
+ * tracked, not commanded — single tactical board at a time).
+ */
+export function focusPortfolioIncident(id: string): void {
+  const pi = getAppState().portfolio.find((p) => p.id === id)
+  if (!pi) return
+  if (pi.focused) {
+    exitWatchCommand()
+    return
+  }
+  if (pi.source === 'feed') {
+    const feed = getAppState().dispatchFeed.find((f) => f.id === id)
+    if (feed) {
+      setAppState({ watchCommand: false, portfolioHoverId: null })
+      getPortfolioLayer()?.setActive(false)
+      void focusFeedIncident(feed)
+    }
+    return
+  }
+  // Scenario secondary: fly the tactical camera to it, drill board intact.
+  const scene = getScene()
+  setAppState({ watchCommand: false, portfolioHoverId: null })
+  getPortfolioLayer()?.setActive(false)
+  if (scene) flyToTactical(scene.viewer, pi.lat, pi.lon)
+}
+
+/** Keep the citywide markers/weather in sync while Watch Command is up. */
+export function refreshWatchLayers(): void {
+  if (!getAppState().watchCommand) return
+  getPortfolioLayer()?.setIncidents(getAppState().portfolio)
+  getPortfolioLayer()?.setWeather(getAppState().weatherAlerts)
+}
+
+export async function changeEocLevel(level: 1 | 2 | 3 | 4, changedBy: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/nycem/eoc', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ level, changedBy }),
+    })
+    return res.ok
+  } catch (err) {
+    console.error('[nycem] eoc change failed:', err)
+    return false
+  }
+}
+
+export async function decideSuggestion(
+  id: string,
+  action: 'accepted' | 'snoozed' | 'dismissed',
+  by: string,
+): Promise<void> {
+  try {
+    await fetch(`/api/nycem/suggestions/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, by }),
+    })
+  } catch (err) {
+    console.error('[nycem] suggestion decision failed:', err)
+  }
+}
+
+export async function activatePlanAction(plan: string, by: string): Promise<void> {
+  try {
+    await fetch('/api/nycem/plans', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ plan, by }),
+    })
+  } catch (err) {
+    console.error('[nycem] plan activation failed:', err)
+  }
+}
+
+export async function saveRules(rules: import('./types').TriggerRule[]): Promise<boolean> {
+  try {
+    const res = await fetch('/api/nycem/rules', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rules }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function requestTransition(id: string, state: string, by: string, reason?: string): Promise<void> {
+  try {
+    await fetch(`/api/requests/${encodeURIComponent(id)}/transition`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state, by, reason }),
+    })
+  } catch (err) {
+    console.error('[requests] transition failed:', err)
+  }
+}
+
+export async function openInteragencyRequest(input: {
+  incidentId: string | null
+  requestingAgency: string
+  assignedAgency: string
+  description: string
+  priority: string
+  createdBy: string
+}): Promise<boolean> {
+  try {
+    const res = await fetch('/api/requests', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** M8: end the running exercise — the server builds the HSEEP AAR draft. */
+export async function finishExercise(): Promise<void> {
+  try {
+    const res = await fetch('/api/exercises/finish', { method: 'POST' })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null
+      console.error('[exercise] finish failed:', body?.error)
+      return
+    }
+    const session = (await res.json()) as import('./types').ExerciseSession
+    setAppState({ exerciseReview: session })
+  } catch (err) {
+    console.error('[exercise] finish failed:', err)
+  }
+}
+
 /** ACTIVE INCIDENT chip: toggle the focus treatment on/off. */
 export function toggleActiveIncidentMode(): void {
   const next = !getAppState().activeIncidentMode
@@ -1039,11 +1218,13 @@ async function scenarioPost(path: string, body?: Record<string, unknown>): Promi
   }
 }
 
-export async function loadScenario(name: string): Promise<void> {
+export async function loadScenario(name: string, opts: { exercise?: boolean } = {}): Promise<void> {
   // Merged command view is the right default for multi-channel drill traffic.
   setAppState({ aarOpen: false, alert: null, nycemView: false, commsAll: true, commsOpen: true })
-  await scenarioPost('load', { name })
+  await scenarioPost('load', { name, exercise: !!opts.exercise })
   await scenarioPost('play')
+  // Exercises are a Watch Command activity — open the portfolio view.
+  if (opts.exercise) enterWatchCommand()
 }
 
 export const playScenario = (): Promise<void> => scenarioPost('play')

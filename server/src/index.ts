@@ -5,9 +5,37 @@ import { dirname, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
+import { generateAar, getExercise, listExercises, saveExercise, updateExercise, type AarDraft } from './aar.js'
 import { SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
-import { DispatchFeed } from './dispatchFeed.js'
+import { DispatchFeed, type FeedIncident } from './dispatchFeed.js'
 import { env } from './env.js'
+import {
+  activatePlan,
+  appendRequestUpdate,
+  deactivatePlan,
+  EOC_LEVEL_LABEL,
+  eocHistory,
+  eocLevel,
+  nycemSnapshot,
+  openRequest,
+  plans,
+  pushTicker,
+  REQUEST_THRESHOLDS_MS,
+  requestMetrics,
+  requests,
+  saveTriggerRules,
+  setEocLevel,
+  tickerFeed,
+  transitionRequest,
+  triggerRules,
+  type EocLevel,
+  type InteragencyRequest,
+  type RequestPriority,
+  type RequestState,
+  type TickerEvent,
+  type TriggerRule,
+} from './nycem.js'
+import { WeatherWatch, type TriggerSuggestion } from './weather.js'
 import {
   appendTimeline,
   clearIncident,
@@ -121,6 +149,14 @@ wss.on('connection', (socket) => {
       scenario: scenario.status(),
       // SIMULATED citywide dispatch feed (FDNY/NYPD/PAPD dispatch centers).
       dispatchFeed: dispatchFeed.all(),
+      // Prompt 11 — NYCEM coordination layer state.
+      portfolio: portfolio(),
+      ticker: tickerFeed(),
+      eoc: { level: eocLevel(), history: eocHistory() },
+      plans: plans(),
+      requests: requests(),
+      requestThresholds: REQUEST_THRESHOLDS_MS,
+      weather: weather.snapshot(),
     }),
   )
 })
@@ -456,6 +492,11 @@ app.post('/api/alarm', async (req, res) => {
   if (!state.incident) return res.status(400).json({ error: 'no active incident' })
   const updated = updateIncident({ alarmLevel: level as Incident['alarmLevel'] })
   broadcast({ type: 'incident', incident: updated.incident })
+  ticker('alarm', `Alarm level ${level.toUpperCase()} — ${updated.incident?.address ?? ''}`, {
+    incidentId: updated.incident?.id,
+    severity: ALARM_SEVERITY[level] ?? 2,
+  })
+  broadcastPortfolio()
   let added: string[] = []
   try {
     if (level !== '10-75') {
@@ -583,10 +624,356 @@ whisper.start()
 // and battalion for the INCIDENTS dropdown. Rotating, labeled SIMULATED.
 // ---------------------------------------------------------------------------
 const dispatchFeed = new DispatchFeed()
-dispatchFeed.on('update', (incidents) => broadcast({ type: 'dispatch.feed', incidents }))
-dispatchFeed.start()
+dispatchFeed.on('update', (incidents: FeedIncident[]) => {
+  broadcast({ type: 'dispatch.feed', incidents })
+  // Ticker: new boxes and closed boxes from the simulated dispatch centers.
+  const ids = new Set(incidents.map((i) => i.id))
+  for (const i of incidents) {
+    if (!knownFeedIds.has(i.id)) {
+      ticker('new-incident', `${i.source} dispatch: ${i.type} — ${i.address}, ${i.borough}`, {
+        incidentId: i.id,
+        agency: i.source,
+        borough: i.borough,
+        severity: 1,
+      })
+    }
+  }
+  for (const id of knownFeedIds) {
+    if (!ids.has(id)) ticker('incident-closed', `Box closed: ${id}`, { incidentId: id })
+  }
+  knownFeedIds.clear()
+  for (const id of ids) knownFeedIds.add(id)
+  broadcastPortfolio()
+})
+const knownFeedIds = new Set<string>()
+// NOTE: dispatchFeed.start() is deferred until after the scenario engine is
+// constructed — the update listener walks portfolio(), which reads it.
 
 app.get('/api/dispatch/feed', (_req, res) => res.json({ incidents: dispatchFeed.all() }))
+
+// ---------------------------------------------------------------------------
+// Prompt 11 — NYCEM coordination layer: the pieces that sit ABOVE incidents.
+// KeyStone is a neutral read-and-coordinate layer; CIMS labels (Primary /
+// Supporting / Coordinating Agency) are used exactly and never inferred as
+// command authority.
+// ---------------------------------------------------------------------------
+
+/** Citywide ticker: push + broadcast one merged feed of major events. */
+function ticker(kind: string, text: string, extra: Partial<TickerEvent> = {}): void {
+  const ev = pushTicker({ kind, text, ...extra })
+  broadcast({ type: 'ticker', event: ev })
+}
+
+/** CIMS Primary Agency for the tactical board's incident types. */
+const PRIMARY_BY_TYPE: Record<string, string> = {
+  'Structural Fire': 'FDNY',
+  Hazmat: 'FDNY',
+  Collapse: 'FDNY',
+  'Mass Casualty': 'EMS',
+}
+const ALARM_SEVERITY: Record<string, number> = { '10-75': 2, 'all-hands': 3, '2nd': 4, '3rd': 5 }
+
+export interface PortfolioIncident {
+  id: string
+  address: string
+  borough: string
+  lat: number
+  lon: number
+  type: string
+  severity: number
+  primaryAgency: string
+  supportingAgencies: string[]
+  /** "Tracked in KeyStone" rollup — never authoritative citywide availability. */
+  unitsByAgency: Record<string, number>
+  startedAt: string
+  source: 'board' | 'scenario' | 'feed'
+  alarmLevel?: string
+  openRequests: number
+  /** True for the incident currently on the tactical board. */
+  focused: boolean
+}
+
+function openRequestCount(incidentId: string): number {
+  return requests().filter(
+    (r) => r.incidentId === incidentId && r.state !== 'complete' && r.state !== 'declined',
+  ).length
+}
+
+/** The Watch Command portfolio: every active incident KeyStone knows about,
+ *  from every source, as ONE shared list — no duplicate state. */
+function portfolio(): PortfolioIncident[] {
+  const out: PortfolioIncident[] = []
+  const state = getState()
+  if (state.incident) {
+    const inc = state.incident
+    const unitsByAgency: Record<string, number> = {}
+    for (const u of registry.all()) {
+      if (['ff', 'officer', 'medic'].includes(u.category)) continue // members ride their rigs
+      unitsByAgency[u.agency] = (unitsByAgency[u.agency] ?? 0) + 1
+    }
+    out.push({
+      id: inc.id,
+      address: inc.address,
+      borough: inc.borough ?? 'New York',
+      lat: inc.lat,
+      lon: inc.lon,
+      type: inc.type,
+      severity: ALARM_SEVERITY[inc.alarmLevel ?? '10-75'] ?? 2,
+      primaryAgency: PRIMARY_BY_TYPE[inc.type] ?? 'FDNY',
+      supportingAgencies: Object.keys(unitsByAgency).filter((a) => a !== (PRIMARY_BY_TYPE[inc.type] ?? 'FDNY')),
+      unitsByAgency,
+      startedAt: inc.createdAt,
+      source: 'board',
+      alarmLevel: inc.alarmLevel ?? '10-75',
+      openRequests: openRequestCount(inc.id),
+      focused: true,
+    })
+  }
+  for (const s of scenario.secondaryIncidents()) {
+    out.push({
+      id: s.id,
+      address: s.address,
+      borough: s.borough,
+      lat: s.lat,
+      lon: s.lon,
+      type: s.type,
+      severity: s.severity,
+      primaryAgency: s.primaryAgency,
+      supportingAgencies: s.supportingAgencies ?? [],
+      unitsByAgency: s.unitsByAgency ?? {},
+      startedAt: s.startedAt,
+      source: 'scenario',
+      openRequests: openRequestCount(s.id),
+      focused: false,
+    })
+  }
+  for (const f of dispatchFeed.all()) {
+    out.push({
+      id: f.id,
+      address: f.address,
+      borough: f.borough,
+      lat: f.lat,
+      lon: f.lon,
+      type: f.type,
+      severity: f.units >= 6 ? 2 : 1,
+      primaryAgency: f.source,
+      supportingAgencies: [],
+      unitsByAgency: { [f.source]: f.units },
+      startedAt: f.startedAt,
+      source: 'feed',
+      openRequests: openRequestCount(f.id),
+      focused: false,
+    })
+  }
+  return out
+}
+
+function broadcastPortfolio(): void {
+  broadcast({ type: 'portfolio', incidents: portfolio() })
+}
+
+// ------------------------------ EOC level ------------------------------------
+
+app.post('/api/nycem/eoc', (req, res) => {
+  const { level, changedBy } = req.body as { level?: number; changedBy?: string }
+  if (![1, 2, 3, 4].includes(level as number)) return res.status(400).json({ error: 'level must be 1-4' })
+  if (!changedBy?.trim()) return res.status(400).json({ error: '"changed by" is required' })
+  const change = setEocLevel(level as EocLevel, changedBy.trim())
+  appendTimeline('eoc.level', { level, changedBy })
+  ticker('eoc', `EOC activation ${EOC_LEVEL_LABEL[level as EocLevel]} — changed by ${changedBy}`, {
+    severity: 5 - (level as number),
+  })
+  broadcast({ type: 'eoc', level: eocLevel(), change, history: eocHistory() })
+  res.json({ level: eocLevel(), history: eocHistory() })
+})
+
+// --------------------------- Plan activations --------------------------------
+
+app.post('/api/nycem/plans', (req, res) => {
+  const { plan, by } = req.body as { plan?: string; by?: string }
+  if (!plan?.trim() || !by?.trim()) return res.status(400).json({ error: 'plan and by are required' })
+  const p = activatePlan(plan.trim(), by.trim())
+  appendTimeline('plan.activated', { plan: p.plan, by })
+  ticker('plan', `${p.plan} ACTIVATED by ${by}`, { severity: 3 })
+  broadcast({ type: 'plans', plans: plans() })
+  res.status(201).json(p)
+})
+
+app.post('/api/nycem/plans/:id/deactivate', (req, res) => {
+  const { by } = req.body as { by?: string }
+  if (!by?.trim()) return res.status(400).json({ error: 'by is required' })
+  const p = deactivatePlan(req.params.id, by.trim())
+  if (!p) return res.status(404).json({ error: 'no active plan with that id' })
+  appendTimeline('plan.deactivated', { plan: p.plan, by })
+  ticker('plan', `${p.plan} deactivated by ${by}`)
+  broadcast({ type: 'plans', plans: plans() })
+  res.json(p)
+})
+
+// ---------------------------- Trigger rules (M5) ------------------------------
+
+app.get('/api/nycem/rules', (_req, res) => res.json({ rules: triggerRules() }))
+
+app.put('/api/nycem/rules', (req, res) => {
+  const { rules } = req.body as { rules?: TriggerRule[] }
+  if (!Array.isArray(rules)) return res.status(400).json({ error: 'rules array required' })
+  saveTriggerRules(rules)
+  weather.reevaluate()
+  broadcast({ type: 'rules', rules: triggerRules() })
+  res.json({ rules: triggerRules() })
+})
+
+// ------------------------------ Weather (M5) ----------------------------------
+
+const weather = new WeatherWatch()
+weather.on('weather', (snap) => broadcast({ type: 'weather', ...snap }))
+weather.on('suggestion', (s: TriggerSuggestion) => {
+  appendTimeline('weather.trigger', { plan: s.plan, product: s.product.event, suggestionId: s.id })
+  ticker(
+    'weather',
+    `NWS ${s.product.event}${s.product.simulated ? ' (SIMULATED)' : ''} meets ${s.plan} trigger criteria — suggest EOC Level ${s.suggestedEocLevel}`,
+    { severity: 4 },
+  )
+  broadcast({ type: 'weather', ...weather.snapshot() })
+})
+weather.start()
+
+app.get('/api/nycem/weather', (_req, res) => res.json(weather.snapshot()))
+
+app.post('/api/nycem/suggestions/:id', (req, res) => {
+  const { action, by } = req.body as { action?: 'accepted' | 'snoozed' | 'dismissed'; by?: string }
+  if (!action || !['accepted', 'snoozed', 'dismissed'].includes(action)) {
+    return res.status(400).json({ error: 'action must be accepted | snoozed | dismissed' })
+  }
+  if (!by?.trim()) return res.status(400).json({ error: 'by is required' })
+  const s = weather.decide(req.params.id, action, by.trim())
+  if (!s) return res.status(404).json({ error: 'no pending suggestion with that id' })
+  // ALL THREE decisions log — accept, snooze, dismiss.
+  appendTimeline('weather.decision', { suggestionId: s.id, plan: s.plan, action, by })
+  ticker('weather', `${s.plan} trigger ${action} by ${by}`)
+  res.json(s)
+})
+
+// ------------------------ Interagency requests (M2) ---------------------------
+
+/** Request lifecycle side-effects shared by REST + scenario scripting. */
+function afterRequestChange(req2: InteragencyRequest, verb: string, by: string): void {
+  appendTimeline('request.' + verb, {
+    id: req2.id,
+    state: req2.state,
+    priority: req2.priority,
+    pair: `${req2.requestingAgency}→${req2.assignedAgency}`,
+    by,
+  })
+  ticker(
+    'request',
+    `Request ${verb.toUpperCase()}: ${req2.description} (${req2.requestingAgency}→${req2.assignedAgency}, ${req2.priority})`,
+    { incidentId: req2.incidentId ?? undefined, agency: req2.assignedAgency, severity: req2.priority === 'immediate' ? 4 : req2.priority === 'urgent' ? 3 : 1 },
+  )
+  broadcast({ type: 'requests', requests: requests() })
+  broadcastPortfolio() // open-request counts ride the portfolio cards
+}
+
+app.get('/api/requests', (_req, res) => res.json({ requests: requests(), thresholds: REQUEST_THRESHOLDS_MS }))
+
+app.post('/api/requests', (req, res) => {
+  const b = req.body as Partial<InteragencyRequest>
+  if (!b.requestingAgency || !b.assignedAgency || !b.description?.trim() || !b.createdBy?.trim()) {
+    return res.status(400).json({ error: 'requestingAgency, assignedAgency, description, createdBy required' })
+  }
+  const priority = (['routine', 'urgent', 'immediate'] as const).includes(b.priority as RequestPriority)
+    ? (b.priority as RequestPriority)
+    : 'routine'
+  const created = openRequest({
+    incidentId: b.incidentId ?? null,
+    requestingAgency: b.requestingAgency,
+    assignedAgency: b.assignedAgency,
+    description: b.description.trim().slice(0, 300),
+    priority,
+    createdBy: b.createdBy.trim(),
+  })
+  afterRequestChange(created, 'opened', created.createdBy)
+  res.status(201).json(created)
+})
+
+app.post('/api/requests/:id/transition', (req, res) => {
+  const { state, by, reason } = req.body as { state?: RequestState; by?: string; reason?: string }
+  if (!state || !by?.trim()) return res.status(400).json({ error: 'state and by required' })
+  const result = transitionRequest(req.params.id, state, by.trim(), reason)
+  if ('error' in result) return res.status(400).json(result)
+  afterRequestChange(result, state, by.trim())
+  res.json(result)
+})
+
+app.post('/api/requests/:id/update', (req, res) => {
+  const { by, text } = req.body as { by?: string; text?: string }
+  if (!by?.trim() || !text?.trim()) return res.status(400).json({ error: 'by and text required' })
+  const result = appendRequestUpdate(req.params.id, by.trim(), text.trim().slice(0, 500))
+  if (!result) return res.status(404).json({ error: 'no such request' })
+  broadcast({ type: 'requests', requests: requests() })
+  res.json(result)
+})
+
+app.get('/api/requests/metrics', (req, res) => {
+  const { from, to } = req.query as { from?: string; to?: string }
+  res.json({ metrics: requestMetrics(from, to) })
+})
+
+// ----------------------------- Exercises (M8) ---------------------------------
+
+app.post('/api/exercises/finish', (_req, res) => {
+  if (!scenario.exercise || !scenario.exerciseStartedAt) {
+    return res.status(400).json({ error: 'no exercise session running (load a scenario with exercise: true)' })
+  }
+  const snap = nycemSnapshot()
+  const session = generateAar({
+    scenario: String(scenario.status().name ?? 'exercise'),
+    startedAt: scenario.exerciseStartedAt,
+    endedAt: new Date().toISOString(),
+    timeline: getState().timeline,
+    ticker: snap.ticker,
+    requests: snap.requests,
+    eocChanges: snap.eoc.history,
+    plans: snap.plans,
+    suggestions: weather.snapshot().suggestions,
+  })
+  saveExercise(session)
+  appendTimeline('exercise.finished', { id: session.id, scenario: session.scenario })
+  ticker('plan', `Exercise ended — AAR draft ${session.id} generated (${session.aar.metrics.length} metrics)`)
+  // The recording session is over: clear the flag so ENDEX can't mint
+  // overlapping sessions while the drill winds down. Playback continues.
+  scenario.setExercise(false)
+  broadcast({ type: 'scenario.status', scenario: scenario.status() })
+  res.status(201).json(session)
+})
+
+app.get('/api/exercises', (_req, res) => res.json({ exercises: listExercises() }))
+
+app.get('/api/exercises/:id', (req, res) => {
+  const s = getExercise(req.params.id)
+  if (!s) return res.status(404).json({ error: 'no such exercise' })
+  res.json(s)
+})
+
+app.put('/api/exercises/:id', (req, res) => {
+  const { aar } = req.body as { aar?: AarDraft }
+  if (!aar) return res.status(400).json({ error: 'aar required' })
+  if (!updateExercise(req.params.id, aar)) return res.status(404).json({ error: 'no such exercise' })
+  res.json({ ok: true })
+})
+
+app.get('/api/nycem/state', (_req, res) =>
+  res.json({
+    eoc: { level: eocLevel(), history: eocHistory() },
+    plans: plans(),
+    portfolio: portfolio(),
+    ticker: tickerFeed(),
+    requests: requests(),
+    thresholds: REQUEST_THRESHOLDS_MS,
+    rules: triggerRules(),
+    weather: weather.snapshot(),
+  }),
+)
 
 const simComms = new SimComms()
 simComms.on('line', (channel: CommsChannel, line: TranscriptLine) => {
@@ -666,6 +1053,13 @@ app.post('/api/incident', (req, res) => {
   const state = createIncident(incident)
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
+  ticker('new-incident', `${incident.type} — ${incident.address}`, {
+    incidentId: incident.id,
+    agency: PRIMARY_BY_TYPE[incident.type] ?? 'FDNY',
+    borough: incident.borough,
+    severity: 2,
+  })
+  broadcastPortfolio()
   res.status(201).json(state)
 })
 
@@ -679,10 +1073,15 @@ app.delete('/api/incident', (_req, res) => {
   stagingFlip = 0
   simChatter.reset()
   for (const u of registry.all()) registry.remove(u.uid)
+  const prevIncident = getState().incident
   const state = clearIncident()
   broadcast({ type: 'incident', incident: null })
   broadcast({ type: 'exposure', labels: [] })
   broadcast({ type: 'alert', alert: { kind: 'clear' } })
+  if (prevIncident) {
+    ticker('incident-closed', `Incident closed — ${prevIncident.address}`, { incidentId: prevIncident.id })
+  }
+  broadcastPortfolio()
   console.log('[incident] cleared — board reset')
   res.json(state)
 })
@@ -751,6 +1150,18 @@ const scenario = new ScenarioEngine({
   emitTimeline: (kind, payload) => {
     const ev = appendTimeline(kind, payload)
     broadcast({ type: 'timeline', event: ev })
+    // Citywide ticker mirrors the major cross-incident moments.
+    if (kind === 'alert.mayday') {
+      ticker('mayday', `MAYDAY — ${String((payload as { callsign?: string }).callsign ?? 'unknown unit')}`, {
+        incidentId: getState().incident?.id,
+        severity: 5,
+      })
+    } else if (String(payload?.event ?? kind).toLowerCase().includes('mci')) {
+      ticker('mci', `MCI declared — ${getState().incident?.address ?? ''}`, {
+        incidentId: getState().incident?.id,
+        severity: 4,
+      })
+    }
   },
   createIncident: (incident) => {
     simulator.stop()
@@ -767,16 +1178,62 @@ const scenario = new ScenarioEngine({
   setAlarm: (level) => {
     const updated = updateIncident({ alarmLevel: level })
     broadcast({ type: 'incident', incident: updated.incident })
+    ticker('alarm', `Alarm level ${String(level).toUpperCase()} (drill) — ${updated.incident?.address ?? ''}`, {
+      incidentId: updated.incident?.id,
+      severity: ALARM_SEVERITY[level ?? '10-75'] ?? 2,
+    })
+    broadcastPortfolio()
+  },
+  // Prompt 11 hooks — the coordination layer rides the scenario:
+  portfolioChanged: () => broadcastPortfolio(),
+  openRequest: (r, incidentId) => {
+    const resolved = incidentId === '__PRIMARY__' ? (getState().incident?.id ?? null) : incidentId
+    const created = openRequest({
+      incidentId: resolved,
+      requestingAgency: r.requestingAgency,
+      assignedAgency: r.assignedAgency,
+      description: r.description,
+      priority: r.priority,
+      createdBy: r.createdBy,
+    })
+    afterRequestChange(created, 'opened', r.createdBy)
+    return created.id
+  },
+  transitionRequest: (id, state, by, reason) => {
+    const result = transitionRequest(id, state as RequestState, by, reason)
+    if (!('error' in result)) afterRequestChange(result, state, by)
+  },
+  injectNws: (nws) => {
+    weather.injectMockProduct({
+      id: nws.id,
+      event: nws.event,
+      headline: nws.headline,
+      severity: nws.severity,
+      onset: new Date().toISOString(),
+      ends: nws.endsInMin ? new Date(Date.now() + nws.endsInMin * 60_000).toISOString() : null,
+      areaDesc: nws.areaDesc,
+      polygons: nws.polygons ?? [],
+    })
   },
 })
+
+// Safe now: the feed's synchronous first update reads scenario via portfolio().
+dispatchFeed.start()
 
 app.get('/api/scenario', (_req, res) => res.json(scenario.status()))
 
 app.post('/api/scenario/load', async (req, res) => {
-  const { name } = req.body as { name?: string }
+  const { name, exercise } = req.body as { name?: string; exercise?: boolean }
   if (!name) return res.status(400).json({ error: 'name required' })
   try {
     await scenario.load(name)
+    // Exercise mode (M8): live human interactions record alongside the
+    // script; /api/exercises/finish builds the HSEEP AAR from the window.
+    scenario.setExercise(!!exercise)
+    if (exercise) {
+      appendTimeline('exercise.started', { scenario: name })
+      ticker('plan', `EXERCISE started — ${name} (participants live, script driving)`)
+    }
     res.json(scenario.status())
   } catch (err) {
     console.error('[scenario] load failed:', err)

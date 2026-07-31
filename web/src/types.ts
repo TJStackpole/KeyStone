@@ -129,6 +129,158 @@ export interface TimelineEvent {
   payload?: unknown
 }
 
+// ---------------------- Prompt 11: NYCEM coordination -----------------------
+
+export interface PortfolioIncident {
+  id: string
+  address: string
+  borough: string
+  lat: number
+  lon: number
+  type: string
+  severity: number
+  /** CIMS terminology, exactly: Primary / Supporting Agency. */
+  primaryAgency: string
+  supportingAgencies: string[]
+  /** "Tracked in KeyStone" — never authoritative citywide availability. */
+  unitsByAgency: Record<string, number>
+  startedAt: string
+  source: 'board' | 'scenario' | 'feed'
+  alarmLevel?: string
+  openRequests: number
+  focused: boolean
+}
+
+export interface TickerEvent {
+  id: string
+  ts: string
+  kind: string
+  text: string
+  incidentId?: string
+  agency?: string
+  borough?: string
+  severity?: number
+}
+
+export type EocLevel = 1 | 2 | 3 | 4
+
+export interface EocChange {
+  level: EocLevel
+  changedBy: string
+  changedAt: string
+}
+
+export interface PlanActivation {
+  id: string
+  plan: string
+  activatedAt: string
+  activatedBy: string
+  deactivatedAt?: string
+  deactivatedBy?: string
+}
+
+export type RequestState = 'opened' | 'acknowledged' | 'assigned' | 'in_progress' | 'complete' | 'declined'
+export type RequestPriority = 'routine' | 'urgent' | 'immediate'
+
+export interface InteragencyRequest {
+  id: string
+  incidentId: string | null
+  requestingAgency: string
+  assignedAgency: string
+  description: string
+  priority: RequestPriority
+  state: RequestState
+  declineReason?: string
+  createdBy: string
+  createdAt: string
+  transitions: { state: string; at: string; by?: string; note?: string }[]
+  updates: { at: string; by: string; text: string }[]
+}
+
+export interface TriggerRule {
+  id: string
+  plan: string
+  enabled: boolean
+  eventMatch: string[]
+  suggestedEocLevel: EocLevel
+  suggestedActions: string[]
+  validateSme: boolean
+}
+
+export interface NwsAlert {
+  id: string
+  event: string
+  headline: string
+  severity: string
+  onset: string | null
+  ends: string | null
+  areaDesc: string
+  polygons: [number, number][][]
+  simulated?: boolean
+}
+
+export interface TriggerSuggestion {
+  id: string
+  ruleId: string
+  plan: string
+  suggestedEocLevel: EocLevel
+  suggestedActions: string[]
+  firedAt: string
+  product: NwsAlert
+  state: 'pending' | 'accepted' | 'snoozed' | 'dismissed'
+  decidedBy?: string
+  decidedAt?: string
+  validateSme: boolean
+}
+
+export interface WeatherObsNycem {
+  stationId: string
+  observedAt: string | null
+  tempC: number | null
+  windKt: number | null
+  windDirDeg: number | null
+  precipMmHr: number | null
+}
+
+export interface AarMetric {
+  name: string
+  value: string
+  detail: string
+  sources: string[]
+}
+
+export interface AarFinding {
+  area: string
+  finding: string
+  sources: string[]
+}
+
+export interface AarDraft {
+  title: string
+  generatedAt: string
+  overview: {
+    exerciseName: string
+    date: string
+    durationMin: number
+    scope: string
+    participatingAgencies: string[]
+  }
+  keyEvents: { at: string; text: string }[]
+  objectives: { objective: string; observed: string; met: 'met' | 'partial' | 'not observed' }[]
+  strengths: AarFinding[]
+  improvements: AarFinding[]
+  improvementPlan: { item: string; owner: string; deadline: string }[]
+  metrics: AarMetric[]
+}
+
+export interface ExerciseSession {
+  id: string
+  scenario: string
+  startedAt: string
+  endedAt: string
+  aar: AarDraft
+}
+
 /**
  * One entry of the SIMULATED citywide dispatch feed (FDNY / NYPD / PAPD
  * dispatch centers) — the "other boxes" running around the city, grouped by
@@ -225,6 +377,7 @@ export interface ScenarioStatus {
   clock: number
   duration: number
   chapters: ScenarioChapter[]
+  exercise?: boolean
 }
 
 export interface MapAlert {

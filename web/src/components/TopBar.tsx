@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   activateInspectedIncident,
+  changeEocLevel,
+  enterWatchCommand,
+  exitWatchCommand,
   focusFeedIncident,
   loadScenario,
   runDemoScenario,
@@ -223,6 +226,76 @@ function ScenariosMenu() {
             <b>DRILL</b>
             <i>Multi-agency bus fire w/ MCI at the Port Authority Bus Terminal</i>
           </button>
+          <button
+            className="scenario-item drill"
+            onClick={() => {
+              setOpen(false)
+              void loadScenario('pabt-flood-exercise', { exercise: true })
+            }}
+          >
+            <b>EXERCISE</b>
+            <i>PABT drill + Queens flash flood, two incidents — live participants, HSEEP AAR at the end</i>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** EOC activation level chip (Prompt 11): Level 4 Watch Command is the
+ *  always-on default; every change requires "changed by" and logs. */
+function EocChip() {
+  const { eoc } = useAppState()
+  const [open, setOpen] = useState(false)
+  const [by, setBy] = useState(() => localStorage.getItem('ks-operator') ?? '')
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  const LABELS: Record<number, string> = {
+    4: 'Level 4 — Watch Command (steady state)',
+    3: 'Level 3 — Situation Room',
+    2: 'Level 2 — Partial EOC',
+    1: 'Level 1 — Full EOC',
+  }
+  return (
+    <div className="eoc-wrap" ref={wrapRef}>
+      <button
+        className={`chip chip-btn${eoc.level < 4 ? ' amber active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        title={`EOC activation: ${LABELS[eoc.level]} — every change logs with "changed by"`}
+      >
+        <span className="dot" /> EOC L{eoc.level} {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="eoc-menu glass">
+          <input
+            placeholder='"Changed by" (required)'
+            value={by}
+            onChange={(e) => {
+              setBy(e.target.value)
+              localStorage.setItem('ks-operator', e.target.value)
+            }}
+          />
+          {[4, 3, 2, 1].map((l) => (
+            <button
+              key={l}
+              className={`eoc-item${eoc.level === l ? ' on' : ''}`}
+              disabled={!by.trim()}
+              onClick={() => {
+                void changeEocLevel(l as 1 | 2 | 3 | 4, by.trim())
+                setOpen(false)
+              }}
+            >
+              {LABELS[l]}
+            </button>
+          ))}
+          <div className="eoc-note">Manual change only · immutable history on the citywide timeline</div>
         </div>
       )}
     </div>
@@ -388,7 +461,7 @@ export function TopBar() {
     inspected,
     activeIncidentMode,
     viewMode,
-    nycemView,
+    watchCommand,
   } = useAppState()
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
@@ -448,15 +521,14 @@ export function TopBar() {
           <span className="dot" /> ACTIVE INCIDENT
         </button>
         {incident && activeIncidentMode && <IsolateMenu />}
-        {incident && (
-          <button
-            className={`chip chip-btn${nycemView ? ' active' : ''}`}
-            onClick={() => setAppState((s) => ({ nycemView: !s.nycemView }))}
-            title="Toggle IC tactical view ↔ NYCEM Watch Command coordination view"
-          >
-            <span className="dot" /> NYCEM
-          </button>
-        )}
+        <button
+          className={`chip chip-btn${watchCommand ? ' active' : ''}`}
+          onClick={() => (watchCommand ? exitWatchCommand() : enterWatchCommand())}
+          title="Watch Command — citywide multi-incident portfolio view (NYCEM coordination layer)"
+        >
+          <span className="dot" /> {watchCommand ? '← TACTICAL' : 'WATCH CMD'}
+        </button>
+        <EocChip />
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && (
           <button
