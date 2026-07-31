@@ -139,6 +139,13 @@ export function TopBar() {
           </span>
         ))}
         <OverlaysMenu />
+        <button
+          className="chip chip-btn"
+          onClick={() => setAppState((s) => ({ manualsOpen: !s.manualsOpen }))}
+          title="Ask the Manuals — cited answers from the local FDNY publications corpus"
+        >
+          <span className="dot" /> MANUALS
+        </button>
         {takConnected === true && (
           <button
             className="chip chip-btn"

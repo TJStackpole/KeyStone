@@ -19,6 +19,7 @@ import { ScenarioEngine } from './scenario/engine.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
 import { CHAT_ROOMS, SimUnitChatter } from './simChat.js'
+import { doctrine, MIN_RELEVANT_SCORE } from './doctrine.js'
 import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
 import { shapeDeleteCot, shapeToCot } from './tak/shapes.js'
@@ -135,6 +136,31 @@ tak.on('event', (ev) => {
 })
 
 app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-200) }))
+
+// ---------------------- Module 1: Ask the Manuals ---------------------------
+// Extractive search over the locally-indexed FD Books corpus. Only short
+// query-relevant snippets with full citations ever leave this process.
+doctrine.load()
+
+app.get('/api/doctrine/status', (_req, res) =>
+  res.json({ ready: doctrine.ready, report: doctrine.report }),
+)
+
+app.get('/api/doctrine/ask', (req, res) => {
+  const q = String(req.query.q ?? '').trim()
+  const topic = req.query.topic ? String(req.query.topic) : undefined
+  if (!q) return res.status(400).json({ error: 'q required' })
+  if (!doctrine.ready) {
+    return res.json({ ready: false, found: false, results: [] })
+  }
+  const results = doctrine.search(q, 6, topic)
+  // Honesty floor: the corpus only "answers" when the best page is BOTH
+  // strong AND covers most of the question's terms — one rare word matching
+  // somewhere must not masquerade as an answer.
+  const found =
+    results.length > 0 && results[0].score >= MIN_RELEVANT_SCORE && results[0].coverage >= 0.5
+  res.json({ ready: true, found, results: found ? results : [] })
+})
 
 app.post('/api/chat', (req, res) => {
   const { text, room } = req.body as { text?: string; room?: string }

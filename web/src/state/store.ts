@@ -83,6 +83,8 @@ export interface AppState {
   /** TAK GeoChat: every EUD on the TAK server, "All Chat Rooms". */
   chats: ChatMsg[]
   chatOpen: boolean
+  /** "Ask the Manuals" doctrine panel (Module 1). */
+  manualsOpen: boolean
   commsConfig: CommsConfig | null
   replay: { active: boolean; playing: boolean; t: number; duration: number }
   timeline: TimelineEvent[]
@@ -187,6 +189,7 @@ const initial: AppState = {
   aarOpen: false,
   chats: [],
   chatOpen: false,
+  manualsOpen: false,
   commsConfig: null,
   replay: { active: false, playing: false, t: 0, duration: 0 },
   timeline: [],
