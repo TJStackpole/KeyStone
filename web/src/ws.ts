@@ -5,6 +5,7 @@ import type {
   ChatMsg,
   CommsChannel,
   ExposureLabel,
+  FeedIncident,
   IcsShape,
   Incident,
   MapAlert,
@@ -23,6 +24,11 @@ interface SnapshotMsg {
   takConnected?: boolean
   chats?: ChatMsg[]
   scenario?: ScenarioStatus
+  dispatchFeed?: FeedIncident[]
+}
+interface DispatchFeedMsg {
+  type: 'dispatch.feed'
+  incidents: FeedIncident[]
 }
 interface ShapeMsg {
   type: 'shape'
@@ -101,6 +107,7 @@ type ServerMsg =
   | ExposureMsg
   | AarMsg
   | ChatWsMsg
+  | DispatchFeedMsg
 
 let started = false
 
@@ -146,6 +153,7 @@ const REPLAY_SAFE = new Set([
   'scenario.status',
   'chat',
   'snapshot',
+  'dispatch.feed', // ambient citywide picture — not part of the replayed board
 ])
 
 function handle(msg: ServerMsg): void {
@@ -168,6 +176,7 @@ function handle(msg: ServerMsg): void {
       const scenarioLoaded = !!msg.scenario?.loaded
       setAppState((s) => ({
         scenario: scenarioLoaded ? (msg.scenario ?? null) : null,
+        dispatchFeed: msg.dispatchFeed ?? s.dispatchFeed,
         chats: msg.chats ?? [],
         ...(!scenarioLoaded && s.commsAll ? { commsAll: false } : {}),
         ...(!scenarioLoaded &&
@@ -269,6 +278,9 @@ function handle(msg: ServerMsg): void {
       setAppState((s) =>
         s.chats.some((c) => c.id === msg.msg.id) ? {} : { chats: [...s.chats, msg.msg].slice(-200) },
       )
+      break
+    case 'dispatch.feed':
+      setAppState({ dispatchFeed: msg.incidents })
       break
     case 'unit.remove':
       setAppState((s) => {

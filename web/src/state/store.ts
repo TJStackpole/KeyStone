@@ -7,6 +7,7 @@ import type {
   CommsConfig,
   DataLayerId,
   DrawTool,
+  FeedIncident,
   GeoHit,
   IcsShape,
   Incident,
@@ -88,6 +89,10 @@ export interface AppState {
   scenario: ScenarioStatus | null
   /** Active full-screen alert (mayday etc.) — null when clear. */
   alert: MapAlert | null
+  /** SIMULATED citywide dispatch feed (FDNY/NYPD/PAPD dispatch centers). */
+  dispatchFeed: FeedIncident[]
+  /** Feed entry the board is currently focused on (null = none/manual). */
+  focusedFeedId: string | null
   /** IC view <-> NYCEM Watch Command coordination view. */
   nycemView: boolean
   /** After-action report overlay (auto-opens at scenario end). */
@@ -223,6 +228,8 @@ const initial: AppState = {
   commsSource: 'sim',
   scenario: null,
   alert: null,
+  dispatchFeed: [],
+  focusedFeedId: null,
   nycemView: false,
   aarOpen: false,
   chats: [],

@@ -6,6 +6,7 @@ import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
 import { SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
+import { DispatchFeed } from './dispatchFeed.js'
 import { env } from './env.js'
 import {
   appendTimeline,
@@ -110,6 +111,8 @@ wss.on('connection', (socket) => {
       // Reconnecting dashboards learn drill state here — a server restart
       // mid-drill otherwise leaves a stale "playing" DRILL bar forever.
       scenario: scenario.status(),
+      // SIMULATED citywide dispatch feed (FDNY/NYPD/PAPD dispatch centers).
+      dispatchFeed: dispatchFeed.all(),
     }),
   )
 })
@@ -522,6 +525,17 @@ whisper.on('line', (line: TranscriptLine) => {
   broadcast({ type: 'transcript', channel: 'fdny' as CommsChannel, line })
 })
 whisper.start()
+
+// ---------------------------------------------------------------------------
+// SIMULATED citywide dispatch feed (FDNY / NYPD / PAPD dispatch centers):
+// the "other boxes" running around the city, broken down by FDNY division
+// and battalion for the INCIDENTS dropdown. Rotating, labeled SIMULATED.
+// ---------------------------------------------------------------------------
+const dispatchFeed = new DispatchFeed()
+dispatchFeed.on('update', (incidents) => broadcast({ type: 'dispatch.feed', incidents }))
+dispatchFeed.start()
+
+app.get('/api/dispatch/feed', (_req, res) => res.json({ incidents: dispatchFeed.all() }))
 
 const simComms = new SimComms()
 simComms.on('line', (channel: CommsChannel, line: TranscriptLine) => {

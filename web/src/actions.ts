@@ -39,7 +39,17 @@ import {
 import { replayEngine } from './replay'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
 import { crewOf } from './types'
-import type { Agency, GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, Unit, UnitCategory } from './types'
+import type {
+  Agency,
+  FeedIncident,
+  GeoHit,
+  IcsShape,
+  Incident,
+  IncidentType,
+  ToggleLayerId,
+  Unit,
+  UnitCategory,
+} from './types'
 
 function newIncidentId(): string {
   return `INC-${Date.now().toString(36).toUpperCase()}`
@@ -104,8 +114,41 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     timeline: [],
     stagingPick: 'auto',
     isolateView: 'model', // a LIVE pick must not straddle incidents
+    focusedFeedId: null, // manual stand-up — not tracking a feed entry
   })
   getShapeLayer()?.clear()
+}
+
+/**
+ * INCIDENTS dropdown: focus the board on one SIMULATED citywide feed entry —
+ * full stand-up at its coordinates, then dispatch the assignment so the
+ * responding units populate. One board at a time: focusing a feed incident
+ * replaces whatever was up (same as standing up from search).
+ */
+export async function focusFeedIncident(fi: FeedIncident): Promise<void> {
+  await standUpIncident(
+    {
+      label: `${fi.address}, ${fi.borough}`,
+      name: fi.address,
+      borough: fi.borough,
+      lat: fi.lat,
+      lon: fi.lon,
+    },
+    feedIncidentType(fi.type),
+  )
+  setAppState({ focusedFeedId: fi.id })
+  // The feed reported units responding — put them on the picture.
+  void dispatchAssignment()
+}
+
+/** Map a dispatch-feed type string onto the board's incident-type chips. */
+function feedIncidentType(feedType: string): IncidentType {
+  const t = feedType.toLowerCase()
+  if (t.includes('fire')) return 'Structural Fire'
+  if (t.includes('gas') || t.includes('package')) return 'Hazmat'
+  if (t.includes('collapse')) return 'Collapse'
+  if (t.includes('mva') || t.includes('medical') || t.includes('mci')) return 'Mass Casualty'
+  return 'Structural Fire'
 }
 
 /**
@@ -935,6 +978,7 @@ export function adoptIncident(incident: Incident): void {
     wind: null,
     tacticsOverride: null,
     floorRef: null,
+    focusedFeedId: null, // server-initiated board — not a feed pick
   })
   getUnitLayer()?.setInteriorBounds(null)
   getHazardLayer()?.clear()
@@ -1040,6 +1084,7 @@ export function clearLocalIncident(): void {
     inspectedModelOn: false,
     floorRef: null,
     memberCrewToggles: {},
+    focusedFeedId: null,
   })
   getUnitLayer()?.setInteriorBounds(null)
   getHazardLayer()?.clear()

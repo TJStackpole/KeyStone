@@ -129,6 +129,26 @@ export interface TimelineEvent {
   payload?: unknown
 }
 
+/**
+ * One entry of the SIMULATED citywide dispatch feed (FDNY / NYPD / PAPD
+ * dispatch centers) — the "other boxes" running around the city, grouped by
+ * FDNY division and battalion in the INCIDENTS dropdown.
+ */
+export interface FeedIncident {
+  id: string
+  address: string
+  borough: string
+  lat: number
+  lon: number
+  type: string
+  battalion: number
+  division: number
+  source: 'FDNY' | 'NYPD' | 'PAPD'
+  units: number
+  status: 'Dispatched' | 'Operating' | 'Winding Down'
+  startedAt: string
+}
+
 // ------------------------------ units (Phase 3+) ----------------------------
 
 export type UnitCategory =
