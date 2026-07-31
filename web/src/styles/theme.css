@@ -978,8 +978,11 @@ html, body {
 
 /* OVERLAYS dropdown (top bar) */
 .overlays-wrap { position: relative; }
-/* Citywide INCIDENTS dropdown — simulated dispatch feed by division/battalion. */
-.incidents-wrap { position: relative; margin-left: 12px; }
+/* Citywide INCIDENTS dropdown — simulated dispatch feed by division/battalion.
+   Lives on the brand row, hugging the KEYSTONE name (the wide eyebrow line
+   above used to push it visually far from the name). */
+.brand-row { display: flex; align-items: center; gap: 10px; }
+.incidents-wrap { position: relative; }
 .incidents-menu {
   position: absolute;
   top: calc(100% + 8px);

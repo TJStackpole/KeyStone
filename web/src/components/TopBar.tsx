@@ -215,9 +215,11 @@ export function TopBar() {
     <header className="topbar glass">
       <div className="wordmark">
         <span className="sub">Common Operating Picture · FDNY / NYCEM</span>
-        <span className="name">KEYSTONE</span>
+        <div className="brand-row">
+          <span className="name">KEYSTONE</span>
+          <IncidentsMenu />
+        </div>
       </div>
-      <IncidentsMenu />
       <SearchBar />
       <button className="demo-btn" onClick={() => void runDemoScenario()} title="Demo scenario: structural fire, 100 Gold St — full flow unattended">
         ▶ DEMO
