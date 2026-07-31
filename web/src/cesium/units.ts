@@ -2,6 +2,7 @@ import * as Cesium from 'cesium'
 import { haversineMeters, nearestOnRing, pointInRing } from '../lib/geo'
 import { getAppState } from '../state/store'
 import type { Unit, UnitCategory } from '../types'
+import type { SceneHandle } from './providers'
 
 // ---------------------------------------------------------------------------
 // Unit taxonomy billboards (CLAUDE.md): FDNY Engine red square · Ladder red
@@ -118,6 +119,15 @@ function pulsePhase(): number {
   return ((Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS) ** 0.7
 }
 
+// Street-level markers bake a sampled ground height into their position
+// samples instead of using CLAMP_TO_GROUND: a clamped billboard riding a
+// SampledPositionProperty re-clamps on EVERY rendered frame while the unit
+// moves, and with tileset collision on each re-clamp is a synchronous
+// ray-pick against the city mesh — (marker + pulse) x 60 fps x every enroute
+// vehicle was several ms of main thread per frame at first-alarm convergence.
+// Baking costs ONE pick per unit per >10 m of travel, off the render loop.
+const GROUND_RESAMPLE_M = 10
+
 // Apparatus categories that park at the scene — they get a staged-spot
 // marker on arrival and their marker pins there (GPS wander suppression).
 const VEHICLES = new Set<UnitCategory>(['engine', 'ladder', 'battalion', 'rescue', 'ems', 'nypd', 'esu', 'papd', 'oem'])
@@ -144,14 +154,50 @@ export class UnitLayer {
   private stagedAt = new Map<string, { lat: number; lon: number }>()
   /** Fire-building footprint rings — interior members snap inside them. */
   private interiorRings: number[][][] | null = null
+  /** Baked street height per unit (see GROUND_RESAMPLE_M). viaGlobe marks a
+   *  height sampled off the ellipsoid globe — a lie once the google upgrade
+   *  hides that globe, so those entries resample instead of being trusted. */
+  private groundHeights = new Map<string, { lat: number; lon: number; h: number; viaGlobe: boolean }>()
 
   /** Target footprint outer rings ([lon,lat][] each), or null to clear. */
   setInteriorBounds(rings: number[][][] | null): void {
     this.interiorRings = rings && rings.length ? rings : null
   }
 
-  constructor(viewer: Cesium.Viewer) {
-    void viewer.dataSources.add(this.source)
+  constructor(private handle: SceneHandle) {
+    void handle.viewer.dataSources.add(this.source)
+  }
+
+  /**
+   * Street height under a unit, from the same sources CLAMP_TO_GROUND
+   * consults (collision tileset first, then the globe when it's shown), but
+   * sampled once per CoT update instead of once per rendered frame. Returns
+   * undefined when nothing is loaded to sample yet — the caller falls back
+   * to real clamping until a height exists.
+   */
+  private groundHeightFor(uid: string, lat: number, lon: number): number | undefined {
+    const scene = this.handle.viewer.scene
+    const tileset = this.handle.buildingTileset
+    const cached = this.groundHeights.get(uid)
+    if (
+      cached &&
+      !(cached.viaGlobe && tileset && !scene.globe.show) &&
+      haversineMeters(cached.lat, cached.lon, lat, lon) < GROUND_RESAMPLE_M
+    ) {
+      return cached.h
+    }
+    const carto = Cesium.Cartographic.fromDegrees(lon, lat)
+    let h = tileset?.getHeight(carto, scene)
+    let viaGlobe = false
+    if (h === undefined && scene.globe.show) {
+      h = scene.globe.getHeight(carto)
+      viaGlobe = true
+    }
+    // No mesh streamed at this spot yet: reuse the last-known height (streets
+    // are near-flat block to block) and retry on the next update.
+    if (h === undefined) return cached?.h
+    this.groundHeights.set(uid, { lat, lon, h, viaGlobe })
+    return h
   }
 
   /** Tap-to-toggle a unit's callsign label. Returns the new visibility. */
@@ -248,15 +294,19 @@ export class UnitLayer {
         ? ref.z0 + (Math.max(1, unit.floor ?? 1) - 0.5) * ref.storeyM
         : unit.hae + s.isolateLiftM
     }
+    // Street-level units ride the scene surface (CoT hae 0 floats above
+    // photorealistic-tile streets); drones fly true altitude and interior
+    // members hold their floor height inside the building. The street height
+    // is BAKED into the samples (see GROUND_RESAMPLE_M) — CLAMP_TO_GROUND is
+    // only the fallback while no mesh has streamed in to sample.
+    let clampRef = Cesium.HeightReference.NONE
+    if (unit.category !== 'drone' && !(unit.floor && unit.floor > 0)) {
+      const ground = this.groundHeightFor(unit.uid, lat, lon)
+      if (ground !== undefined) hae = ground
+      else clampRef = Cesium.HeightReference.CLAMP_TO_GROUND
+    }
     const position = Cesium.Cartesian3.fromDegrees(lon, lat, hae)
     const now = Cesium.JulianDate.now()
-    // Street-level units clamp to the scene surface (CoT hae 0 floats above
-    // photorealistic-tile streets); drones fly true altitude and interior
-    // members hold their floor height inside the building.
-    const clampRef =
-      unit.category !== 'drone' && !(unit.floor && unit.floor > 0)
-        ? Cesium.HeightReference.CLAMP_TO_GROUND
-        : Cesium.HeightReference.NONE
 
     let entity = this.source.entities.getById(id)
     if (!entity) {
@@ -540,6 +590,7 @@ export class UnitLayer {
     this.sampleTimes.delete(uid)
     this.pulseAgency.delete(uid)
     this.stagedAt.delete(uid)
+    this.groundHeights.delete(uid)
   }
 
   /** Transcript mention: pulse the unit's marker for ~3 s (F6/F7 spec). */
@@ -595,5 +646,6 @@ export class UnitLayer {
     this.sampleTimes.clear()
     this.pulseAgency.clear()
     this.stagedAt.clear()
+    this.groundHeights.clear()
   }
 }

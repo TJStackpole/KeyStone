@@ -41,7 +41,7 @@ export function registerScene(h: SceneHandle): void {
   handle = h
   footprintLayer = new FootprintLayer(h.viewer)
   intelLayer = new IntelMarkerLayer(h.viewer)
-  unitLayer = new UnitLayer(h.viewer)
+  unitLayer = new UnitLayer(h)
   shapeLayer = new ShapeLayer(h.viewer)
   drawController = new DrawController(h.viewer, shapeLayer)
   boundaryLayer = new BoundaryLayer(h.viewer)
