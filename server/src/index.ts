@@ -18,6 +18,7 @@ import {
   upsertShape,
 } from './incidentStore.js'
 import { ScenarioEngine } from './scenario/engine.js'
+import { isForeignSimUid, SIM_UID_PREFIX } from './sim/ns.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
 import { CHAT_ROOMS, SimUnitChatter } from './simChat.js'
@@ -169,7 +170,9 @@ tak.on('event', (ev) => {
   // which the id-dedupe drops).
   if (ev.type === 'b-t-f' && ev.raw) {
     const msg = extractGeoChat(ev.raw, ev.uid)
-    if (msg) recordChat(msg)
+    // A parallel dev stack's sim arrival chatter belongs to ITS incident —
+    // drop it along with that stack's units (see sim/ns.ts).
+    if (msg && !isForeignSimUid(msg.senderUid ?? '')) recordChat(msg)
     return
   }
   // Proof-of-protocol: log genuine CoT as it arrives off the TAK server —
@@ -790,5 +793,5 @@ process.on('unhandledRejection', (reason) => {
 })
 
 httpServer.listen(PORT, () => {
-  console.log(`[keystone-server] listening on :${PORT} (http + ws /ws)`)
+  console.log(`[keystone-server] listening on :${PORT} (http + ws /ws) — sim uid namespace ${SIM_UID_PREFIX}*`)
 })

@@ -2,6 +2,7 @@ import { bearingDeg, destination, haversineMeters, Polyline, type PathPoint } fr
 import { countWetSamples } from '../nyc.js'
 import { buildCotXml, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
 import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
+import { SIM_UID_PREFIX } from './ns.js'
 
 const TICK_MS = 2000
 const OSRM = 'https://router.project-osrm.org/route/v1/driving'
@@ -199,7 +200,7 @@ export class FirstAlarmSimulator {
     const [tMin, tMax] = TURNOUT_S[spec.category] ?? [15, 45]
     const unit: SimUnit = {
       spec,
-      uid: `WT-SIM-${spec.callsign}`,
+      uid: `${SIM_UID_PREFIX}${spec.callsign}`,
       path,
       traveledM: 0,
       phase: 'enroute',
@@ -241,7 +242,7 @@ export class FirstAlarmSimulator {
         ? Math.min(this.building.floors, this.building.fireFloor + Math.floor(Math.random() * 2))
         : 0
       this.personnel.push({
-        uid: `WT-SIM-${u.spec.callsign}-M${i + 1}`,
+        uid: `${SIM_UID_PREFIX}${u.spec.callsign}-M${i + 1}`,
         callsign: `${u.spec.callsign}/${i + 1}`,
         role,
         parentCallsign: u.spec.callsign,

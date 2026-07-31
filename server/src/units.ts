@@ -7,6 +7,7 @@ import {
   type CotEvent,
   type UnitCategory,
 } from './tak/cot.js'
+import { isForeignSimUid } from './sim/ns.js'
 
 export interface Unit {
   uid: string
@@ -36,6 +37,8 @@ const SWEEP_INTERVAL_MS = 5_000
 /**
  * Live unit picture, built exclusively from CoT events — the registry cannot
  * tell (by design) whether an event came from the simulator or a real phone.
+ * Sole exception: sim uids namespaced to a PARALLEL dev stack are dropped at
+ * ingest so two stacks sharing one TAK server don't cross-feed (sim/ns.ts).
  *
  * Events: 'unit' (Unit upserted), 'remove' (uid: string)
  */
@@ -82,6 +85,10 @@ export class UnitRegistry extends EventEmitter {
   }
 
   upsertFromCot(ev: CotEvent): Unit | null {
+    // Parallel-dev isolation: a second stack on the same TAK server runs its
+    // own simulator under a different uid namespace — its fleet belongs to
+    // THAT stack's incident. Real EUD uids never match the sim prefix.
+    if (isForeignSimUid(ev.uid)) return null
     const removed = this.removedAt.get(ev.uid)
     if (removed !== undefined) {
       // Only events STAMPED AFTER the removal are legitimate respawns

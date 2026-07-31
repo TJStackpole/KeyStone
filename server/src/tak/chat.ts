@@ -15,6 +15,9 @@ export interface ChatMsg {
   self?: boolean
   /** Sender is a simulated unit (WT-SIM-/DRILL- uid) — labeled SIM in the UI. */
   sim?: boolean
+  /** CoT uid of the sending EUD (chatgrp uid0) — lets ingest drop chat from a
+   *  parallel dev stack's sim namespace (see sim/ns.ts). */
+  senderUid?: string
 }
 
 function esc(v: string): string {
@@ -100,5 +103,6 @@ export function extractGeoChat(raw: string, eventUid: string): ChatMsg | null {
     text,
     ts: new Date().toISOString(),
     sim: senderUid.startsWith('WT-SIM-') || senderUid.startsWith('DRILL-') || undefined,
+    senderUid: senderUid || undefined,
   }
 }
