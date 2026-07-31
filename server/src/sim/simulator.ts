@@ -1,5 +1,5 @@
 import { bearingDeg, destination, haversineMeters, Polyline, type PathPoint } from '../lib/geo.js'
-import { countWetSamples } from '../nyc.js'
+import { countWetSamples, isLand } from '../nyc.js'
 import { buildCotXml, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
 import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
 import { SIM_UID_PREFIX } from './ns.js'
@@ -183,9 +183,9 @@ export class FirstAlarmSimulator {
     let holdPoint: PathPoint = { lat: incLat, lon: incLon }
     if (spec.category === 'nypd') {
       const b = bearingDeg(spec.origin.lat, spec.origin.lon, incLat, incLon)
-      holdPoint = destination(incLat, incLon, (b + 180) % 360, 140)
+      holdPoint = await landHoldPoint(incLat, incLon, (b + 180) % 360, 140)
     } else if (spec.category === 'oem') {
-      holdPoint = destination(incLat, incLon, 90, 180)
+      holdPoint = await landHoldPoint(incLat, incLon, 90, 180)
     } else if (spec.category !== 'drone') {
       // spread apparatus around the block face so markers don't stack exactly
       const jitter = Math.random() * 360
@@ -450,6 +450,27 @@ export class FirstAlarmSimulator {
       )
     }
   }
+}
+
+/**
+ * Hold/staging point `distanceM` from the incident on a bearing near
+ * `preferred`, rotated in 30° steps until it lands on a block — a fixed
+ * compass offset (OEM stages 180 m due east) can sit in the river when the
+ * incident is right on a shoreline. A fully wet ring keeps the preferred
+ * point (old behavior); an Open Data outage reads as land and degrades the
+ * same way.
+ */
+export async function landHoldPoint(
+  incLat: number,
+  incLon: number,
+  preferred: number,
+  distanceM: number,
+): Promise<PathPoint> {
+  for (const delta of [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180]) {
+    const p = destination(incLat, incLon, (preferred + delta + 360) % 360, distanceM)
+    if (await isLand(p.lat, p.lon)) return p
+  }
+  return destination(incLat, incLon, preferred, distanceM)
 }
 
 /**
