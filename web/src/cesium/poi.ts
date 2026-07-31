@@ -1,6 +1,5 @@
 import * as Cesium from 'cesium'
 import { fetchFacilities, type Facility } from '../api/nyc'
-import { crispTextImage } from './streets'
 
 // ---------------------------------------------------------------------------
 // Citywide facility overlays (OVERLAYS menu): every FDNY firehouse, official
@@ -105,6 +104,17 @@ export class PoiLayer {
     }
     source.entities.removeAll()
     const cfg = POI[kind]
+    // Shared per-render property instances: hundreds of facilities per kind
+    // (5 kinds ~500 total when everything is on) — one entity per facility
+    // instead of two halves the entity count AND the ground-clamp work, the
+    // name rides the same entity as a batched vector label, and distance
+    // gates stop hundreds of labels drawing at city zoom.
+    const iconScale = new Cesium.NearFarScalar(800, 1, 30_000, 0.45)
+    const iconCondition = new Cesium.DistanceDisplayCondition(0, 60_000)
+    const labelCondition = new Cesium.DistanceDisplayCondition(0, 8000)
+    const labelTranslucency = new Cesium.NearFarScalar(3500, 1, 7000, 0)
+    const labelFill = Cesium.Color.fromCssColorString(cfg.labelColor)
+    const labelOffset = new Cesium.Cartesian2(0, -32)
     for (let i = 0; i < facilities.length; i++) {
       const f = facilities[i]
       source.entities.add({
@@ -115,21 +125,24 @@ export class PoiLayer {
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(800, 1, 30_000, 0.45),
+          scaleByDistance: iconScale,
+          distanceDisplayCondition: iconCondition,
         },
-      })
-      source.entities.add({
-        id: `${kind}:${i}:label`,
-        position: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, 0),
-        billboard: {
-          image: crispTextImage(f.name, cfg.labelColor, 22),
-          scale: 0.5,
-          pixelOffset: new Cesium.Cartesian2(0, -32),
+        label: {
+          text: f.name,
+          font: `600 11px 'JetBrains Mono', monospace`,
+          fillColor: labelFill,
+          outlineColor: Cesium.Color.fromCssColorString('#060a10'),
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: labelOffset,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          // Citywide layer: names only matter up close.
-          translucencyByDistance: new Cesium.NearFarScalar(3500, 1, 7000, 0),
+          // Citywide layer: names only matter up close — beyond 8 km they
+          // don't even enter the render queue.
+          translucencyByDistance: labelTranslucency,
+          distanceDisplayCondition: labelCondition,
         },
       })
     }
