@@ -1053,11 +1053,12 @@ html, body {
 .home-btn:hover { border-color: var(--cyan); }
 .home-btn svg { width: 100%; height: 100%; }
 
-/* Fly-to-incident — stacked above HOME, amber like the incident accents. */
+/* Fly-to-incident — top of the HOME/compass stack, amber accent. (224px is
+   the compass — parking this there buried the north-reorient control.) */
 .incident-btn {
   position: absolute;
   left: 14px;
-  bottom: 230px; /* directly above the HOME button */
+  bottom: 278px; /* directly above the compass */
   width: 46px;
   height: 46px;
   padding: 9px;
