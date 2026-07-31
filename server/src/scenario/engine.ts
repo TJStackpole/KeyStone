@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { extractKeywords, type CommsChannel, type TranscriptLine } from '../comms.js'
+import { DRILL_UID_PREFIX } from '../sim/ns.js'
 import { buildCotXml, categorize, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
 import { shapeToCot, shapeDeleteCot } from '../tak/shapes.js'
 import type { IcsShape, Incident } from '../types.js'
@@ -114,6 +115,19 @@ const TICK_MS = 500
 const MOVE_TX_INTERVAL_S = 2 // scenario seconds between CoT for a moving unit
 const IDLE_TX_INTERVAL_S = 20
 
+/**
+ * Re-home a drill uid/shape id onto THIS stack's namespace (DRILL-<ns>-…).
+ * Scenario JSON ships fixed uids and ids, so two parallel dev stacks playing
+ * the same drill through the shared TAK server would publish IDENTICAL uids —
+ * cross-feeding each other's unit registries and deleting each other's shapes
+ * on real ATAK phones (see sim/ns.ts). Idempotent; a bare DRILL- prefix is
+ * stripped first so legacy ids don't double the family marker.
+ */
+function drillId(raw: string): string {
+  if (raw.startsWith(DRILL_UID_PREFIX)) return raw
+  return DRILL_UID_PREFIX + (raw.startsWith('DRILL-') ? raw.slice('DRILL-'.length) : raw)
+}
+
 function segLengths(path: [number, number][]): { cum: number[]; total: number } {
   const R = 6371008.8
   const cum = [0]
@@ -177,12 +191,19 @@ export class ScenarioEngine extends EventEmitter {
     const raw = await readFile(resolve(SCENARIO_DIR, `${safe}.json`), 'utf8')
     const file = JSON.parse(raw) as ScenarioFile
     file.events.sort((a, b) => a.t - b.t)
-    // Normalize custom spawn uids onto the DRILL- prefix: tombstones, the
-    // rx-log filter, SIM chat badging, and arrival chatter all key on it —
-    // an unprefixed uid would silently lose every one of those behaviors.
+    // Normalize every drill uid/id onto this stack's DRILL-<ns>- namespace.
+    // The DRILL- family keys tombstones, the rx-log filter, SIM chat badging,
+    // and arrival chatter — an unprefixed uid would silently lose every one
+    // of those behaviors. The <ns> isolates parallel dev stacks playing the
+    // same scenario file; without it our OWN ingest filter (units.ts) would
+    // even drop our own units' TAK echo as foreign and the board stays empty.
     for (const ev of file.events) {
-      if (ev.kind === 'unit_spawn' && ev.unit?.uid && !ev.unit.uid.startsWith('DRILL-')) {
-        ev.unit.uid = `DRILL-${ev.unit.uid}`
+      if (ev.kind === 'unit_spawn' && ev.unit) {
+        ev.unit.uid = drillId(ev.unit.uid ?? ev.unit.callsign)
+      } else if (ev.kind === 'annotation' && ev.shape?.id) {
+        ev.shape.id = drillId(ev.shape.id)
+      } else if (ev.kind === 'annotation_remove' && ev.id) {
+        ev.id = drillId(ev.id)
       }
     }
     this.teardown()
@@ -261,7 +282,7 @@ export class ScenarioEngine extends EventEmitter {
       const respawning = new Set(
         this.file.events
           .filter((e) => e.kind === 'unit_spawn' && e.t <= target && e.unit)
-          .map((e) => e.unit!.uid ?? `DRILL-${e.unit!.callsign}`),
+          .map((e) => e.unit!.uid ?? drillId(e.unit!.callsign)),
       )
       this.teardown(true, respawning)
       this.file = fileRef
@@ -379,7 +400,7 @@ export class ScenarioEngine extends EventEmitter {
     switch (ev.kind) {
       case 'unit_spawn': {
         const d = ev.unit!
-        const uid = d.uid ?? `DRILL-${d.callsign}`
+        const uid = d.uid ?? drillId(d.callsign)
         const u: ScenarioUnit = {
           uid,
           callsign: d.callsign,
@@ -428,7 +449,7 @@ export class ScenarioEngine extends EventEmitter {
       }
       case 'annotation': {
         const shape = { ...ev.shape! }
-        if (!shape.id) shape.id = `DRILL-SHAPE-${this.shapeIds.size + 1}`
+        if (!shape.id) shape.id = drillId(`SHAPE-${this.shapeIds.size + 1}`)
         shape.createdAt = new Date().toISOString()
         this.shapeIds.add(shape.id)
         this.deps.upsertShape(shape)

@@ -18,7 +18,7 @@ import {
   upsertShape,
 } from './incidentStore.js'
 import { ScenarioEngine } from './scenario/engine.js'
-import { isForeignSimUid, SIM_UID_PREFIX } from './sim/ns.js'
+import { DRILL_UID_PREFIX, isForeignSimUid, SIM_UID_PREFIX } from './sim/ns.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
 import { CHAT_ROOMS, SimUnitChatter } from './simChat.js'
@@ -793,5 +793,7 @@ process.on('unhandledRejection', (reason) => {
 })
 
 httpServer.listen(PORT, () => {
-  console.log(`[keystone-server] listening on :${PORT} (http + ws /ws) — sim uid namespace ${SIM_UID_PREFIX}*`)
+  console.log(
+    `[keystone-server] listening on :${PORT} (http + ws /ws) — sim uid namespaces ${SIM_UID_PREFIX}* ${DRILL_UID_PREFIX}*`,
+  )
 })
