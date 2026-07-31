@@ -34,6 +34,38 @@ async function setAlarm(level: AlarmLevel): Promise<void> {
   }
 }
 
+/**
+ * Replay scrub row: subscribes to the engine's fast clock DIRECTLY, so the
+ * 8.3 Hz playback tick re-renders only this small row instead of pushing
+ * replay.t through the global store and re-rendering every panel.
+ */
+function ReplayStrip({ playing, duration }: { playing: boolean; duration: number }) {
+  const [t, setT] = useState(() => replayEngine.getT())
+  useEffect(() => replayEngine.subscribeT(setT), [])
+  return (
+    <div className="command-strip glass replaying">
+      <span className="strip-label replay-label">REPLAY 4×</span>
+      <button className="strip-btn" onClick={() => replayEngine.setPlaying(!playing)}>
+        {playing ? '❚❚' : '▶'}
+      </button>
+      <input
+        className="replay-scrub"
+        type="range"
+        min={0}
+        max={duration}
+        value={t}
+        onChange={(e) => replayEngine.seek(Number(e.target.value))}
+      />
+      <span className="strip-mono">
+        T+{fmtElapsed(t)} / {fmtElapsed(duration)}
+      </span>
+      <button className="strip-btn exit" onClick={() => replayEngine.stop()}>
+        EXIT REPLAY
+      </button>
+    </div>
+  )
+}
+
 /** Phase 8 command header: elapsed clock, on-scene counts, alarm level, replay. */
 export function CommandStrip() {
   const { incident, units, replay } = useAppState()
@@ -66,28 +98,7 @@ export function CommandStrip() {
   const currentAlarm = incident.alarmLevel ?? '10-75'
 
   if (replay.active) {
-    return (
-      <div className="command-strip glass replaying">
-        <span className="strip-label replay-label">REPLAY 4×</span>
-        <button className="strip-btn" onClick={() => replayEngine.setPlaying(!replay.playing)}>
-          {replay.playing ? '❚❚' : '▶'}
-        </button>
-        <input
-          className="replay-scrub"
-          type="range"
-          min={0}
-          max={replay.duration}
-          value={replay.t}
-          onChange={(e) => replayEngine.seek(Number(e.target.value))}
-        />
-        <span className="strip-mono">
-          T+{fmtElapsed(replay.t)} / {fmtElapsed(replay.duration)}
-        </span>
-        <button className="strip-btn exit" onClick={() => replayEngine.stop()}>
-          EXIT REPLAY
-        </button>
-      </div>
-    )
+    return <ReplayStrip playing={replay.playing} duration={replay.duration} />
   }
 
   if (collapsed) {

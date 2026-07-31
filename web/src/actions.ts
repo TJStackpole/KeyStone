@@ -10,6 +10,7 @@ import {
   fetchTaxLots,
   fetchTrafficLinks,
   fetchTunnels,
+  linksNear,
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchWind } from './api/weather'
@@ -37,6 +38,7 @@ import {
 } from './cesium/scene'
 import { replayEngine } from './replay'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
+import { crewOf } from './types'
 import type { Agency, GeoHit, IcsShape, Incident, IncidentType, ToggleLayerId, Unit, UnitCategory } from './types'
 
 function newIncidentId(): string {
@@ -150,7 +152,8 @@ export function relocateIncidentSite(incident: Incident): void {
   lastFootprints = null
   getTrafficLayer()?.clear()
   getHazardLayer()?.clear()
-  setAppState({ targetHeightM: null, inspected: null, wind: null })
+  getUnitLayer()?.setInteriorBounds(null)
+  setAppState({ targetHeightM: null, inspected: null, wind: null, floorRef: null })
   if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
   void loadFootprints(incident)
   void loadSiteIntel(incident)
@@ -192,6 +195,24 @@ async function loadFootprints(incident: Incident): Promise<void> {
     // Remember the target's height — it drives the collapse-zone tool (1.5x rule).
     const target = feats.find((f) => f.bin === targetBin)
     setAppState({ targetHeightM: target?.heightM ?? null })
+    // GPS accuracy: interior members snap into the fire building's real
+    // footprint instead of drifting through walls.
+    getUnitLayer()?.setInteriorBounds(target ? target.polygons.map((p) => p[0]).filter((r) => r && r.length >= 3) : null)
+    // ...and position by FLOOR against true street level + storey height,
+    // rather than trusting raw CoT altitude. Recomputed with the real PLUTO
+    // floor count when it lands (loadSiteIntel).
+    if (target) {
+      void (async () => {
+        const base = (await layer.targetBase()) ?? 0
+        const now = getAppState()
+        if (now.incident?.id !== incident.id) return
+        const floors = now.intel.pluto?.numFloors ?? Math.max(1, Math.round(target.heightM / 3.2))
+        setAppState({ floorRef: { z0: base, storeyM: target.heightM / floors } })
+        applyUnitVisibility()
+      })()
+    } else {
+      setAppState({ floorRef: null })
+    }
     // Module 4: per-face collapse zones from the real footprint + roof height.
     if (target && getAppState().layerToggles.collapsezones) {
       getHazardLayer()?.renderCollapse(target, target.heightM)
@@ -207,6 +228,8 @@ async function loadFootprints(incident: Incident): Promise<void> {
     lastFootprints = null
     resetIsolate() // a clip against vanished data is worse than no clip
     layer.clear()
+    getUnitLayer()?.setInteriorBounds(null)
+    setAppState({ floorRef: null })
     setLayerStatus('footprints', 'unavailable')
   }
 }
@@ -724,6 +747,10 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
       const layer = getStreetLayer()
       layer?.set(streets)
       layer?.setVisible(getAppState().layerToggles.streets)
+      // Seed the camera-follow gate: the fly-in's moveEnd otherwise refetches
+      // the SAME labels (the gate only knew about camera-triggered fetches).
+      streetSeq++
+      lastStreetFetch = { lat: incident.lat, lon: incident.lon, radiusM: 500 }
     } catch (err) {
       console.error('[streets] labels unavailable:', err)
       if (stillCurrent()) getStreetLayer()?.clear()
@@ -762,7 +789,16 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
     try {
       const pluto = incident.bbl ? await fetchPluto(incident.bbl) : null
       if (!stillCurrent()) return
-      setAppState((s) => ({ intel: { ...s.intel, pluto } }))
+      setAppState((s) => ({
+        intel: { ...s.intel, pluto },
+        // Sharpen the interior floor geometry with the REAL floor count —
+        // the footprint pass estimated it from height alone.
+        floorRef:
+          s.floorRef && pluto?.numFloors && s.targetHeightM
+            ? { z0: s.floorRef.z0, storeyM: s.targetHeightM / pluto.numFloors }
+            : s.floorRef,
+      }))
+      applyUnitVisibility()
       setLayerStatus('pluto', 'ok')
     } catch (err) {
       console.error('[pluto] layer unavailable:', err)
@@ -898,7 +934,9 @@ export function adoptIncident(incident: Incident): void {
     isolateView: 'model',
     wind: null,
     tacticsOverride: null,
+    floorRef: null,
   })
+  getUnitLayer()?.setInteriorBounds(null)
   getHazardLayer()?.clear()
   getShapeLayer()?.clear()
   const scene = getScene()
@@ -1000,7 +1038,10 @@ export function clearLocalIncident(): void {
     tacticsOpen: false,
     tacticsOverride: null,
     inspectedModelOn: false,
+    floorRef: null,
+    memberCrewToggles: {},
   })
+  getUnitLayer()?.setInteriorBounds(null)
   getHazardLayer()?.clear()
   getShapeLayer()?.clear()
   getUnitLayer()?.clear()
@@ -1185,6 +1226,8 @@ function movedEnough(
   return moved >= last.radiusM * 0.35 || radiusM > last.radiusM * 1.3
 }
 
+let lotAbort: AbortController | null = null
+
 export async function refreshLots(force = false): Promise<void> {
   const layer = getLotLayer()
   if (!layer || !getAppState().layerToggles.lots) return
@@ -1197,15 +1240,27 @@ export async function refreshLots(force = false): Promise<void> {
   const radiusM = Math.min(900, Math.max(300, center.heightM * 0.7))
   if (!force && !movedEnough(lastLotFetch, lat, lon, radiusM)) return
   const seq = ++lotSeq
+  // One in-flight fetch at a time; the movement gate is written OPTIMISTICALLY
+  // (rolled back on failure/empty) so a settle DURING a fetch can't duplicate
+  // a several-hundred-KB download that always completes.
+  lotAbort?.abort()
+  lotAbort = new AbortController()
+  const prevGate = lastLotFetch
+  lastLotFetch = { lat, lon, radiusM }
   try {
-    const lots = await fetchTaxLots(lat, lon, radiusM)
+    const lots = await fetchTaxLots(lat, lon, radiusM, lotAbort.signal)
     if (seq !== lotSeq || !getAppState().layerToggles.lots) return
     if (layer !== getLotLayer()) return // scene torn down/remounted mid-fetch
     // Empty results keep the old grid (render no-ops) — and must not poison
     // the movement gate, or the next pan would never refetch.
-    if (lots.length) lastLotFetch = { lat, lon, radiusM }
+    if (!lots.length) {
+      lastLotFetch = prevGate
+      return
+    }
     layer.render(lots)
   } catch (err) {
+    if (seq === lotSeq) lastLotFetch = prevGate
+    if ((err as Error).name === 'AbortError') return // superseded, not broken
     console.error('[lots] layer unavailable:', err) // degrade, never crash
   }
 }
@@ -1218,6 +1273,8 @@ export async function refreshLots(force = false): Promise<void> {
 let roadSeq = 0
 let lastRoadFetch: { lat: number; lon: number; radiusM: number } | null = null
 
+let roadAbort: AbortController | null = null
+
 export async function refreshRoads(force = false): Promise<void> {
   const layer = getRoadLayer()
   if (!layer || !getAppState().layerToggles.roads) return
@@ -1228,13 +1285,22 @@ export async function refreshRoads(force = false): Promise<void> {
   const radiusM = Math.min(1200, Math.max(400, center.heightM * 0.8))
   if (!force && !movedEnough(lastRoadFetch, lat, lon, radiusM)) return
   const seq = ++roadSeq
+  roadAbort?.abort()
+  roadAbort = new AbortController()
+  const prevGate = lastRoadFetch
+  lastRoadFetch = { lat, lon, radiusM } // optimistic — rolled back on fail/empty
   try {
-    const segments = await fetchRoadSegments(lat, lon, radiusM)
+    const segments = await fetchRoadSegments(lat, lon, radiusM, roadAbort.signal)
     if (seq !== roadSeq || !getAppState().layerToggles.roads) return
     if (layer !== getRoadLayer()) return // scene torn down/remounted mid-fetch
-    if (segments.length) lastRoadFetch = { lat, lon, radiusM }
+    if (!segments.length) {
+      lastRoadFetch = prevGate
+      return
+    }
     layer.renderRoads(segments)
   } catch (err) {
+    if (seq === roadSeq) lastRoadFetch = prevGate
+    if ((err as Error).name === 'AbortError') return
     console.error('[roads] layer unavailable:', err)
   }
 }
@@ -1267,6 +1333,8 @@ export function ensureTunnels(): void {
 let streetSeq = 0
 let lastStreetFetch: { lat: number; lon: number; radiusM: number } | null = null
 
+let streetAbort: AbortController | null = null
+
 export async function refreshStreetLabels(force = false): Promise<void> {
   const layer = getStreetLayer()
   if (!layer || !getAppState().layerToggles.streets) return
@@ -1277,34 +1345,50 @@ export async function refreshStreetLabels(force = false): Promise<void> {
   const radiusM = Math.min(1000, Math.max(400, center.heightM * 0.8))
   if (!force && !movedEnough(lastStreetFetch, lat, lon, radiusM)) return
   const seq = ++streetSeq
+  streetAbort?.abort()
+  streetAbort = new AbortController()
+  const prevGate = lastStreetFetch
+  lastStreetFetch = { lat, lon, radiusM } // optimistic — rolled back on fail/empty
   try {
-    const streets = await fetchStreetLabels(lat, lon, radiusM)
+    const streets = await fetchStreetLabels(lat, lon, radiusM, streetAbort.signal)
     if (seq !== streetSeq || !getAppState().layerToggles.streets) return
     if (layer !== getStreetLayer()) return // scene torn down/remounted mid-fetch
-    if (streets.length) lastStreetFetch = { lat, lon, radiusM }
-    if (streets.length) layer.set(streets)
+    if (!streets.length) {
+      lastStreetFetch = prevGate
+      return
+    }
+    layer.set(streets)
   } catch (err) {
+    if (seq === streetSeq) lastStreetFetch = prevGate
+    if ((err as Error).name === 'AbortError') return
     console.error('[streets] labels unavailable:', err)
   }
 }
 
 let inspectSeq = 0
+let inspectAbort: AbortController | null = null
 
 export async function inspectBuildingAt(lat: number, lon: number): Promise<void> {
   const seq = ++inspectSeq
+  // Rapid taps used to stack dozens of stale in-flight SODA/geosearch
+  // requests (each click fans out several) — cancel the previous fan-out.
+  inspectAbort?.abort()
+  inspectAbort = new AbortController()
+  const signal = inspectAbort.signal
   // The tax lot UNDER the click is authoritative for the address — the
   // nearest address POINT can belong to the neighbor when a click lands
   // mid-lot (yard, parking, big footprint).
   const lotBbl = getLotLayer()?.lotAt(lon, lat) ?? null
   let hit: GeoHit | null = null
   try {
-    hit = await reverseGeocode(lat, lon)
+    hit = await reverseGeocode(lat, lon, signal)
   } catch (err) {
+    if ((err as Error).name === 'AbortError') return
     console.error('[inspect] reverse geocode unavailable:', err)
   }
   if (seq !== inspectSeq) return
   if (lotBbl && hit?.bbl !== lotBbl) {
-    const lotPluto = await fetchPluto(lotBbl).catch(() => null)
+    const lotPluto = await fetchPluto(lotBbl, signal).catch(() => null)
     if (seq !== inspectSeq) return
     if (lotPluto?.address) {
       const borough = hit?.borough ?? 'New York'
@@ -1338,9 +1422,9 @@ export async function inspectBuildingAt(lat: number, lon: number): Promise<void>
     searchPrefill: hit.label,
   })
   const [pluto, safety, cofo] = await Promise.all([
-    hit.bbl ? fetchPluto(hit.bbl).catch(() => null) : Promise.resolve(null),
-    hit.bin ? fetchBuildingSafety(hit.bin).catch(() => null) : Promise.resolve(null),
-    hit.bin ? fetchCertificatesOfOccupancy(hit.bin).catch(() => []) : Promise.resolve([]),
+    hit.bbl ? fetchPluto(hit.bbl, signal).catch(() => null) : Promise.resolve(null),
+    hit.bin ? fetchBuildingSafety(hit.bin, signal).catch(() => null) : Promise.resolve(null),
+    hit.bin ? fetchCertificatesOfOccupancy(hit.bin, signal).catch(() => []) : Promise.resolve([]),
   ])
   if (seq !== inspectSeq) return
   const current = getAppState().inspected
@@ -1488,10 +1572,12 @@ export async function refreshTraffic(): Promise<void> {
     trafficTimer = setInterval(() => void refreshTraffic(), 60_000)
   }
   try {
-    // DOT's sensor network covers highways/major arterials only — if nothing
-    // is near a residential incident, widen to show the approach corridors.
-    let links = await fetchTrafficLinks(incident.lat, incident.lon, 2500)
-    if (!links.length) links = await fetchTrafficLinks(incident.lat, incident.lon, 8000)
+    // ONE citywide download per cycle; the 2500 m try and the 8000 m widen
+    // (DOT sensors cover highways/arterials only — residential incidents need
+    // the approach corridors) both filter the same in-memory array.
+    const all = await fetchTrafficLinks()
+    let links = linksNear(all, incident.lat, incident.lon, 2500)
+    if (!links.length) links = linksNear(all, incident.lat, incident.lon, 8000)
     // Stale-guard: the incident may have changed while the fetch was in flight.
     const now = getAppState()
     if (now.incident?.id !== incident.id || !now.layerToggles.traffic) return
@@ -1560,9 +1646,20 @@ export function unitMapVisible(u: Unit): boolean {
   if (!(s.unitToggles[u.category] ?? true)) return false
   if (!(s.agencyToggles[u.agency] ?? true)) return false
   if (PERSONNEL_CATEGORIES.has(u.category)) {
+    // Per-crew switch: the roster can hide one company's members while the
+    // rest of the picture stays up. Missing key = shown.
+    if (s.memberCrewToggles[crewOf(u.callsign)] === false) return false
     return u.category === 'ff' && (u.floor ?? 0) >= 1
   }
   return true
+}
+
+/** Roster crew rows: show/hide ONE company's individual members on the map. */
+export function toggleMemberCrew(crew: string): void {
+  setAppState((s) => ({
+    memberCrewToggles: { ...s.memberCrewToggles, [crew]: s.memberCrewToggles[crew] === false },
+  }))
+  applyUnitVisibility()
 }
 
 /** Re-run the visibility policy over every unit on the picture. */

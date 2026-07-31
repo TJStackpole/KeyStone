@@ -19,6 +19,36 @@ export function formatMeters(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`
 }
 
+/**
+ * Nearest point on the ring's edges to (lon, lat), planar-approximated with a
+ * cos(lat) x-scale (fine at building scale). Ring is [lon, lat][].
+ */
+export function nearestOnRing(lon: number, lat: number, ring: number[][]): [number, number] {
+  const cosLat = Math.cos((lat * Math.PI) / 180)
+  let best: [number, number] = [ring[0][0], ring[0][1]]
+  let bestD2 = Infinity
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [ax, ay] = ring[i]
+    const [bx, by] = ring[i + 1]
+    const abx = (bx - ax) * cosLat
+    const aby = by - ay
+    const apx = (lon - ax) * cosLat
+    const apy = lat - ay
+    const len2 = abx * abx + aby * aby || 1e-12
+    const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / len2))
+    const cx = ax + (bx - ax) * t
+    const cy = ay + (by - ay) * t
+    const dx = (lon - cx) * cosLat
+    const dy = lat - cy
+    const d2 = dx * dx + dy * dy
+    if (d2 < bestD2) {
+      bestD2 = d2
+      best = [cx, cy]
+    }
+  }
+  return best
+}
+
 /** Ray-cast (even-odd) point-in-ring test. Ring is [lon, lat][]; point is lon/lat degrees. */
 export function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
   let inside = false

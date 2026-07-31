@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { setAppState, useAppState } from '../state/store'
 import type { CommsChannel, TranscriptLine } from '../types'
 
@@ -49,6 +49,23 @@ function HighlightedText({ line }: { line: TranscriptLine }) {
   )
 }
 
+/**
+ * One transcript row, memoized: line objects are referentially stable across
+ * store writes (ws.ts appends, never mutates), so the 200-row scroll skips
+ * re-rendering — and re-compiling each row's highlight regex — on every
+ * units.batch (~1-2 s all incident long).
+ */
+const CommsLine = memo(function CommsLine({ line }: { line: TranscriptLine }) {
+  return (
+    <div className="comms-line">
+      <span className="line-ts">{hhmmss(line.ts)}</span>
+      <span className="line-text">
+        <HighlightedText line={line} />
+      </span>
+    </div>
+  )
+})
+
 export function CommsPanel() {
   const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario, commsAll, commsSource } =
     useAppState()
@@ -85,12 +102,10 @@ export function CommsPanel() {
   // SIM mode shows only simulated content: live-transcribed lines are
   // filtered out rather than mislabeled under the SIMULATED watermark.
   // (Keyless installs are unaffected — all their lines are non-live.)
+  // Memoized: a fresh array identity every render would defeat the row memo.
+  const fdnySim = useMemo(() => transcripts.fdny.filter((l) => !l.live), [transcripts.fdny])
   const lines =
-    scenarioMode && commsAll
-      ? merged
-      : commsChannel === 'fdny' && !liveSelected
-        ? transcripts.fdny.filter((l) => !l.live)
-        : transcripts[commsChannel]
+    scenarioMode && commsAll ? merged : commsChannel === 'fdny' && !liveSelected ? fdnySim : transcripts[commsChannel]
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -212,12 +227,7 @@ export function CommsPanel() {
           // Server-minted line id; the ts|full-text fallback only serves lines
           // from an id-less server during dev HMR. Same-ms same-prefix lines
           // are routine (whisper bursts), so truncated text must never key.
-          <div key={l.id ?? `${l.ts}|${l.text}`} className="comms-line">
-            <span className="line-ts">{hhmmss(l.ts)}</span>
-            <span className="line-text">
-              <HighlightedText line={l} />
-            </span>
-          </div>
+          <CommsLine key={l.id ?? `${l.ts}|${l.text}`} line={l} />
         ))}
       </div>
     </section>

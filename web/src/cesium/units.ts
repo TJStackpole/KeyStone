@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { haversineMeters, nearestOnRing, pointInRing } from '../lib/geo'
 import { getAppState } from '../state/store'
 import type { Unit, UnitCategory } from '../types'
 
@@ -77,6 +78,31 @@ const TRAIL_COLOR: Record<string, string> = {
 }
 const TRAIL_MAX_POINTS = 40
 const VEHICLE_TRAIL_EXEMPT = new Set(['ff', 'officer', 'medic', 'drone'])
+// Ground-clamped polylines re-tessellate on EVERY positions write — gate
+// trail growth to real movement (sim rigs cover 21-26 m per 2 s tick, so a
+// 50 m gate roughly halves the rebuilds with no visual cost at demo zoom).
+const TRAIL_MIN_STEP_M = 50
+
+// Per-agency color + glow material caches: allocating these per rebuild (and
+// per pulse ring) churned GC for values that never change.
+const agencyColorCache = new Map<string, Cesium.Color>()
+function agencyColor(agency: string): Cesium.Color {
+  let c = agencyColorCache.get(agency)
+  if (!c) {
+    c = Cesium.Color.fromCssColorString(TRAIL_COLOR[agency] ?? '#22d3ee')
+    agencyColorCache.set(agency, c)
+  }
+  return c
+}
+const trailMaterialCache = new Map<string, Cesium.PolylineGlowMaterialProperty>()
+function trailMaterial(agency: string): Cesium.PolylineGlowMaterialProperty {
+  let m = trailMaterialCache.get(agency)
+  if (!m) {
+    m = new Cesium.PolylineGlowMaterialProperty({ color: agencyColor(agency).withAlpha(0.85), glowPower: 0.25 })
+    trailMaterialCache.set(agency, m)
+  }
+  return m
+}
 
 const MAX_POSITION_SAMPLES = 120 // ~4 minutes at the 2 s CoT cadence
 
@@ -92,6 +118,17 @@ function pulsePhase(): number {
   return ((Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS) ** 0.7
 }
 
+// Apparatus categories that park at the scene — they get a staged-spot
+// marker on arrival and their marker pins there (GPS wander suppression).
+const VEHICLES = new Set<UnitCategory>(['engine', 'ladder', 'battalion', 'rescue', 'ems', 'nypd', 'esu', 'papd', 'oem'])
+/** Reported drift beyond this is a real reposition, not GPS noise. */
+const STAGED_PIN_RADIUS_M = 30
+const STAGED_PAD = svgIcon(
+  `<circle cx="13" cy="13" r="10" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="4.5 3.5"/>` +
+    `<circle cx="13" cy="13" r="2.2" fill="#f59e0b"/>`,
+)
+const STAGED_LABEL_FILL = Cesium.Color.fromCssColorString('#fbbf24')
+
 export class UnitLayer {
   private source = new Cesium.CustomDataSource('units')
   /** Recent enroute positions per vehicle — the live response trail. */
@@ -103,6 +140,15 @@ export class UnitLayer {
   private labeledUids = new Set<string>()
   /** Agency captured in each pulse ring's color closure — recreate on change. */
   private pulseAgency = new Map<string, string>()
+  /** Where each apparatus parked on arrival — marker anchor + pin position. */
+  private stagedAt = new Map<string, { lat: number; lon: number }>()
+  /** Fire-building footprint rings — interior members snap inside them. */
+  private interiorRings: number[][][] | null = null
+
+  /** Target footprint outer rings ([lon,lat][] each), or null to clear. */
+  setInteriorBounds(rings: number[][][] | null): void {
+    this.interiorRings = rings && rings.length ? rings : null
+  }
 
   constructor(viewer: Cesium.Viewer) {
     void viewer.dataSources.add(this.source)
@@ -127,18 +173,82 @@ export class UnitLayer {
 
   upsert(unit: Unit, show = true): void {
     const id = `unit:${unit.uid}`
-    // Interior members follow the ISOLATE schematic: while its floor geometry
-    // is published they sit mid-storey on THEIR floor (so a vertically scaled
-    // model carries them with it); otherwise they ride the raw lift.
+    const s = getAppState()
     const interior = unit.category === 'ff' && (unit.floor ?? 0) >= 1
+    let lat = unit.lat
+    let lon = unit.lon
     let hae = unit.hae
-    if (interior) {
-      const iso = getAppState().isolateFloors
-      hae = iso
-        ? iso.z0 + (Math.max(1, unit.floor ?? 1) - 0.5) * iso.storeyM
-        : unit.hae + getAppState().isolateLiftM
+
+    // GPS accuracy — parked apparatus: the moment a rig arrives, remember
+    // exactly where it parked, drop a staged-spot marker there, and PIN the
+    // marker to that spot while reported positions merely wander around it.
+    if (VEHICLES.has(unit.category)) {
+      const arrived = !!unit.status && unit.status !== 'Enroute'
+      const st = this.stagedAt.get(unit.uid)
+      if (arrived) {
+        if (!st) {
+          this.stagedAt.set(unit.uid, { lat, lon })
+          this.upsertStagedMarker(unit, lat, lon, show)
+        } else if (haversineMeters(st.lat, st.lon, lat, lon) < STAGED_PIN_RADIUS_M) {
+          lat = st.lat
+          lon = st.lon
+        } else {
+          // Genuinely repositioned (new hydrant, ladder re-spot) — follow it.
+          st.lat = lat
+          st.lon = lon
+          this.upsertStagedMarker(unit, lat, lon, show)
+        }
+      } else if (st) {
+        // Back enroute (rewind / reassignment): the staged spot is history.
+        this.stagedAt.delete(unit.uid)
+        this.source.entities.removeById(`unit:${unit.uid}:staged`)
+      }
     }
-    const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, hae)
+
+    // GPS accuracy — interior members: a member reported inside the building
+    // must RENDER inside it. Snap strays to the nearest footprint edge and
+    // nudge 1.5 m inboard; height comes from true street level + storey
+    // geometry (floorRef / the isolate schematic) instead of raw CoT altitude.
+    if (interior) {
+      if (this.interiorRings && !this.interiorRings.some((r) => pointInRing(lon, lat, r))) {
+        let best: [number, number] | null = null
+        let bestRing: number[][] | null = null
+        let bestD = Infinity
+        for (const ring of this.interiorRings) {
+          const p = nearestOnRing(lon, lat, ring)
+          const d = haversineMeters(lat, lon, p[1], p[0])
+          if (d < bestD) {
+            bestD = d
+            best = p
+            bestRing = ring
+          }
+        }
+        // Only rescue plausible strays — a member 100 m out is bad data, and
+        // teleporting them onto the building would lie about it.
+        if (best && bestRing && bestD < 60) {
+          let avgLon = 0
+          let avgLat = 0
+          for (const [x, y] of bestRing) {
+            avgLon += x
+            avgLat += y
+          }
+          avgLon /= bestRing.length
+          avgLat /= bestRing.length
+          const cosLat = Math.cos((best[1] * Math.PI) / 180)
+          const dxM = (avgLon - best[0]) * 111_320 * cosLat
+          const dyM = (avgLat - best[1]) * 111_320
+          const dM = Math.hypot(dxM, dyM)
+          const frac = dM > 0 ? Math.min(1, 1.5 / dM) : 0
+          lon = best[0] + (avgLon - best[0]) * frac
+          lat = best[1] + (avgLat - best[1]) * frac
+        }
+      }
+      const ref = s.isolateFloors ?? s.floorRef
+      hae = ref
+        ? ref.z0 + (Math.max(1, unit.floor ?? 1) - 0.5) * ref.storeyM
+        : unit.hae + s.isolateLiftM
+    }
+    const position = Cesium.Cartesian3.fromDegrees(lon, lat, hae)
     const now = Cesium.JulianDate.now()
     // Street-level units clamp to the scene surface (CoT hae 0 floats above
     // photorealistic-tile streets); drones fly true altitude and interior
@@ -229,6 +339,45 @@ export class UnitLayer {
     if (unit.category === 'drone') this.updateDroneExtras(unit, show)
     this.updateTrail(unit, show)
     this.updatePulse(unit, show, entity.position as Cesium.PositionProperty, clampRef)
+    // The staged-spot marker follows the unit's visibility policy.
+    const staged = this.source.entities.getById(`unit:${unit.uid}:staged`)
+    if (staged) staged.show = show
+  }
+
+  /** Dashed amber pad + "{callsign} STAGED" at the spot the rig parked. */
+  private upsertStagedMarker(unit: Unit, lat: number, lon: number, show: boolean): void {
+    const id = `unit:${unit.uid}:staged`
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat)
+    let e = this.source.entities.getById(id)
+    if (!e) {
+      e = this.source.entities.add({
+        id,
+        position: pos,
+        billboard: {
+          image: STAGED_PAD,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(300, 1, 4000, 0.45),
+        },
+        label: {
+          text: `${unit.callsign} STAGED`,
+          font: `600 9.5px 'JetBrains Mono', monospace`,
+          fillColor: STAGED_LABEL_FILL,
+          showBackground: true,
+          backgroundColor: LABEL_BG,
+          backgroundPadding: new Cesium.Cartesian2(4, 2),
+          pixelOffset: new Cesium.Cartesian2(0, 14),
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(300, 1, 3000, 0.5),
+        },
+      })
+    } else {
+      e.position = new Cesium.ConstantPositionProperty(pos)
+    }
+    e.show = show
   }
 
   /**
@@ -263,7 +412,7 @@ export class UnitLayer {
     }
     if (!pulse) {
       this.pulseAgency.set(unit.uid, unit.agency)
-      const base = Cesium.Color.fromCssColorString(TRAIL_COLOR[unit.agency] ?? '#22d3ee')
+      const base = agencyColor(unit.agency)
       const scratch = new Cesium.Color()
       pulse = this.source.entities.add({
         id: pulseId,
@@ -310,10 +459,18 @@ export class UnitLayer {
     }
     const last = buf[buf.length - 1]
     let grew = false
-    if (!last || Math.abs(last[0] - unit.lon) > 1e-6 || Math.abs(last[1] - unit.lat) > 1e-6) {
+    if (!last) {
       buf.push([unit.lon, unit.lat])
-      if (buf.length > TRAIL_MAX_POINTS) buf.shift()
       grew = true
+    } else {
+      // Equirectangular meters — cheap, exact enough for a 50 m gate.
+      const dxM = (unit.lon - last[0]) * 111_320 * Math.cos((unit.lat * Math.PI) / 180)
+      const dyM = (unit.lat - last[1]) * 111_320
+      if (dxM * dxM + dyM * dyM >= TRAIL_MIN_STEP_M * TRAIL_MIN_STEP_M) {
+        buf.push([unit.lon, unit.lat])
+        if (buf.length > TRAIL_MAX_POINTS) buf.shift()
+        grew = true
+      }
     }
     if (buf.length < 2) return
     // Ground-clamped polylines rebuild their shadow-volume primitive on every
@@ -323,7 +480,6 @@ export class UnitLayer {
       existing.show = show
       return
     }
-    const color = Cesium.Color.fromCssColorString(TRAIL_COLOR[unit.agency] ?? '#22d3ee')
     const positions = Cesium.Cartesian3.fromDegreesArray(buf.flat())
     let trail = this.source.entities.getById(trailId)
     if (!trail) {
@@ -332,7 +488,7 @@ export class UnitLayer {
         polyline: {
           positions,
           width: 3.5,
-          material: new Cesium.PolylineGlowMaterialProperty({ color: color.withAlpha(0.85), glowPower: 0.25 }),
+          material: trailMaterial(unit.agency),
           clampToGround: true,
         },
       })
@@ -379,9 +535,11 @@ export class UnitLayer {
     this.source.entities.removeById(`unit:${uid}:cone`)
     this.source.entities.removeById(`unit:${uid}:trail`)
     this.source.entities.removeById(`unit:${uid}:pulse`)
+    this.source.entities.removeById(`unit:${uid}:staged`)
     this.trails.delete(uid)
     this.sampleTimes.delete(uid)
     this.pulseAgency.delete(uid)
+    this.stagedAt.delete(uid)
   }
 
   /** Transcript mention: pulse the unit's marker for ~3 s (F6/F7 spec). */
@@ -436,5 +594,6 @@ export class UnitLayer {
     this.trails.clear()
     this.sampleTimes.clear()
     this.pulseAgency.clear()
+    this.stagedAt.clear()
   }
 }

@@ -47,7 +47,11 @@ function flushNow(): void {
 
 function flush(): void {
   if (flushTimer) return
-  flushTimer = setTimeout(flushNow, 1500) // sustained appends = steady cadence
+  // 8 s matches the unit.track sampling cadence — the persisted data only
+  // changes meaningfully at that rate, and the multi-MB synchronous
+  // stringify+write stalls the event loop ~9 ms per flush at the timeline
+  // cap. The exit/SIGINT/SIGTERM handlers still bound loss on shutdown.
+  flushTimer = setTimeout(flushNow, 8000)
   flushTimer.unref?.()
 }
 

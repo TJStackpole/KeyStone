@@ -47,10 +47,28 @@ const httpServer = createServer(app)
 // ---------------------------------------------------------------------------
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
 
+// Backpressure policy: a slow or half-open dashboard must not queue the live
+// feed unboundedly in server memory. High-rate SA frames (units.batch) are
+// DROPPABLE — every unit re-emits within seconds, so a skipped delta heals on
+// its own. Small history-bearing frames (transcript/chat/timeline/incident/
+// shape) are never shed: the snapshot doesn't resync transcripts.
+const DROPPABLE_TYPES = new Set(['units.batch', 'unit'])
+const SOFT_BUFFER_LIMIT = 256 * 1024
+const HARD_BUFFER_LIMIT = 4 * 1024 * 1024
+
 export function broadcast(message: unknown): void {
   const raw = JSON.stringify(message)
+  const droppable = DROPPABLE_TYPES.has((message as { type?: string }).type ?? '')
   for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) client.send(raw)
+    if (client.readyState !== WebSocket.OPEN) continue
+    if (client.bufferedAmount > HARD_BUFFER_LIMIT) {
+      // Hopeless backlog — cut it loose; the client's reconnect-forever loop
+      // plus the connection snapshot restores full state.
+      client.terminate()
+      continue
+    }
+    if (droppable && client.bufferedAmount > SOFT_BUFFER_LIMIT) continue
+    client.send(raw)
   }
 }
 
@@ -59,8 +77,24 @@ export function broadcast(message: unknown): void {
 // that kills the entire server mid-demo. ws closes the connection itself.
 wss.on('error', (err) => console.warn('[ws] server error:', err.message))
 
+// Canonical ws heartbeat: half-open dashboards (sleeping laptops, dropped
+// Wi-Fi) never fire 'close' on their own — ping them and reap the silent.
+const socketAlive = new WeakMap<WebSocket, boolean>()
+setInterval(() => {
+  for (const client of wss.clients) {
+    if (socketAlive.get(client) === false) {
+      client.terminate()
+      continue
+    }
+    socketAlive.set(client, false)
+    client.ping()
+  }
+}, 30_000).unref()
+
 wss.on('connection', (socket) => {
   socket.on('error', (err) => console.warn('[ws] client error:', err.message))
+  socketAlive.set(socket, true)
+  socket.on('pong', () => socketAlive.set(socket, true))
   const state = getState()
   socket.send(
     JSON.stringify({

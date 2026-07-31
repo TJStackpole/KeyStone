@@ -51,6 +51,12 @@ export interface AppState {
   /** null until the server reports TAK link state. */
   takConnected: boolean | null
   unitToggles: Record<UnitCategory, boolean>
+  /**
+   * Per-crew member visibility (keyed by parent callsign, e.g. "E-6"):
+   * hides that company's individual members on the map. Missing key = shown.
+   * ANDed with the category/agency toggles and the GPS policy.
+   */
+  memberCrewToggles: Record<string, boolean>
   /** Agency-level map filters (NYCEM view) — ANDed with unitToggles. */
   agencyToggles: Record<Agency, boolean>
   /** Master GPS tracking switch: off = no unit dots on the map at all. */
@@ -117,6 +123,13 @@ export interface AppState {
    * on their floor even when the model is vertically scaled.
    */
   isolateFloors: { z0: number; storeyM: number } | null
+  /**
+   * True-scale floor geometry of the incident building (street base + real
+   * storey height), published once footprints resolve. Interior members
+   * position by floor against this OUTSIDE isolate too — far more accurate
+   * than trusting raw CoT altitude. isolateFloors overrides it when set.
+   */
+  floorRef: { z0: number; storeyM: number } | null
   /** Tapped-building schematic (no incident required) is on the globe. */
   inspectedModelOn: boolean
   /** Camera mode: tactical 3D or straight-down satellite-style view. */
@@ -181,6 +194,7 @@ const initial: AppState = {
     medic: true,
     unknown: true,
   },
+  memberCrewToggles: {},
   agencyToggles: { FDNY: true, EMS: true, NYPD: true, PAPD: true, OEM: true, TAK: true },
   gpsTracking: true,
   dispatching: false,
@@ -227,6 +241,7 @@ const initial: AppState = {
   isolateView: 'model',
   isolateScale: 1,
   isolateFloors: null,
+  floorRef: null,
   inspectedModelOn: false,
   viewMode: '3d',
   groundViewActive: false,

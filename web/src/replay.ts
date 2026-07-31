@@ -33,6 +33,28 @@ class ReplayEngine {
 
   private starting = false
 
+  // The playback clock lives OUTSIDE the global store: writing t at 8.3 Hz
+  // re-rendered every panel in the app for a value only the scrub bar reads.
+  // The scrub subscribes here directly; the store keeps active/playing/
+  // duration plus t at the boundaries (start/stop/seek/pause) only.
+  private currentT = 0
+  private tListeners = new Set<(t: number) => void>()
+
+  getT(): number {
+    return this.currentT
+  }
+
+  /** Scrub-bar subscription to the fast clock. Returns the unsubscribe. */
+  subscribeT(cb: (t: number) => void): () => void {
+    this.tListeners.add(cb)
+    return () => this.tListeners.delete(cb)
+  }
+
+  private setT(t: number): void {
+    this.currentT = t
+    this.tListeners.forEach((cb) => cb(t))
+  }
+
   async start(): Promise<void> {
     // Re-entrancy guard: replay.active only flips after the fetch resolves,
     // so a double-click would otherwise stack two tick intervals.
@@ -61,6 +83,7 @@ class ReplayEngine {
     this.t0 = events[0].tm
     const duration = events[events.length - 1].tm - this.t0
 
+    this.setT(0)
     setAppState({ replay: { active: true, playing: true, t: 0, duration } })
     this.rebuildAt(0)
     this.timer = setInterval(() => this.tick(), TICK_MS)
@@ -69,6 +92,7 @@ class ReplayEngine {
   stop(): void {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
+    this.setT(0)
     setAppState({ replay: { active: false, playing: false, t: 0, duration: 0 } })
     void this.resyncLive()
   }
@@ -81,14 +105,17 @@ class ReplayEngine {
   reapplyVisibility(): void {
     const s = getAppState()
     if (!s.replay.active || !this.events.length) return
-    this.rebuildAt(s.replay.t)
+    this.rebuildAt(this.currentT)
   }
 
   setPlaying(playing: boolean): void {
-    setAppState((s) => ({ replay: { ...s.replay, playing } }))
+    // Sync t into the store at the pause boundary so anything reading
+    // replay.t (resume, seeks) sees where playback actually stopped.
+    setAppState((s) => ({ replay: { ...s.replay, playing, t: this.currentT } }))
   }
 
   seek(t: number): void {
+    this.setT(t)
     setAppState((s) => ({ replay: { ...s.replay, t } }))
     this.rebuildAt(t)
   }
@@ -96,8 +123,8 @@ class ReplayEngine {
   private tick(): void {
     const { replay } = getAppState()
     if (!replay.active || !replay.playing) return
-    const t = Math.min(replay.t + TICK_MS * SPEED, replay.duration)
-    setAppState((s) => ({ replay: { ...s.replay, t } }))
+    const t = Math.min(this.currentT + TICK_MS * SPEED, replay.duration)
+    this.setT(t) // fast path: scrub-bar listeners only, no store write
     this.applyRange(t)
     if (t >= replay.duration) this.setPlaying(false)
   }

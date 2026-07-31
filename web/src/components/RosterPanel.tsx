@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleUnitCategory } from '../actions'
+import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
 import { useAppState } from '../state/store'
-import type { Agency, Unit, UnitCategory } from '../types'
+import { airMinutesLeft, crewOf, type Agency, type Unit, type UnitCategory } from '../types'
 
 const AGENCY_ORDER: Agency[] = ['FDNY', 'EMS', 'NYPD', 'PAPD', 'OEM', 'TAK']
 
@@ -111,7 +111,10 @@ export function RosterPanel() {
         </div>
       )}
 
-      <div className="roster-body" style={collapsed ? { display: 'none' } : undefined}>
+      {/* Collapsed = UNMOUNTED, not display:none — reconciling ~40 grouped
+          rows on every units.batch while invisible was pure waste. */}
+      {!collapsed && (
+      <div className="roster-body">
         {AGENCY_ORDER.filter((a) => grouped.has(a)).map((agency) => {
           const byCat = grouped.get(agency)!
           const agencyUnits = [...byCat.values()].flat()
@@ -131,13 +134,79 @@ export function RosterPanel() {
           )
         })}
       </div>
+      )}
     </section>
+  )
+}
+
+// Personnel categories render grouped BY CREW (E-6/1 under E-6) with a
+// per-crew map toggle, so one company's members can be hidden at a time.
+const CREW_GROUPED = new Set<UnitCategory>(['ff', 'officer', 'medic'])
+
+/** SCBA chip for a member row: estimated air minutes, colored by pressure. */
+function AirChip({ u }: { u: Unit }) {
+  if (!u.bio || u.bio.airPsi < 0) return null
+  const min = airMinutesLeft(u.bio)
+  if (min === null) return null
+  const tone = u.bio.airPsi <= 1100 ? 'low' : u.bio.airPsi <= 1800 ? 'warn' : 'ok'
+  return (
+    <span className={`air-chip ${tone}`} title={`SCBA ${Math.round(u.bio.airPsi)} psi · ~${Math.round(min)} min at this member's burn rate (SIMULATED)`}>
+      ⏱ {Math.round(min)}m
+    </span>
+  )
+}
+
+function MemberRow({ u }: { u: Unit }) {
+  return (
+    <button className="unit-row member" onClick={() => flyToUnit(u.uid)}>
+      <span className="unit-callsign">{u.callsign}</span>
+      {(u.floor ?? 0) >= 1 && <span className="unit-alt">FL {u.floor}</span>}
+      <AirChip u={u} />
+      <span className={`status-chip ${u.status === 'Rehab' ? 'staged' : (STATUS_CLASS[u.status ?? ''] ?? 'unknown')}`}>
+        {u.status ?? '—'}
+      </span>
+    </button>
+  )
+}
+
+function CrewBlock({ crew, members }: { crew: string; members: Unit[] }) {
+  const { memberCrewToggles } = useAppState()
+  const visible = memberCrewToggles[crew] !== false
+  const interior = members.filter((m) => (m.floor ?? 0) >= 1).length
+  return (
+    <div className="crew-block">
+      <button
+        className={`crew-head${visible ? '' : ' off'}`}
+        onClick={() => toggleMemberCrew(crew)}
+        title={visible ? `Hide ${crew}'s members on the globe` : `Show ${crew}'s members on the globe`}
+      >
+        <span className="crew-name">{crew} CREW</span>
+        <span className="crew-counts">
+          {interior > 0 ? `${interior} INT · ` : ''}
+          {members.length}
+        </span>
+        <span className="eye">{visible ? '◉' : '◌'}</span>
+      </button>
+      {members.map((u) => (
+        <MemberRow key={u.uid} u={u} />
+      ))}
+    </div>
   )
 }
 
 function RosterGroup({ category, list }: { category: UnitCategory; list: Unit[] }) {
   const { unitToggles } = useAppState()
   const visible = unitToggles[category]
+  const crews = useMemo(() => {
+    if (!CREW_GROUPED.has(category)) return null
+    const map = new Map<string, Unit[]>()
+    for (const u of list) {
+      const crew = crewOf(u.callsign)
+      if (!map.has(crew)) map.set(crew, [])
+      map.get(crew)!.push(u)
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+  }, [category, list])
   return (
     <div className="roster-group">
       <button
@@ -149,15 +218,17 @@ function RosterGroup({ category, list }: { category: UnitCategory; list: Unit[] 
         {CATEGORY_LABEL[category]}
         <span className="eye">{visible ? '◉' : '◌'}</span>
       </button>
-      {list.map((u) => (
-        <button key={u.uid} className="unit-row" onClick={() => flyToUnit(u.uid)}>
-          <span className="unit-callsign">{u.callsign}</span>
-          {u.category === 'drone' && u.hae > 5 && <span className="unit-alt">{Math.round(u.hae)} m</span>}
-          <span className={`status-chip ${STATUS_CLASS[u.status ?? ''] ?? 'unknown'}`}>
-            {u.status ?? '—'}
-          </span>
-        </button>
-      ))}
+      {crews
+        ? crews.map(([crew, members]) => <CrewBlock key={crew} crew={crew} members={members} />)
+        : list.map((u) => (
+            <button key={u.uid} className="unit-row" onClick={() => flyToUnit(u.uid)}>
+              <span className="unit-callsign">{u.callsign}</span>
+              {u.category === 'drone' && u.hae > 5 && <span className="unit-alt">{Math.round(u.hae)} m</span>}
+              <span className={`status-chip ${STATUS_CLASS[u.status ?? ''] ?? 'unknown'}`}>
+                {u.status ?? '—'}
+              </span>
+            </button>
+          ))}
     </div>
   )
 }

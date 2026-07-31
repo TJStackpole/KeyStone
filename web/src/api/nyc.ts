@@ -284,14 +284,19 @@ interface CenterlineRow {
  * One label per distinct street name, anchored at the midpoint of its longest
  * nearby segment — enough to caption the fireground like a map.
  */
-export async function fetchStreetLabels(lat: number, lon: number, radiusM = 500): Promise<StreetLabel[]> {
+export async function fetchStreetLabels(
+  lat: number,
+  lon: number,
+  radiusM = 500,
+  signal?: AbortSignal,
+): Promise<StreetLabel[]> {
   maybeFailNyc()
   const params = new URLSearchParams({
     $select: 'full_street_name,segmentlength,the_geom',
     $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
     $limit: '600',
   })
-  const res = await fetch(`${STREET_CENTERLINE}?${params}`)
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { signal })
   if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
   const rows = (await res.json()) as CenterlineRow[]
 
@@ -352,14 +357,20 @@ const NYC = { latMin: 40.3, latMax: 41.2, lonMin: -74.6, lonMax: -73.3 }
  * data_as_of DESC and keep only the newest reading per link, or the layer
  * draws stacks of stale, mutually contradictory polylines.
  */
-export async function fetchTrafficLinks(lat: number, lon: number, radiusM = 2500): Promise<TrafficLink[]> {
+/**
+ * All FRESH citywide traffic links, one fetch. Radius filtering happens in
+ * the caller (linksNear) so the 2500 m try + 8000 m widen reuse ONE download
+ * instead of doubling a multi-hundred-KB request. The 30-min-fresh window is
+ * ~750 rows, so $limit 1500 covers it with margin at a third of the payload.
+ */
+export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficLink[]> {
   maybeFailNyc()
   const params = new URLSearchParams({
     $select: 'link_id,speed,status,link_points,link_name,data_as_of',
     $order: 'data_as_of DESC',
-    $limit: '4000',
+    $limit: '1500',
   })
-  const res = await fetch(`${TRAFFIC_SPEEDS}?${params}`)
+  const res = await fetch(`${TRAFFIC_SPEEDS}?${params}`, { signal })
   if (!res.ok) throw new Error(`traffic SODA ${res.status}`)
   const rows = (await res.json()) as TrafficRow[]
   const seen = new Set<string>()
@@ -391,11 +402,14 @@ export async function fetchTrafficLinks(lat: number, lon: number, radiusM = 2500
       }
     }
     if (positions.length < 2) continue
-    const near = positions.some(([pLon, pLat]) => haversineMeters(lat, lon, pLat, pLon) <= radiusM)
-    if (!near) continue
     out.push({ name: r.link_name ?? 'link', speedMph: speed, asOf: r.data_as_of ?? '', positions })
   }
   return out
+}
+
+/** Links with any vertex within radiusM of the point — filters ONE download. */
+export function linksNear(links: TrafficLink[], lat: number, lon: number, radiusM: number): TrafficLink[] {
+  return links.filter((l) => l.positions.some(([pLon, pLat]) => haversineMeters(lat, lon, pLat, pLon) <= radiusM))
 }
 
 // --------------------- Certificates of Occupancy (by BIN) -------------------

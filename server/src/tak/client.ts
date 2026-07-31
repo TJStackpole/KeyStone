@@ -17,7 +17,11 @@ export interface TakIdentity {
 const SELF_LAT = 40.7128
 const SELF_LON = -74.006
 
-const MAX_BUFFER = 1024 * 1024 // drop pathological buffers rather than OOM
+const MAX_BUFFER = 1024 * 1024 // drop pathological rx buffers rather than OOM
+// Tx cap: a wedged-but-open TAK server (paused container, zero-window peer)
+// otherwise buffers the entire CoT stream in process memory while send()
+// keeps reporting success. ~25-50 s of demo-rate traffic.
+const MAX_TX_BUFFER = 512 * 1024
 const MAX_BACKOFF_MS = 15_000
 
 /**
@@ -59,6 +63,12 @@ export class TakClient extends EventEmitter {
   /** Publish raw CoT XML into the TAK server. Returns false if not connected. */
   send(xml: string): boolean {
     if (!this.socket || !this.connected) return false
+    if (this.socket.writableLength > MAX_TX_BUFFER) {
+      // Peer stopped reading — destroy() fires the existing error/close path,
+      // flipping tak.status honest and re-entering reconnect-with-backoff.
+      this.socket.destroy(new Error('tx backpressure — peer not reading'))
+      return false
+    }
     this.socket.write(xml)
     return true
   }
@@ -71,6 +81,8 @@ export class TakClient extends EventEmitter {
     socket.on('connect', () => {
       this.connected = true
       this.backoff = 1000
+      // Detect half-open peers in ~30 s instead of the OS retransmit timeout.
+      socket.setKeepAlive(true, 30_000)
       console.log(`[tak] ${this.identity.callsign} connected to ${this.host}:${this.port} (plain-TCP CoT)`)
       socket.write(
         buildCotXml({

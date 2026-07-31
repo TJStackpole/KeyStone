@@ -157,6 +157,25 @@ export interface BioTelemetry {
 
 export type BioStatus = 'ok' | 'caution' | 'rotate'
 
+/**
+ * Estimated minutes of SCBA air remaining, derived from the member's own
+ * observed burn rate ((4500 − psi) / minutes on air, clamped to a plausible
+ * 45–220 psi/min working range). Null when the member has no cylinder data.
+ * SIMULATED telemetry — labeled wherever displayed.
+ */
+export function airMinutesLeft(bio: BioTelemetry): number | null {
+  if (bio.airPsi < 0) return null
+  const observed = bio.toaMin > 0.5 ? (4500 - bio.airPsi) / bio.toaMin : 90
+  const rate = Math.min(220, Math.max(45, observed))
+  return bio.airPsi / rate
+}
+
+/** Crew a member belongs to: "E-6/1" → "E-6". Vehicles map to themselves. */
+export function crewOf(callsign: string): string {
+  const i = callsign.indexOf('/')
+  return i === -1 ? callsign : callsign.slice(0, i)
+}
+
 export function bioStatusOf(bio: BioTelemetry): BioStatus {
   if (bio.hr >= 178 || (bio.airPsi >= 0 && bio.airPsi <= 1100) || bio.tempC >= 38.5 || bio.toaMin >= 22) {
     return 'rotate'

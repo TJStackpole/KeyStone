@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { flyToUnit } from '../actions'
 import { getUnitLayer } from '../cesium/scene'
 import { setAppState, useAppState } from '../state/store'
-import { bioStatusOf, type BioStatus, type Unit } from '../types'
+import { airMinutesLeft, bioStatusOf, crewOf, type BioStatus, type Unit } from '../types'
 import { droneStreamFor } from './DronePanel'
 import { SitrepContent } from './SitrepPanel'
 import { VideoTile } from './VideoTile'
@@ -53,6 +53,29 @@ export function UtilityDock() {
 // Fireground accountability: exactly which members are on which floor of the
 // incident building, top floor down, fire floor flagged.
 
+const memberTone = (m: Unit) =>
+  m.status === 'Rehab' ? 'staged' : m.bio ? { ok: 'onscene', caution: 'enroute', rotate: 'operating' }[bioStatusOf(m.bio)] : 'unknown'
+
+/**
+ * Accountability chip with the member's estimated SCBA minutes inline — the
+ * number the IC actually rotates on. Module scope + memo: defined inside the
+ * render body it was a NEW component type every pass, remounting every chip
+ * on each units.batch.
+ */
+const MemberChip = memo(function MemberChip({ m }: { m: Unit }) {
+  const air = m.bio && m.bio.airPsi >= 0 ? airMinutesLeft(m.bio) : null
+  return (
+    <button
+      className={`member-chip ${memberTone(m)}`}
+      onClick={() => flyToUnit(m.uid)}
+      title={air !== null ? `~${Math.round(air)} min SCBA air (SIMULATED) — fly to member` : 'Fly to member'}
+    >
+      {m.callsign}
+      {air !== null && <i className="chip-air">{Math.round(air)}m</i>}
+    </button>
+  )
+})
+
 function FloorsContent() {
   const { units, timeline } = useAppState()
 
@@ -84,9 +107,6 @@ function FloorsContent() {
     return [...map.entries()].sort((a, b) => b[0] - a[0])
   }, [interior])
 
-  const bioTone = (m: Unit) =>
-    m.status === 'Rehab' ? 'staged' : m.bio ? { ok: 'onscene', caution: 'enroute', rotate: 'operating' }[bioStatusOf(m.bio)] : 'unknown'
-
   return (
     <div className="dock-scroll">
       <div className="floors-summary">
@@ -114,9 +134,7 @@ function FloorsContent() {
           </span>
           <span className="floor-members">
             {list.map((m) => (
-              <button key={m.uid} className={`member-chip ${bioTone(m)}`} onClick={() => flyToUnit(m.uid)} title="Fly to member">
-                {m.callsign}
-              </button>
+              <MemberChip key={m.uid} m={m} />
             ))}
           </span>
           <span className="floor-count">{list.length}</span>
@@ -127,9 +145,7 @@ function FloorsContent() {
           <span className="floor-label">EXT</span>
           <span className="floor-members">
             {exterior.map((m) => (
-              <button key={m.uid} className={`member-chip ${bioTone(m)}`} onClick={() => flyToUnit(m.uid)} title="Fly to member">
-                {m.callsign}
-              </button>
+              <MemberChip key={m.uid} m={m} />
             ))}
           </span>
           <span className="floor-count">{exterior.length}</span>
@@ -243,6 +259,22 @@ function BioContent() {
   const rotate = members.filter((m) => bioStatusOf(m.bio) === 'rotate' && !inRehab(m))
   const caution = members.filter((m) => bioStatusOf(m.bio) === 'caution' && !inRehab(m))
 
+  // SCBA picture BY COMPANY: a crew rotates together, so the decision number
+  // is the LOWEST member's estimated air. Sorted worst-first.
+  const crewAir = useMemo(() => {
+    const map = new Map<string, { min: number; uid: string; psi: number }>()
+    for (const m of members) {
+      if (inRehab(m) || m.bio.airPsi < 0) continue
+      const min = airMinutesLeft(m.bio)
+      if (min === null) continue
+      const crew = crewOf(m.callsign)
+      const cur = map.get(crew)
+      if (!cur || min < cur.min) map.set(crew, { min, uid: m.uid, psi: m.bio.airPsi })
+    }
+    return [...map.entries()].sort((a, b) => a[1].min - b[1].min)
+  }, [members])
+  const lowAir = members.filter((m) => !inRehab(m) && m.bio.airPsi >= 0 && m.bio.airPsi <= 1100)
+
   return (
     <div className="dock-scroll">
       <div className="bio-summary">
@@ -250,6 +282,32 @@ function BioContent() {
         <span className={`status-chip ${caution.length ? 'enroute' : 'unknown'}`}>{caution.length} CAUTION</span>
         <span className="status-chip onscene">{members.length - rotate.length - caution.length} OK</span>
       </div>
+      {crewAir.length > 0 && (
+        <>
+          <div className="intel-section-title">SCBA AIR BY COMPANY · LOWEST MEMBER · EST. MIN</div>
+          <div className="scba-strip">
+            {crewAir.map(([crew, v]) => (
+              <button
+                key={crew}
+                className={`scba-chip ${v.psi <= 1100 ? 'low' : v.psi <= 1800 ? 'warn' : 'ok'}`}
+                onClick={() => flyToUnit(v.uid)}
+                title={`${crew}: lowest member ~${Math.round(v.min)} min (${Math.round(v.psi)} psi) — fly to member`}
+              >
+                {crew} <b>{Math.round(v.min)}m</b>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {lowAir.length > 0 && (
+        <div className="bio-advisory">
+          ⚠ LOW AIR (≤1100 psi):{' '}
+          {lowAir
+            .map((m) => `${m.callsign} ~${Math.round(airMinutesLeft(m.bio) ?? 0)}min`)
+            .join(', ')}{' '}
+          — begin exit / relieve now.
+        </div>
+      )}
       {rotate.length > 0 && (
         <div className="bio-advisory">
           ⚠ ROTATION ADVISED: {rotate.map((m) => m.callsign).join(', ')} — relieve and send to rehab.
@@ -275,6 +333,10 @@ function BioContent() {
               {m.bio.airPsi >= 0 && <Bar frac={m.bio.airPsi / 4500} tone={s} />}
             </span>
             <span className="bio-cell">
+              <label>AIR-T</label>
+              <b>{m.bio.airPsi < 0 ? '—' : `~${Math.round(airMinutesLeft(m.bio) ?? 0)}m`}</b>
+            </span>
+            <span className="bio-cell">
               <label>TEMP</label>
               <b>{m.bio.tempC.toFixed(1)}°</b>
             </span>
@@ -292,7 +354,10 @@ function BioContent() {
           </button>
         )
       })}
-      <div className="bio-footnote">SIMULATED TELEMETRY — thresholds: HR ≥178, SCBA ≤1100 psi, core ≥38.5°C, ops ≥22 min</div>
+      <div className="bio-footnote">
+        SIMULATED TELEMETRY — thresholds: HR ≥178, SCBA ≤1100 psi, core ≥38.5°C, ops ≥22 min. AIR-T = est. minutes at
+        the member's own burn rate.
+      </div>
     </div>
   )
 }
