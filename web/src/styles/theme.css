@@ -1053,6 +1053,22 @@ html, body {
 .home-btn:hover { border-color: var(--cyan); }
 .home-btn svg { width: 100%; height: 100%; }
 
+/* Fly-to-incident — stacked above HOME, amber like the incident accents. */
+.incident-btn {
+  position: absolute;
+  left: 14px;
+  bottom: 230px; /* directly above the HOME button */
+  width: 46px;
+  height: 46px;
+  padding: 9px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 40;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+.incident-btn:hover { border-color: var(--amber); box-shadow: var(--glow-amber); }
+.incident-btn svg { width: 100%; height: 100%; }
+
 .staging-picker {
   position: absolute;
   bottom: 252px;

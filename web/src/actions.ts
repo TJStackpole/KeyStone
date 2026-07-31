@@ -1067,11 +1067,14 @@ export function rotateSelectedApparatus(deltaDeg: number): void {
 const HOME_VIEW = { lon: -74.0085, lat: 40.6875, height: 2800, pitchDeg: -35 }
 
 /**
- * HOME: fly back to where you started — the operator's own position when the
- * browser grants geolocation and it's inside the ops envelope, otherwise the
- * city-center establishing shot the app opens on.
+ * HOME: fly back to YOUR CURRENT LOCATION — where the platform is physically
+ * open — when the browser grants geolocation and the fix is inside the ops
+ * envelope; otherwise the city-center establishing shot. The last good fix is
+ * cached so repeat clicks fly instantly (and keep working through a flaky
+ * GPS) while a fresh fix refreshes the cache in the background.
  */
 let goHomeSeq = 0
+let lastKnownHome: { lon: number; lat: number } | null = null
 
 export function goHome(): void {
   const scene = getScene()
@@ -1102,15 +1105,38 @@ export function goHome(): void {
     fly(HOME_VIEW.lon, HOME_VIEW.lat)
     return
   }
+  const cached = lastKnownHome
+  // Instant flight from the cached fix; the fresh fix below only refreshes
+  // the cache (re-flying mid-flight for a few meters of drift would jar).
+  if (cached) fly(cached.lon, cached.lat)
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude } = pos.coords
       const inside = Cesium.Rectangle.contains(OPS_AREA, Cesium.Cartographic.fromDegrees(longitude, latitude))
-      fly(inside ? longitude : HOME_VIEW.lon, inside ? latitude : HOME_VIEW.lat)
+      if (inside) lastKnownHome = { lon: longitude, lat: latitude }
+      if (!cached) fly(inside ? longitude : HOME_VIEW.lon, inside ? latitude : HOME_VIEW.lat)
     },
-    () => fly(HOME_VIEW.lon, HOME_VIEW.lat), // denied / unavailable / timed out
-    { timeout: 2000, maximumAge: 300_000 },
+    () => {
+      if (!cached) fly(HOME_VIEW.lon, HOME_VIEW.lat) // denied / unavailable / timed out
+    },
+    // 8 s: long enough to answer the permission prompt and for a cold GPS
+    // fix — the old 2 s timeout expired first and HOME always fell back.
+    { timeout: 8000, maximumAge: 300_000 },
   )
+}
+
+/** Fly back to the ACTIVE INCIDENT's tactical view (incident button). */
+export function goToIncident(): void {
+  const scene = getScene()
+  const inc = getAppState().incident
+  if (!scene || !inc) return
+  if (getAppState().groundViewActive) exitGround()
+  if (getAppState().viewMode === 'topdown') {
+    setAppState({ viewMode: '3d' })
+    void setTopDown(scene, false)
+    scene.viewer.camera.cancelFlight()
+  }
+  flyToTactical(scene.viewer, inc.lat, inc.lon)
 }
 
 /** Compass click: swing the camera back to north, rotating about the view center. */
