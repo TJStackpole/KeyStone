@@ -41,6 +41,12 @@ export interface TacticalModelOpts {
    * wireframe/marks over the real building.
    */
   view: 'model' | 'live'
+  /**
+   * Vertical exaggeration (MODEL view only) — stretches every storey so
+   * interior tracking reads at a glance. Real dimensions stay in the header,
+   * and the scale is labeled on the model per the no-silent-simulation rule.
+   */
+  scale?: number
 }
 
 /** Closest point on the ring (lon/lat pairs) to `p`, plus that edge's index and squared distance. */
@@ -101,7 +107,9 @@ export class TacticalModelLayer {
     const ring = closed ? outer : [...outer, outer[0]]
     const z0 = opts.base + opts.lift
     const floors = Math.max(1, Math.round(opts.floors))
-    const storey = opts.heightM / floors
+    const scale = Math.max(1, opts.scale ?? 1)
+    const hEff = opts.heightM * scale
+    const storey = hEff / floors
     const step = Math.max(1, Math.ceil(floors / MAX_RINGS))
 
     const entrance = closestOnRing(ring, opts.address)
@@ -109,7 +117,7 @@ export class TacticalModelLayer {
     // MODEL view: clean schematic replaces the (patchy when clipped) real
     // imagery — glass volume per wing, floor slabs, estimated stair core.
     if (opts.view === 'model') {
-      this.buildModel(target, ring, opts, z0, floors, storey, step, entrance)
+      this.buildModel(target, ring, opts, z0, floors, storey, step, entrance, hEff)
     }
 
     // Floor rings (fire floor always drawn, in red).
@@ -148,7 +156,7 @@ export class TacticalModelLayer {
       this.source.entities.add({
         id: `tact:col:${i}`,
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArrayHeights([lon, lat, z0, lon, lat, z0 + opts.heightM]),
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([lon, lat, z0, lon, lat, z0 + hEff]),
           width: 1.2,
           material: GRID.withAlpha(0.35),
         },
@@ -200,16 +208,17 @@ export class TacticalModelLayer {
       })
     }
 
-    // Header floating over the roof.
+    // Header floating over the roof. Real dimensions always — the scale
+    // stretches the model, so it's declared right next to the true height.
     this.source.entities.add({
       id: 'tact:head',
       position: Cesium.Cartesian3.fromDegrees(
         (minLon + maxLon) / 2,
         (minLat + maxLat) / 2,
-        z0 + opts.heightM + Math.max(8, opts.heightM * 0.12),
+        z0 + hEff + Math.max(8, hEff * 0.12),
       ),
       label: {
-        text: `${floors} FLOORS · ${Math.round(opts.heightM)} m${opts.fireFloor ? ` · FIRE FL ${opts.fireFloor}` : ''}`,
+        text: `${floors} FLOORS · ${Math.round(opts.heightM)} m${opts.fireFloor ? ` · FIRE FL ${opts.fireFloor}` : ''}${scale > 1 ? ` · ×${scale} VERT SCALE` : ''}`,
         font: `700 13px 'JetBrains Mono', monospace`,
         fillColor: Cesium.Color.fromCssColorString('#e2ecf7'),
         showBackground: true,
@@ -236,6 +245,7 @@ export class TacticalModelLayer {
     storey: number,
     step: number,
     entrance: { lat: number; lon: number },
+    hEff: number,
   ): void {
     // Glass volume for EVERY part of the footprint (multi-wing complexes).
     for (let i = 0; i < target.polygons.length; i++) {
@@ -246,7 +256,7 @@ export class TacticalModelLayer {
         polygon: {
           hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(outer.flat())),
           height: z0,
-          extrudedHeight: z0 + opts.heightM,
+          extrudedHeight: z0 + hEff,
           material: VOLUME_FILL,
           outline: true,
           outlineColor: GRID.withAlpha(0.5),
@@ -335,7 +345,7 @@ export class TacticalModelLayer {
       polygon: {
         hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(coreRing.flat())),
         height: z0,
-        extrudedHeight: z0 + opts.heightM,
+        extrudedHeight: z0 + hEff,
         material: CORE_FILL,
         outline: true,
         outlineColor: EGRESS,
@@ -343,7 +353,7 @@ export class TacticalModelLayer {
     })
     this.source.entities.add({
       id: 'tact:core:label',
-      position: Cesium.Cartesian3.fromDegrees(core.lon, core.lat, z0 + opts.heightM * 0.55),
+      position: Cesium.Cartesian3.fromDegrees(core.lon, core.lat, z0 + hEff * 0.55),
       billboard: {
         image: crispTextImage('STAIRS (EST.)', '#fbbf24', 20),
         scale: 0.5,

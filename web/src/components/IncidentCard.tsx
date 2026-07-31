@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { changeIncidentType, endIncident } from '../actions'
+import { useEffect, useRef, useState } from 'react'
+import { changeIncidentType, editIncidentAddress, endIncident } from '../actions'
+import { autocompleteAddress } from '../api/geosearch'
 import { useAppState } from '../state/store'
-import { INCIDENT_TYPES } from '../types'
+import { INCIDENT_TYPES, type GeoHit, type Incident } from '../types'
 
 /** Two-click END control: first click arms CONFIRM, second tears the board down. */
 function EndIncidentButton() {
@@ -26,6 +27,110 @@ function EndIncidentButton() {
     >
       {armed ? 'CONFIRM END?' : '✕ END'}
     </button>
+  )
+}
+
+/**
+ * Live address correction — dispatch addresses are wrong often enough that
+ * the IC must be able to fix one mid-incident. Picking a geocoded suggestion
+ * RELOCATES the incident (camera, footprints, intel move; units, shapes, and
+ * the timeline stay); pressing Enter on free text corrects the label only.
+ */
+function EditableAddress({ incident }: { incident: Incident }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState('')
+  const [hits, setHits] = useState<GeoHit[]>([])
+  const [saving, setSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!editing) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [editing])
+
+  // Debounced GeoSearch autocomplete (same keyless API as the search bar).
+  useEffect(() => {
+    if (!editing || text.trim().length < 3) {
+      setHits([])
+      return
+    }
+    const t = setTimeout(() => {
+      abortRef.current?.abort()
+      const ac = new AbortController()
+      abortRef.current = ac
+      autocompleteAddress(text.trim(), ac.signal)
+        .then(setHits)
+        .catch(() => {}) // aborted or offline — suggestions just stay empty
+    }, 250)
+    return () => clearTimeout(t)
+  }, [editing, text])
+
+  const open = () => {
+    setText(incident.address)
+    setHits([])
+    setEditing(true)
+  }
+  const close = () => {
+    abortRef.current?.abort()
+    setEditing(false)
+    setHits([])
+    setSaving(false)
+  }
+  const commit = async (update: { label: string; hit?: GeoHit }) => {
+    if (!update.label.trim()) return
+    setSaving(true)
+    await editIncidentAddress(update)
+    close()
+  }
+
+  if (!editing) {
+    return (
+      <div className="addr">
+        <span className="addr-text">{incident.address}</span>
+        <button className="addr-edit-btn" onClick={open} title="Correct the incident address (live)">
+          ✎
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="addr editing">
+      <input
+        ref={inputRef}
+        className="addr-input"
+        value={text}
+        disabled={saving}
+        placeholder="Corrected address…"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            // Prefer an exact geocoded match so a typed-out pick relocates too.
+            const exact = hits.find((h) => h.label.toLowerCase() === text.trim().toLowerCase())
+            void commit(exact ? { label: exact.label, hit: exact } : { label: text.trim() })
+          }
+          if (e.key === 'Escape') close()
+        }}
+      />
+      <button className="addr-edit-btn" onClick={close} title="Cancel">
+        ✕
+      </button>
+      {hits.length > 0 && (
+        <ul className="addr-suggest glass">
+          {hits.map((h) => (
+            <li key={`${h.label}:${h.lat}`}>
+              <button onClick={() => void commit({ label: h.label, hit: h })}>
+                {h.label}
+                <i>RELOCATES INCIDENT</i>
+              </button>
+            </li>
+          ))}
+          <li className="addr-hint">ENTER = LABEL-ONLY CORRECTION · PICK A MATCH TO MOVE THE INCIDENT</li>
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -59,7 +164,7 @@ export function IncidentCard() {
         <span className="chev">▾</span>
       </button>
       <EndIncidentButton />
-      <div className="addr">{incident.address}</div>
+      <EditableAddress incident={incident} />
       <div className="meta">
         {incident.bin && (
           <span>

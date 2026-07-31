@@ -591,13 +591,27 @@ app.delete('/api/incident', (_req, res) => {
 app.patch('/api/incident', (req, res) => {
   const state = getState()
   if (!state.incident) return res.status(404).json({ error: 'no active incident' })
-  // Whitelist: PATCH exists for the type chips and alarm ladder only —
-  // merging arbitrary body fields let corrupt lat/lon poison dispatch + CoT.
+  // Whitelist: type chips, alarm ladder, and LIVE ADDRESS CORRECTION (the
+  // dispatch address is often wrong; the corrected one may relocate the
+  // incident). Coordinates are validated to the NYC envelope — corrupt
+  // lat/lon would poison dispatch + CoT.
   const b = req.body as Partial<Incident>
   const patch: Partial<Incident> = {}
   if (typeof b.type === 'string') patch.type = b.type
   if (typeof b.alarmLevel === 'string') patch.alarmLevel = b.alarmLevel
-  if (!Object.keys(patch).length) return res.status(400).json({ error: 'only type/alarmLevel are patchable' })
+  if (typeof b.address === 'string' && b.address.trim()) patch.address = b.address.trim().slice(0, 160)
+  if (typeof b.lat === 'number' && typeof b.lon === 'number') {
+    if (b.lat > 40.4 && b.lat < 41.1 && b.lon > -74.4 && b.lon < -73.5) {
+      patch.lat = b.lat
+      patch.lon = b.lon
+      patch.bin = typeof b.bin === 'string' ? b.bin : undefined
+      patch.bbl = typeof b.bbl === 'string' ? b.bbl : undefined
+      patch.borough = typeof b.borough === 'string' ? b.borough : undefined
+    } else {
+      return res.status(400).json({ error: 'coordinates outside the NYC envelope' })
+    }
+  }
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'only type/alarmLevel/address are patchable' })
   const updated = updateIncident(patch)
   broadcast({ type: 'incident', incident: updated.incident })
   res.json(updated)

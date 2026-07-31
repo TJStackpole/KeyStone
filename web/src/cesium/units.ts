@@ -127,11 +127,18 @@ export class UnitLayer {
 
   upsert(unit: Unit, show = true): void {
     const id = `unit:${unit.uid}`
-    // Interior members ride the ISOLATE lift so they stay inside the raised
-    // building instead of hovering below it.
+    // Interior members follow the ISOLATE schematic: while its floor geometry
+    // is published they sit mid-storey on THEIR floor (so a vertically scaled
+    // model carries them with it); otherwise they ride the raw lift.
     const interior = unit.category === 'ff' && (unit.floor ?? 0) >= 1
-    const lift = interior ? getAppState().isolateLiftM : 0
-    const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, unit.hae + lift)
+    let hae = unit.hae
+    if (interior) {
+      const iso = getAppState().isolateFloors
+      hae = iso
+        ? iso.z0 + (Math.max(1, unit.floor ?? 1) - 0.5) * iso.storeyM
+        : unit.hae + getAppState().isolateLiftM
+    }
+    const position = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, hae)
     const now = Cesium.JulianDate.now()
     // Street-level units clamp to the scene surface (CoT hae 0 floats above
     // photorealistic-tile streets); drones fly true altitude and interior

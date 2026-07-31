@@ -1,4 +1,4 @@
-import { adoptIncident, clearLocalIncident, flyToAlert, unitMapVisible } from './actions'
+import { adoptIncident, clearLocalIncident, flyToAlert, relocateIncidentSite, unitMapVisible } from './actions'
 import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
 import type {
@@ -210,6 +210,11 @@ function handle(msg: ServerMsg): void {
         clearLocalIncident()
       } else {
         setAppState({ incident: msg.incident })
+        // Address CORRECTION moved the incident — rebuild the site picture
+        // at the new coordinates (shapes/units/timeline stay).
+        if (msg.incident && prev && (msg.incident.lat !== prev.lat || msg.incident.lon !== prev.lon)) {
+          relocateIncidentSite(msg.incident)
+        }
       }
       break
     }

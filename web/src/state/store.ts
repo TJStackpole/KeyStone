@@ -103,6 +103,16 @@ export interface AppState {
   isolateLiftM: number
   /** ISOLATE rendering: clean schematic 3D model vs the clipped real imagery. */
   isolateView: 'model' | 'live'
+  /** MODEL-view vertical exaggeration (1 / 1.5 / 2×) — easier floor tracking. */
+  isolateScale: number
+  /**
+   * Floor geometry of the CURRENT schematic (base height + scaled storey
+   * height) — interior members position by floor against this, so they stay
+   * on their floor even when the model is vertically scaled.
+   */
+  isolateFloors: { z0: number; storeyM: number } | null
+  /** Tapped-building schematic (no incident required) is on the globe. */
+  inspectedModelOn: boolean
   /** Camera mode: tactical 3D or straight-down satellite-style view. */
   viewMode: '3d' | 'topdown'
   /** Street-level camera dropped by the GND tool. */
@@ -208,6 +218,9 @@ const initial: AppState = {
   isolateMode: false,
   isolateLiftM: 0,
   isolateView: 'model',
+  isolateScale: 1,
+  isolateFloors: null,
+  inspectedModelOn: false,
   viewMode: '3d',
   groundViewActive: false,
   groundViewFt: 6,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   loadScenario,
   runDemoScenario,
+  setIsolateScale,
   setIsolateView,
   toggleActiveIncidentMode,
   toggleIsolateMode,
@@ -109,6 +110,7 @@ export function TopBar() {
     activeIncidentMode,
     isolateMode,
     isolateView,
+    isolateScale,
     viewMode,
     nycemView,
   } = useAppState()
@@ -203,6 +205,19 @@ export function TopBar() {
             >
               LIVE
             </button>
+          </span>
+        )}
+        {incident && activeIncidentMode && isolateMode && isolateView === 'model' && (
+          <span className="chip seg" title="Vertical scale — stretch the model's floors so unit tracking reads at a glance (real dimensions stay on the header)">
+            {[1, 1.5, 2].map((k) => (
+              <button
+                key={k}
+                className={`seg-btn${isolateScale === k ? ' on' : ''}`}
+                onClick={() => setIsolateScale(k)}
+              >
+                {k}×
+              </button>
+            ))}
           </span>
         )}
         {incident && (

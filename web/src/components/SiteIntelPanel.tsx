@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { clearInspected, flyToFeature, toggleLayer } from '../actions'
+import { clearInspected, flyToFeature, hideInspectedModel, showInspectedModel, toggleLayer } from '../actions'
 import { buildingLinks, type CofoRecord } from '../api/nyc'
 import { formatMeters } from '../lib/geo'
 import { useAppState } from '../state/store'
@@ -56,18 +56,31 @@ const TOGGLES: { id: ToggleLayerId; label: string }[] = [
 
 /** Public record for any building the operator tapped (not the fire building). */
 function InspectedSection() {
-  const { inspected } = useAppState()
+  const { inspected, incident, isolateMode, inspectedModelOn } = useAppState()
   if (!inspected) return null
   const { hit, loading, pluto, safety, cofo } = inspected
   return (
     <div className="intel-section inspected">
       <div className="intel-section-title">
         Tapped building
-        <button className="panel-close inline" onClick={clearInspected} title="Back to the incident building">
+        <button
+          className="panel-close inline"
+          onClick={clearInspected}
+          title={incident ? 'Back to the incident building' : 'Close building info'}
+        >
           ✕
         </button>
       </div>
       <div className="inspected-address">{hit.label}</div>
+      {!isolateMode && (
+        <button
+          className={`toggle-chip model-chip${inspectedModelOn ? ' on' : ''}`}
+          onClick={() => (inspectedModelOn ? hideInspectedModel() : void showInspectedModel())}
+          title="Schematic 3D model from the building's real footprint, height, and PLUTO floor count — entrances, estimated egress and stairs"
+        >
+          {inspectedModelOn ? '✕ HIDE 3D MODEL' : '◧ VIEW 3D MODEL'}
+        </button>
+      )}
       {loading && <div className="intel-note">QUERYING NYC OPEN DATA…</div>}
       {!loading && (
         <>
@@ -112,10 +125,28 @@ function InspectedSection() {
 }
 
 export function SiteIntelPanel() {
-  const { incident, intel, layers, layerToggles } = useAppState()
+  const { incident, intel, layers, layerToggles, inspected } = useAppState()
   const [collapsed, setCollapsed] = useState(false)
 
-  if (!incident) return null
+  // No incident up: tapping a building still gets its full public record —
+  // and the VIEW 3D MODEL button — in a slim standalone panel.
+  if (!incident) {
+    if (!inspected) return null
+    return (
+      <aside className={`intel-panel glass${collapsed ? ' collapsed' : ''}`}>
+        <button className="intel-head" onClick={() => setCollapsed((c) => !c)}>
+          <span className="card-title">Building Info</span>
+          <span className="intel-bin">{inspected.hit.bin ? `BIN ${inspected.hit.bin}` : ''}</span>
+          <span className={`chev${collapsed ? ' closed' : ''}`}>▾</span>
+        </button>
+        {!collapsed && (
+          <div className="intel-body">
+            <InspectedSection />
+          </div>
+        )}
+      </aside>
+    )
+  }
 
   const pluto = intel.pluto
   const hydrants = intel.hydrants.slice(0, 3)

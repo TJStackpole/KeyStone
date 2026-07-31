@@ -13,7 +13,7 @@ import {
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchWind } from './api/weather'
-import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
+import { fetchFootprints, footprintContaining, sampleStreetBase, type Footprint } from './cesium/footprints'
 import type { PoiKind } from './cesium/poi'
 import { flyToTactical, OPS_AREA, TILE_CACHE_BYTES } from './cesium/providers'
 import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
@@ -68,6 +68,7 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // painting historical tracks over the new board.
   if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
+  hideInspectedModel()
   lastFootprints = null
   getTrafficLayer()?.clear() // stale polylines from the previous location
   if (getAppState().groundViewActive) exitGround()
@@ -103,6 +104,57 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     isolateView: 'model', // a LIVE pick must not straddle incidents
   })
   getShapeLayer()?.clear()
+}
+
+/**
+ * Live address correction: the dispatch address is often wrong on real
+ * incidents. A geocoded hit RELOCATES the incident (camera, footprints,
+ * intel — shapes/units/timeline stay); free text corrects the label only.
+ */
+export async function editIncidentAddress(update: { label: string; hit?: GeoHit }): Promise<void> {
+  const incident = getAppState().incident
+  if (!incident) return
+  const patch: Partial<Incident> = { address: update.label }
+  if (update.hit) {
+    patch.lat = update.hit.lat
+    patch.lon = update.hit.lon
+    patch.bin = update.hit.bin
+    patch.bbl = update.hit.bbl
+    patch.borough = update.hit.borough
+  }
+  try {
+    const res = await fetch('/api/incident', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) throw new Error(`address patch ${res.status}`)
+  } catch (err) {
+    console.error('[incident] address correction failed:', err)
+    return
+  }
+  const updated = { ...incident, ...patch }
+  setAppState({ incident: updated })
+  if (update.hit) relocateIncidentSite(updated)
+}
+
+/**
+ * The incident MOVED (address correction) — rebuild the site picture at the
+ * new coordinates WITHOUT touching shapes, units, or the timeline. Used by
+ * the local editor and by remote stations receiving the broadcast.
+ */
+export function relocateIncidentSite(incident: Incident): void {
+  const scene = getScene()
+  resetIsolate()
+  hideInspectedModel()
+  lastFootprints = null
+  getTrafficLayer()?.clear()
+  getHazardLayer()?.clear()
+  setAppState({ targetHeightM: null, inspected: null, wind: null })
+  if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
+  void loadFootprints(incident)
+  void loadSiteIntel(incident)
+  getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
 }
 
 export async function changeIncidentType(type: IncidentType): Promise<void> {
@@ -179,6 +231,9 @@ export function toggleIsolateMode(): void {
     )
     return
   }
+  // ISOLATE owns the tactical layer — a tapped-building schematic in it
+  // would be clobbered mid-session; clear it up front.
+  if (on) hideInspectedModel()
   // Street-level camera and isolate framing don't mix — leave ground view
   // first so zoom/collision controller settings restore properly.
   if (on && getAppState().groundViewActive) exitGround()
@@ -200,10 +255,39 @@ if (import.meta.env.DEV) {
   }
 }
 
-/** How high ISOLATE levitates the building above the flattened city. */
-function isolateLiftM(): number {
-  const h = getAppState().targetHeightM ?? 30
-  return Math.min(80, Math.max(35, h * 0.5))
+// Facility overlays parked during ISOLATE (with everything else).
+const POI_KINDS: PoiKind[] = ['poiFirehouses', 'poiFdny', 'poiPrecincts', 'poiHospitals', 'poiNycem']
+
+/**
+ * ISOLATE is a single-building study — every background overlay (roads,
+ * tunnels, street labels, traffic, lot lines, boundaries, facility POIs,
+ * hydrant/firehouse marks, wind, collapse zones) auto-parks so the model is
+ * the sole focus, and restores to its stored toggle on exit. Units and ICS
+ * shapes stay — they ARE the operation. The stored toggles never change, so
+ * the chips keep reflecting the operator's choices.
+ */
+function setOverlaysParked(parked: boolean): void {
+  const t = getAppState().layerToggles
+  const show = (on: boolean) => !parked && on
+  getLotLayer()?.setVisible(show(t.lots))
+  getRoadLayer()?.setRoadsVisible(show(t.roads))
+  getRoadLayer()?.setTunnelsVisible(show(t.tunnels))
+  getStreetLayer()?.setVisible(show(t.streets))
+  getTrafficLayer()?.setVisible(show(t.traffic))
+  getIntelLayer()?.setHydrantsVisible(show(t.hydrants))
+  getIntelLayer()?.setFirehousesVisible(show(t.firehouses))
+  getHazardLayer()?.setWindVisible(show(t.wind))
+  getHazardLayer()?.setCollapseVisible(show(t.collapsezones))
+  for (const kind of ['battalions', 'divisions'] as const) {
+    getBoundaryLayer()
+      ?.setVisible(kind, show(t[kind]))
+      .catch(() => {}) // restore fetch failure — the toggle chip still reads true; next click retries
+  }
+  for (const kind of POI_KINDS) {
+    getPoiLayer()
+      ?.setEnabled(kind, show(t[kind]))
+      .catch(() => {})
+  }
 }
 
 /**
@@ -255,7 +339,10 @@ function frameIsolatedBuilding(base: number): void {
   const scene = getScene()
   const inc = getAppState().incident
   if (!scene || !inc) return
-  const h = getAppState().targetHeightM ?? 30
+  const s = getAppState()
+  // MODEL view stretches the schematic vertically — frame the scaled height.
+  const k = s.isolateView === 'model' ? s.isolateScale : 1
+  const h = (s.targetHeightM ?? 30) * k
   // The lift actually applied (0 in keyless — no tileset to translate).
   const lift = getAppState().isolateLiftM
   const target = lastFootprints?.feats.find((f) => f.bin === lastFootprints?.targetBin)
@@ -288,6 +375,9 @@ let isolateApplySeq = 0
 // MODEL/LIVE chips must not re-style a scene whose clip hasn't landed yet
 // (hiding the tileset while the globe is still hidden blacks out the map).
 let isolateApplied = false
+// Pre-clip street level captured by the ON path — scale-chip reframes reuse
+// it (a fresh sample would hit the isolate ground plane at the wrong height).
+let lastIsolateBase = 0
 
 /**
  * The ON path is async: it waits for the pre-clip street-level sample before
@@ -311,7 +401,9 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
       tileset.enableCollision = true // camera-vs-mesh guard back on
       if (scene.mode === 'google') scene.viewer.scene.globe.show = false
     }
-    setAppState({ isolateLiftM: 0 })
+    // isolateFloors clears BEFORE the unit pass — interior members must fall
+    // back to their true CoT heights, not the torn-down schematic's floors.
+    setAppState({ isolateLiftM: 0, isolateFloors: null })
     applyUnitVisibility()
     boostIsolateVisuals(false)
     // Keyless: bring the neighbor extrusions back.
@@ -319,8 +411,9 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
       void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, true)
     }
     getFootprintLayer()?.setTargetVisible(getAppState().layerToggles.targetbox)
-    // Lot borders were parked during isolate (they'd classify the facade).
-    getLotLayer()?.setVisible(getAppState().layerToggles.lots)
+    // Every background overlay was parked during isolate — restore each to
+    // its stored toggle.
+    setOverlaysParked(false)
     void applyTacticalModel(false)
     return
   }
@@ -348,16 +441,18 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
         // would shove the camera over invisible towers. The globe + floor
         // clamp guard the flattened ground instead.
         tileset.enableCollision = false
-        // Raise the lone building above the flattened city: translate the
-        // (fully clipped) tileset along the local up vector. Only the target
-        // survives the clip, so only it visibly lifts.
+        // Land the lone building ON the flattened ground: translate the
+        // (fully clipped) tileset up by the depth of its sunken streets, so
+        // the building's base sits at globe height — right where the
+        // CLAMP_TO_GROUND unit markers are. Ground crews and the model read
+        // as one picture instead of a levitating exhibit.
         const inc = s.incident
         if (inc) {
           const up = Cesium.Cartesian3.normalize(
             Cesium.Cartesian3.fromDegrees(inc.lon, inc.lat),
             new Cesium.Cartesian3(),
           )
-          const liftM = isolateLiftM()
+          const liftM = -base + 0.5
           const lift = Cesium.Cartesian3.multiplyByScalar(up, liftM, new Cesium.Cartesian3())
           tileset.modelMatrix = Cesium.Matrix4.fromTranslation(lift)
           setAppState({ isolateLiftM: liftM }) // interior members ride the lift
@@ -373,12 +468,13 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     if (scene.extrudeFootprints) {
       void getFootprintLayer()?.render(lastFootprints.feats, lastFootprints.targetBin, false)
     }
-    // Ground-classified lot borders would paint the lifted facade — park
-    // them for the whole isolate session (both views).
-    getLotLayer()?.setVisible(false)
+    // Sole focus: park EVERY background overlay for the isolate session —
+    // the operator is studying one building, not the map.
+    setOverlaysParked(true)
     // MODEL/LIVE appearance: tileset visibility, imagery boost, target-box
     // park, and the schematic itself all key off the selected view.
     isolateApplied = true
+    lastIsolateBase = base // scale/view changes reframe against this
     applyIsolateAppearance()
     if (opts.frame) frameIsolatedBuilding(base)
   })()
@@ -413,6 +509,19 @@ export function setIsolateView(view: 'model' | 'live'): void {
   // If the async ON path is still awaiting its pre-clip sample, just store
   // the choice — its own applyIsolateAppearance() picks it up when it lands.
   if (getAppState().isolateMode && isolateApplied) applyIsolateAppearance()
+}
+
+/**
+ * MODEL-view vertical scale chips (1× / 1.5× / 2×): stretch the schematic so
+ * floor-by-floor unit tracking reads at a glance, then reframe to fit.
+ */
+export function setIsolateScale(scale: number): void {
+  if (getAppState().isolateScale === scale) return
+  setAppState({ isolateScale: scale })
+  if (getAppState().isolateMode && isolateApplied) {
+    applyIsolateAppearance()
+    frameIsolatedBuilding(lastIsolateBase)
+  }
 }
 
 let tacticalSeq = 0
@@ -454,6 +563,9 @@ async function applyTacticalModel(on: boolean): Promise<void> {
   }
   const heightM = now.targetHeightM ?? target.heightM
   floors = floors ?? now.intel.pluto?.numFloors ?? Math.max(1, Math.round(heightM / 3.2))
+  // Vertical exaggeration is a MODEL-view affordance — the LIVE clipped mesh
+  // can't stretch, so its schematic wireframe must stay true-scale over it.
+  const scale = now.isolateView === 'model' ? now.isolateScale : 1
   tactical.show(target, {
     base,
     lift: now.isolateLiftM,
@@ -462,7 +574,13 @@ async function applyTacticalModel(on: boolean): Promise<void> {
     fireFloor,
     address: { lat: inc.lat, lon: inc.lon },
     view: now.isolateView,
+    scale,
   })
+  // Publish the schematic's floor geometry so interior members position by
+  // FLOOR (mid-storey) — they stretch with the model instead of staying at
+  // their true heights inside a taller shell.
+  setAppState({ isolateFloors: { z0: base + now.isolateLiftM, storeyM: (heightM * scale) / floors } })
+  applyUnitVisibility()
 }
 
 /**
@@ -746,6 +864,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
 export function adoptIncident(incident: Incident): void {
   if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
+  hideInspectedModel()
   lastFootprints = null
   getTrafficLayer()?.clear() // stale polylines from the previous location
   setAppState({
@@ -864,6 +983,7 @@ export function clearLocalIncident(): void {
     wind: null,
     tacticsOpen: false,
     tacticsOverride: null,
+    inspectedModelOn: false,
   })
   getHazardLayer()?.clear()
   getShapeLayer()?.clear()
@@ -1085,6 +1205,7 @@ let lastRoadFetch: { lat: number; lon: number; radiusM: number } | null = null
 export async function refreshRoads(force = false): Promise<void> {
   const layer = getRoadLayer()
   if (!layer || !getAppState().layerToggles.roads) return
+  if (getAppState().isolateMode) return // parked — sole-focus building study
   const center = lookAtCenter()
   if (!center || center.heightM > ROAD_MAX_CAMERA_M) return
   const { lat, lon } = center
@@ -1133,6 +1254,7 @@ let lastStreetFetch: { lat: number; lon: number; radiusM: number } | null = null
 export async function refreshStreetLabels(force = false): Promise<void> {
   const layer = getStreetLayer()
   if (!layer || !getAppState().layerToggles.streets) return
+  if (getAppState().isolateMode) return // parked — sole-focus building study
   const center = lookAtCenter()
   if (!center || center.heightM > ROAD_MAX_CAMERA_M) return
   const { lat, lon } = center
@@ -1186,9 +1308,13 @@ export async function inspectBuildingAt(lat: number, lon: number): Promise<void>
   const incident = getAppState().incident
   // Tapping the incident building itself just returns the panel to it.
   if (incident?.bin && hit.bin && incident.bin === hit.bin) {
+    hideInspectedModel()
     setAppState({ inspected: null })
     return
   }
+  // A schematic of the PREVIOUS tapped building must not linger under the
+  // new building's panel.
+  hideInspectedModel()
   // The tapped address also lands in the search bar — one Enter away from
   // standing up a new incident there.
   setAppState({
@@ -1208,7 +1334,100 @@ export async function inspectBuildingAt(lat: number, lon: number): Promise<void>
 
 export function clearInspected(): void {
   inspectSeq++
+  hideInspectedModel()
   setAppState({ inspected: null })
+}
+
+let inspectedModelSeq = 0
+
+/**
+ * Tapped-building 3D schematic — NO incident required. Fetches the real
+ * footprint under the inspected address, samples true street level, and
+ * wraps the same tactical schematic on it (floors from PLUTO, no fire
+ * floor), then frames it. ISOLATE owns the tactical layer while it's up,
+ * so this is unavailable during isolate (the button hides too).
+ */
+export async function showInspectedModel(): Promise<void> {
+  const scene = getScene()
+  const tactical = getTacticalLayer()
+  const ins = getAppState().inspected
+  if (!scene || !tactical || !ins || getAppState().isolateMode) return
+  const seq = ++inspectedModelSeq
+  const { hit } = ins
+  try {
+    const feats = await fetchFootprints(hit.lat, hit.lon, 120)
+    // BIN match first, then point-in-polygon, then nearest centroid — PAD
+    // address points often sit on the sidewalk outside every ring.
+    let target =
+      (hit.bin ? feats.find((f) => f.bin === hit.bin) : undefined) ??
+      footprintContaining(hit.lon, hit.lat, feats)
+    if (!target) {
+      let bestD2 = Infinity
+      const cosLat = Math.cos((hit.lat * Math.PI) / 180)
+      for (const f of feats) {
+        const outer = f.polygons[0]?.[0]
+        if (!outer?.length) continue
+        let cLon = 0, cLat = 0
+        for (const [lon, lat] of outer) { cLon += lon; cLat += lat }
+        cLon /= outer.length
+        cLat /= outer.length
+        const d2 = ((cLon - hit.lon) * cosLat) ** 2 + (cLat - hit.lat) ** 2
+        if (d2 < bestD2) { bestD2 = d2; target = f }
+      }
+      // Nearest-centroid rescue only within ~60 m — beyond that it's a guess.
+      if (Math.sqrt(bestD2) * 111_320 > 60) target = undefined
+    }
+    if (!target) throw new Error('no footprint under the address')
+    const base = await sampleStreetBase(scene.viewer.scene, target)
+    const now = getAppState()
+    if (seq !== inspectedModelSeq || now.inspected?.hit !== hit || now.isolateMode) return
+    const heightM = target.heightM
+    const floors = now.inspected.pluto?.numFloors ?? Math.max(1, Math.round(heightM / 3.2))
+    tactical.show(target, {
+      base,
+      lift: 0,
+      heightM,
+      floors,
+      address: { lat: hit.lat, lon: hit.lon },
+      view: 'model',
+      scale: 1,
+    })
+    setAppState({ inspectedModelOn: true })
+    // Frame it — bbox center (the hit point is on the sidewalk).
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity
+    for (const poly of target.polygons) {
+      for (const [lon, lat] of poly[0] ?? []) {
+        minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon)
+        minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat)
+      }
+    }
+    const extentM = Math.max(
+      (maxLat - minLat) * 111_320,
+      (maxLon - minLon) * 111_320 * Math.cos((hit.lat * Math.PI) / 180),
+      15,
+    )
+    const center = Cesium.Cartesian3.fromDegrees(
+      (minLon + maxLon) / 2,
+      (minLat + maxLat) / 2,
+      base + heightM / 2,
+    )
+    const radius = Math.max(extentM / 2, heightM / 2) + 12
+    scene.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, radius), {
+      offset: new Cesium.HeadingPitchRange(scene.viewer.camera.heading, Cesium.Math.toRadians(-18), radius * 3.4),
+      duration: 1.4,
+    })
+  } catch (err) {
+    console.error('[inspect] 3D model unavailable:', err)
+  }
+}
+
+/** Clear the tapped-building schematic (never touches an ISOLATE schematic). */
+export function hideInspectedModel(): void {
+  inspectedModelSeq++
+  if (getAppState().inspectedModelOn) {
+    getTacticalLayer()?.clear()
+    setAppState({ inspectedModelOn: false })
+  }
 }
 
 // ---------------------------------------------------------------------------
