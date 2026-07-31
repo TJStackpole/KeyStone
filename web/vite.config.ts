@@ -22,10 +22,12 @@ export default defineConfig({
   envDir: path.resolve(__dirname, '..'),
   envPrefix: ['VITE_', 'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN'],
   server: {
-    port: 5173,
+    // Ports follow the same overrides the server honors, so a second stack
+    // (e.g. a git worktree checkout) can run beside the main one.
+    port: Number(process.env.WATCHTOWER_WEB_PORT ?? 5173),
     proxy: {
-      '/api': 'http://localhost:4010',
-      '/ws': { target: 'ws://localhost:4010', ws: true },
+      '/api': `http://localhost:${process.env.WATCHTOWER_SERVER_PORT ?? 4010}`,
+      '/ws': { target: `ws://localhost:${process.env.WATCHTOWER_SERVER_PORT ?? 4010}`, ws: true },
     },
   },
 })

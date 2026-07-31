@@ -12,6 +12,12 @@ import { pointInRing } from '../lib/geo'
 
 const LOT_LINE = Cesium.Color.fromCssColorString('#22d3ee').withAlpha(0.4)
 
+// Instance construction (sanitize + degrees->Cartesian per ring) is the
+// main-thread cost of a refresh — ~1k lots per fetch in Lower Manhattan used
+// to run as one burst (tens to ~200 ms) right as the camera settled and tile
+// streaming peaked. Chunked across frames it never blocks a frame for long.
+const LOTS_PER_FRAME = 200
+
 /**
  * Dedupe + de-spike a DTM lot ring for GroundPolylineGeometry. Survey data
  * contains exact-duplicate vertices AND A->B->A reversal spikes; either makes
@@ -57,6 +63,8 @@ export class LotLayer {
   private viewer: Cesium.Viewer
   private primitive: Cesium.GroundPolylinePrimitive | null = null
   private lots: TaxLot[] = []
+  /** BBLs behind the current primitive — refetches that add nothing skip. */
+  private renderedBbls = new Set<string>()
   private visible = true
   private renderSeq = 0
 
@@ -65,41 +73,61 @@ export class LotLayer {
   }
 
   render(lots: TaxLot[]): void {
-    this.renderSeq++
+    const seq = ++this.renderSeq
     // Empty result (screen center drifted over water / out of the city):
     // KEEP the grid that's still on screen — wiping it would also kill the
     // click hit-test for lots the operator can plainly see.
     if (!lots.length) return
-    this.clearPrimitive()
-    this.lots = lots
+    // Settle-triggered refetches overlap heavily (zoom-in, short pans): when
+    // every fetched lot is already drawn, the primitive — and the richer
+    // hit-test list behind it — is strictly a superset. Keep both.
+    if (this.primitive && lots.every((l) => this.renderedBbls.has(l.bbl))) return
+
     const instances: Cesium.GeometryInstance[] = []
-    for (const lot of lots) {
-      for (let p = 0; p < lot.polygons.length; p++) {
-        const outer = lot.polygons[p][0]
-        if (!outer || outer.length < 3) continue
-        const pts = sanitizeRing(outer)
-        if (!pts) continue
-        instances.push(
-          new Cesium.GeometryInstance({
-            id: `lot:${lot.bbl}:${p}`,
-            geometry: new Cesium.GroundPolylineGeometry({
-              positions: Cesium.Cartesian3.fromDegreesArray(pts),
-              width: 1.5,
-              loop: true,
+    let i = 0
+    const step = (): void => {
+      // A newer render()/clear() superseded this build — abandon it.
+      if (seq !== this.renderSeq) return
+      const end = Math.min(i + LOTS_PER_FRAME, lots.length)
+      for (; i < end; i++) {
+        const lot = lots[i]
+        for (let p = 0; p < lot.polygons.length; p++) {
+          const outer = lot.polygons[p][0]
+          if (!outer || outer.length < 3) continue
+          const pts = sanitizeRing(outer)
+          if (!pts) continue
+          instances.push(
+            new Cesium.GeometryInstance({
+              id: `lot:${lot.bbl}:${p}`,
+              geometry: new Cesium.GroundPolylineGeometry({
+                positions: Cesium.Cartesian3.fromDegreesArray(pts),
+                width: 1.5,
+                loop: true,
+              }),
+              attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(LOT_LINE) },
             }),
-            attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(LOT_LINE) },
-          }),
-        )
+          )
+        }
       }
+      if (i < lots.length) {
+        requestAnimationFrame(step)
+        return
+      }
+      // Swap only now — the old grid stays up (and hit-testable) while the
+      // replacement builds, so a refresh never blanks the overlay.
+      this.clearPrimitive()
+      this.lots = lots
+      this.renderedBbls = new Set(lots.map((l) => l.bbl))
+      if (!instances.length) return
+      this.primitive = new Cesium.GroundPolylinePrimitive({
+        geometryInstances: instances,
+        appearance: new Cesium.PolylineColorAppearance(),
+        asynchronous: true,
+      })
+      this.primitive.show = this.visible
+      this.viewer.scene.groundPrimitives.add(this.primitive)
     }
-    if (!instances.length) return
-    this.primitive = new Cesium.GroundPolylinePrimitive({
-      geometryInstances: instances,
-      appearance: new Cesium.PolylineColorAppearance(),
-      asynchronous: true,
-    })
-    this.primitive.show = this.visible
-    this.viewer.scene.groundPrimitives.add(this.primitive)
+    step()
   }
 
   /** The BBL of the lot whose border contains the point, if any is loaded. */
@@ -135,5 +163,6 @@ export class LotLayer {
     this.renderSeq++
     this.clearPrimitive()
     this.lots = []
+    this.renderedBbls.clear()
   }
 }

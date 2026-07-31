@@ -26,7 +26,7 @@ import { TakClient } from './tak/client.js'
 import { isUnitEvent } from './tak/cot.js'
 import { shapeDeleteCot, shapeToCot } from './tak/shapes.js'
 import type { IcsShape, Incident } from './types.js'
-import { UnitRegistry } from './units.js'
+import { UnitRegistry, type Unit } from './units.js'
 
 // Deliberately NOT process.env.PORT — dev harnesses inject PORT for the web app,
 // and picking it up here would collide with Vite on 5173. (4010 rather than the
@@ -270,8 +270,49 @@ setInterval(() => {
   if (live.length) broadcast({ type: 'units.batch', units: live })
 }, 200).unref()
 
+// Change gate: CoT is a heartbeat protocol — every publisher re-announces
+// before its stale time whether or not anything changed, and at a working
+// fire most of the roster is parked On Scene. Without a gate every heartbeat
+// re-broadcasts the full unchanged Unit to every dashboard (~15-20 KB/batch
+// steady-state) and wakes every subscribed component for a no-op. Forward a
+// unit only when an observable field changed, plus a keepalive well inside
+// the 120 s stale + 30 s grace window so staleAt keeps refreshing downstream.
+const UNIT_KEEPALIVE_MS = 20_000
+const lastForwarded = new Map<string, { sig: string; t: number }>()
+
+/**
+ * Observable-field signature. Comparing whole Unit objects can never match —
+ * upsertFromCot stamps fresh updatedAt/staleAt/cotTime on every heartbeat.
+ * Positions quantize to ~1 m so a real EUD's GPS breathing while parked
+ * doesn't defeat the gate (sim rigs repeat exact coordinates anyway); any
+ * real reposition clears the quantum in one tick.
+ */
+function unitSig(u: Unit): string {
+  return [
+    u.callsign,
+    u.category,
+    u.cotType,
+    u.status ?? '',
+    u.floor ?? '',
+    u.lat.toFixed(5),
+    u.lon.toFixed(5),
+    u.hae.toFixed(1),
+    u.course?.toFixed(0) ?? '',
+    u.speed?.toFixed(1) ?? '',
+    u.bio ? JSON.stringify(u.bio) : '',
+  ].join('|')
+}
+
 registry.on('unit', (unit) => {
-  pendingUnits.set(unit.uid, unit)
+  const sig = unitSig(unit)
+  const fwd = lastForwarded.get(unit.uid)
+  const nowMs = Date.now()
+  if (!fwd || fwd.sig !== sig || nowMs - fwd.t >= UNIT_KEEPALIVE_MS) {
+    lastForwarded.set(unit.uid, { sig, t: nowMs })
+    pendingUnits.set(unit.uid, unit)
+  }
+  // Replay track sampling stays fed by EVERY event (it self-limits below) —
+  // gating it would tie recorded history to the WS fan-out policy.
   const prev = lastTrackSample.get(unit.uid)
   const now = Date.now()
   if (!prev || now - prev.t > 8000 || prev.status !== unit.status) {
@@ -294,6 +335,8 @@ registry.on('remove', (uid) => {
   // remove would resurrect the unit on every dashboard as a permanent ghost
   // (the registry no longer knows it, so no further remove ever arrives).
   pendingUnits.delete(uid)
+  // And the gate's memory — a respawn under the same uid must forward fresh.
+  lastForwarded.delete(uid)
   lastTrackSample.delete(uid)
   simChatter.forget(uid)
   broadcast({ type: 'unit.remove', uid })
