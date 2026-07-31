@@ -83,29 +83,41 @@ function streetPaintCanvas(name: string): HTMLCanvasElement {
     lruTouch(paintCache, text, 200)
     return cached
   }
-  const font = `600 ${PAINT_FONT_PX}px 'Inter', -apple-system, sans-serif`
+  const font = `700 ${PAINT_FONT_PX}px 'Inter', -apple-system, sans-serif`
   const canvas = document.createElement('canvas')
   const measure = canvas.getContext('2d')!
   measure.font = font
-  canvas.width = Math.ceil(measure.measureText(text).width) + 40
+  canvas.width = Math.ceil(measure.measureText(text).width) + 44
   canvas.height = PAINT_CANVAS_H
   const ctx = canvas.getContext('2d')!
   ctx.font = font
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
-  ctx.lineWidth = 11
+  // Heavy halo: the name must stay legible over the bright yellow road
+  // overlay and busy rooftop imagery alike.
+  ctx.lineWidth = 14
   ctx.strokeStyle = TEXT_HALO
   ctx.strokeText(text, canvas.width / 2, PAINT_CANVAS_H / 2 + 2)
-  ctx.fillStyle = TEXT_FILL
+  ctx.fillStyle = '#eef4fb'
   ctx.fillText(text, canvas.width / 2, PAINT_CANVAS_H / 2 + 2)
   paintCache.set(text, canvas)
   lruTouch(paintCache, text, 200)
   return canvas
 }
 
-/** One street name draped on the ground, oriented along the street. */
-function buildPaintPrimitive(s: StreetLabel): Cesium.GroundPrimitive {
+/**
+ * One street name as a world-fixed quad floating just above the asphalt,
+ * oriented along the street, rendered with DEPTH TEST OFF. Draping the text
+ * onto the surface (the previous approach) molded it over tree canopies and
+ * fought the yellow road overlay in the same classification pass — this way
+ * the name stays put like paint but ALWAYS reads on top of roads, trees, and
+ * imagery, Google-Maps style.
+ */
+function buildPaintPrimitive(
+  s: StreetLabel,
+  viewer: Cesium.Viewer,
+): { prim: Cesium.Primitive; heightOk: boolean } {
   const canvas = streetPaintCanvas(s.name)
   // World size from the canvas aspect at a fixed text height.
   const heightM = TEXT_HEIGHT_M * (PAINT_CANVAS_H / PAINT_FONT_PX)
@@ -119,13 +131,28 @@ function buildPaintPrimitive(s: StreetLabel): Cesium.GroundPrimitive {
     s.lat + heightM / 2 / latM,
   )
   const rotation = paintRotation(s)
-  return new Cesium.GroundPrimitive({
+  // Street height under the anchor from whatever geometry has streamed in
+  // (google-mode streets sit ~-30 m; keyless globe at 0). With depth test
+  // off the height only anchors the quad's parallax at tilt, so a coarse
+  // sample is fine — a missing one falls back to 0 and retries next set().
+  let sampled: number | undefined
+  if (viewer.scene.sampleHeightSupported) {
+    try {
+      sampled = viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(s.lon, s.lat))
+    } catch {
+      sampled = undefined
+    }
+  } else {
+    sampled = 0 // keyless ellipsoid ground IS 0 — no retry needed
+  }
+  const prim = new Cesium.Primitive({
     geometryInstances: new Cesium.GeometryInstance({
       geometry: new Cesium.RectangleGeometry({
         rectangle: rect,
         rotation,
         // Texture rotates WITH the quad — text runs along the street.
         stRotation: rotation,
+        height: (sampled ?? 0) + 0.8,
         vertexFormat: Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
       }),
     }),
@@ -133,12 +160,17 @@ function buildPaintPrimitive(s: StreetLabel): Cesium.GroundPrimitive {
       material: Cesium.Material.fromType('Image', { image: canvas }),
       materialSupport: Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
       translucent: true, // canvas alpha — only the glyphs paint
+      renderState: {
+        // Never occluded, never molded over tree/roof geometry.
+        depthTest: { enabled: false },
+        depthMask: false,
+        blending: Cesium.BlendingState.ALPHA_BLEND,
+      },
     }),
-    // Drape onto whichever surface is under the camera: photorealistic
-    // tiles in google mode, the globe in keyless.
-    classificationType: Cesium.ClassificationType.BOTH,
     asynchronous: true,
+    allowPicking: false,
   })
+  return { prim, heightOk: sampled !== undefined }
 }
 
 /**
@@ -154,10 +186,12 @@ function paintRotation(s: StreetLabel): number {
 }
 
 interface PaintedLabel {
-  prim: Cesium.GroundPrimitive
+  prim: Cesium.Primitive
   lat: number
   lon: number
   rotation: number
+  /** False = built before ground geometry streamed in; rebuild next set(). */
+  heightOk: boolean
 }
 
 /** Anchor drift below this keeps the existing paint (fetch-jitter, not a move). */
@@ -173,19 +207,20 @@ export class StreetLabelLayer {
     this.viewer = viewer
   }
 
-  /** Remove + destroy — GroundPrimitive does not own its appearance material. */
+  /** Remove + destroy — the primitive does not own its appearance material. */
   private removePrim(entry: PaintedLabel): void {
     const mat = entry.prim.appearance?.material as Cesium.Material | undefined
-    this.viewer.scene.groundPrimitives.remove(entry.prim)
+    this.viewer.scene.primitives.remove(entry.prim)
     if (mat && !mat.isDestroyed()) mat.destroy()
   }
 
   /**
    * Diff-based update keyed by STREET NAME (the fetch dedupes to one label
-   * per name): paint already on the ground stays put unless its anchor
-   * genuinely moved — the longest-segment anchor jitters between overlapping
+   * per name): paint already placed stays put unless its anchor genuinely
+   * moved — the longest-segment anchor jitters between overlapping
    * camera-follow fetches, and rebuilding on jitter churned primitives on
-   * every pan settle.
+   * every pan settle. Labels built before ground geometry streamed in
+   * (heightOk false) rebuild once a real street height is available.
    */
   set(labels: StreetLabel[]): void {
     const next = new Set<string>()
@@ -195,14 +230,20 @@ export class StreetLabelLayer {
       if (existing) {
         const cosLat = Math.cos((s.lat * Math.PI) / 180)
         const movedM = Math.hypot((s.lat - existing.lat) * 111_320, (s.lon - existing.lon) * 111_320 * cosLat)
-        if (movedM < REANCHOR_M && Math.abs(paintRotation(s) - existing.rotation) < REROTATE_RAD) continue
+        if (
+          existing.heightOk &&
+          movedM < REANCHOR_M &&
+          Math.abs(paintRotation(s) - existing.rotation) < REROTATE_RAD
+        ) {
+          continue
+        }
         this.removePrim(existing)
         this.byName.delete(s.name)
       }
-      const prim = buildPaintPrimitive(s)
+      const { prim, heightOk } = buildPaintPrimitive(s, this.viewer)
       prim.show = this.visible
-      this.byName.set(s.name, { prim, lat: s.lat, lon: s.lon, rotation: paintRotation(s) })
-      this.viewer.scene.groundPrimitives.add(prim)
+      this.byName.set(s.name, { prim, lat: s.lat, lon: s.lon, rotation: paintRotation(s), heightOk })
+      this.viewer.scene.primitives.add(prim)
     }
     for (const [name, entry] of this.byName) {
       if (!next.has(name)) {
