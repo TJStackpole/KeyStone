@@ -5,6 +5,7 @@ import { BoundaryLayer } from './boundaries'
 import { FocusLayer } from './focus'
 import { FootprintLayer } from './footprints'
 import { ExposureLayer } from './exposures'
+import { HazardLayer } from './hazards'
 import { IntelMarkerLayer } from './intelMarkers'
 import { LotLayer } from './lots'
 import { PoiLayer } from './poi'
@@ -34,6 +35,7 @@ let tacticalLayer: TacticalModelLayer | null = null
 let lotLayer: LotLayer | null = null
 let poiLayer: PoiLayer | null = null
 let roadLayer: RoadLayer | null = null
+let hazardLayer: HazardLayer | null = null
 
 export function registerScene(h: SceneHandle): void {
   handle = h
@@ -51,6 +53,7 @@ export function registerScene(h: SceneHandle): void {
   lotLayer = new LotLayer(h.viewer)
   poiLayer = new PoiLayer(h.viewer)
   roadLayer = new RoadLayer(h.viewer)
+  hazardLayer = new HazardLayer(h.viewer)
   if (import.meta.env.DEV) {
     // Debug handles for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
@@ -76,6 +79,7 @@ export function unregisterScene(): void {
   lotLayer = null
   poiLayer = null
   roadLayer = null
+  hazardLayer = null
 }
 
 export function getTrafficLayer(): TrafficLayer | null {
@@ -136,4 +140,8 @@ export function getPoiLayer(): PoiLayer | null {
 
 export function getRoadLayer(): RoadLayer | null {
   return roadLayer
+}
+
+export function getHazardLayer(): HazardLayer | null {
+  return hazardLayer
 }

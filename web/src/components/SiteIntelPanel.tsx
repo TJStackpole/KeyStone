@@ -50,6 +50,8 @@ const TOGGLES: { id: ToggleLayerId; label: string }[] = [
   { id: 'firehouses', label: 'Houses' },
   { id: 'streets', label: 'Streets' },
   { id: 'traffic', label: 'Traffic' },
+  { id: 'wind', label: 'Wind' },
+  { id: 'collapsezones', label: 'Collapse' },
 ]
 
 /** Public record for any building the operator tapped (not the fire building). */
@@ -143,7 +145,9 @@ export function SiteIntelPanel() {
           </div>
 
           <div className="intel-section">
-            <div className="intel-section-title">Structure · PLUTO</div>
+            <div className="intel-section-title">
+              Structure · PLUTO <i className="not-cids">PUBLIC-DATA PROFILE — NOT CIDS</i>
+            </div>
             <StatusNote status={layers.pluto} empty={pluto ? undefined : 'NO PARCEL RECORD'} />
             {pluto && (
               <div className="pluto-grid">

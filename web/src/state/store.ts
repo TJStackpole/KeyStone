@@ -85,6 +85,11 @@ export interface AppState {
   chatOpen: boolean
   /** "Ask the Manuals" doctrine panel (Module 1). */
   manualsOpen: boolean
+  /** Building-type tactics panel (Module 3) + the IC's type override. */
+  tacticsOpen: boolean
+  tacticsOverride: import('../lib/ffpClassify').FfpType | null
+  /** Live NWS wind at the incident (Module 4). */
+  wind: import('../api/weather').WindObs | null
   commsConfig: CommsConfig | null
   replay: { active: boolean; playing: boolean; t: number; duration: number }
   timeline: TimelineEvent[]
@@ -132,6 +137,8 @@ const initial: AppState = {
     lots: true, // draws only when zoomed in — see refreshLots' height gate
     roads: true, // yellow road-network overlay, camera-following
     tunnels: true, // the four major vehicular tunnels, citywide
+    wind: true, // live NWS wind vector at the incident
+    collapsezones: false, // per-face 1.5xH collapse zones (VALIDATE—SME)
     battalions: false,
     divisions: false,
     poiFirehouses: false,
@@ -190,6 +197,9 @@ const initial: AppState = {
   chats: [],
   chatOpen: false,
   manualsOpen: false,
+  tacticsOpen: false,
+  tacticsOverride: null,
+  wind: null,
   commsConfig: null,
   replay: { active: false, playing: false, t: 0, duration: 0 },
   timeline: [],

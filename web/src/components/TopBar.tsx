@@ -146,6 +146,15 @@ export function TopBar() {
         >
           <span className="dot" /> MANUALS
         </button>
+        {incident && (
+          <button
+            className="chip chip-btn amber"
+            onClick={() => setAppState((s) => ({ tacticsOpen: !s.tacticsOpen }))}
+            title="FFP building-type classification + cited tactics card"
+          >
+            <span className="dot" /> TACTICS
+          </button>
+        )}
         {takConnected === true && (
           <button
             className="chip chip-btn"

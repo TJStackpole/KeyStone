@@ -4,8 +4,10 @@ dist/
 .env.local
 data/incident.json
 # Copyrighted FDNY doctrine corpus index — LOCAL ONLY, never committed,
-# never bundled into the client or any public build.
+# never bundled into the client or any public build. Tactics cards are
+# derived from it and stay local for the same reason.
 server/data/doctrine/
+server/data/tactics/
 .DS_Store
 *.log
 *.tsbuildinfo

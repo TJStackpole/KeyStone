@@ -12,6 +12,7 @@ import {
   fetchTunnels,
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
+import { fetchWind } from './api/weather'
 import { fetchFootprints, footprintContaining, type Footprint } from './cesium/footprints'
 import type { PoiKind } from './cesium/poi'
 import { flyToTactical, OPS_AREA, TILE_CACHE_BYTES } from './cesium/providers'
@@ -24,6 +25,7 @@ import {
   getIntelLayer,
   getExposureLayer,
   getScene,
+  getHazardLayer,
   getLotLayer,
   getPoiLayer,
   getRoadLayer,
@@ -138,6 +140,10 @@ async function loadFootprints(incident: Incident): Promise<void> {
     // Remember the target's height — it drives the collapse-zone tool (1.5x rule).
     const target = feats.find((f) => f.bin === targetBin)
     setAppState({ targetHeightM: target?.heightM ?? null })
+    // Module 4: per-face collapse zones from the real footprint + roof height.
+    if (target && getAppState().layerToggles.collapsezones) {
+      getHazardLayer()?.renderCollapse(target, target.heightM)
+    }
     setLayerStatus('footprints', 'ok')
     // Self-heal ISOLATE: if the operator toggled it while footprints were in
     // flight, re-apply the clip against the freshly resolved target.
@@ -568,6 +574,9 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
   // superseded incident must not repopulate a board that moved on.
   const stillCurrent = () => getAppState().incident?.id === incident.id
 
+  // Module 4: live wind rides every incident stand-up (keyless NWS).
+  void refreshWind()
+
   setLayerStatus('pluto', 'loading')
   setLayerStatus('hydrants', 'loading')
   setLayerStatus('firehouses', 'loading')
@@ -695,6 +704,17 @@ export function toggleLayer(layer: ToggleLayerId): void {
     getRoadLayer()?.setRoadsVisible(next)
     if (next) void refreshRoads(true)
   }
+  if (layer === 'wind') {
+    getHazardLayer()?.setWindVisible(next)
+    if (next) void refreshWind()
+  }
+  if (layer === 'collapsezones') {
+    getHazardLayer()?.setCollapseVisible(next)
+    if (next) {
+      const target = lastFootprints?.feats.find((f) => f.bin === lastFootprints?.targetBin)
+      if (target) getHazardLayer()?.renderCollapse(target, target.heightM)
+    }
+  }
   if (layer === 'tunnels') {
     getRoadLayer()?.setTunnelsVisible(next)
     if (next) ensureTunnels()
@@ -741,7 +761,10 @@ export function adoptIncident(incident: Incident): void {
     timeline: [],
     stagingPick: 'auto', // a reserved callsign from the old response is stale
     isolateView: 'model',
+    wind: null,
+    tacticsOverride: null,
   })
+  getHazardLayer()?.clear()
   getShapeLayer()?.clear()
   const scene = getScene()
   if (getAppState().groundViewActive) exitGround()
@@ -838,7 +861,11 @@ export function clearLocalIncident(): void {
     intel: { pluto: null, hydrants: [], firehouses: [], safety: null, cofo: [] },
     timeline: [],
     stagingPick: 'auto',
+    wind: null,
+    tacticsOpen: false,
+    tacticsOverride: null,
   })
+  getHazardLayer()?.clear()
   getShapeLayer()?.clear()
   getUnitLayer()?.clear()
   getFootprintLayer()?.clear()
@@ -1189,6 +1216,33 @@ export function clearInspected(): void {
 // TRAFFIC layer is on and an incident exists. The interval is a permanent
 // low-cost heartbeat — the gate conditions do the work.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Module 4: live NWS wind at the incident (api.weather.gov — free, keyless).
+// ---------------------------------------------------------------------------
+
+let windTimer: ReturnType<typeof setInterval> | null = null
+let windSeq = 0
+
+export async function refreshWind(): Promise<void> {
+  const { incident, layerToggles } = getAppState()
+  if (!incident) return
+  if (!windTimer) {
+    windTimer = setInterval(() => void refreshWind(), 10 * 60_000)
+  }
+  const seq = ++windSeq
+  try {
+    const wind = await fetchWind(incident.lat, incident.lon)
+    if (seq !== windSeq || getAppState().incident?.id !== incident.id) return
+    setAppState({ wind })
+    if (wind) {
+      getHazardLayer()?.renderWind(incident.lat, incident.lon, wind, incident.type === 'Hazmat')
+      getHazardLayer()?.setWindVisible(layerToggles.wind)
+    }
+  } catch (err) {
+    console.error('[wind] NWS unavailable:', err) // degrade, never crash
+  }
+}
 
 let trafficTimer: ReturnType<typeof setInterval> | null = null
 

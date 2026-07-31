@@ -1,5 +1,6 @@
 import express from 'express'
 import { createServer } from 'node:http'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
@@ -145,6 +146,24 @@ doctrine.load()
 app.get('/api/doctrine/status', (_req, res) =>
   res.json({ ready: doctrine.ready, report: doctrine.report }),
 )
+
+// Module 3: pre-generated tactics cards (derived from the corpus — local
+// only, same licensing posture as the doctrine index).
+const TACTICS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../data/tactics')
+
+app.get('/api/tactics/:type', (req, res) => {
+  const t = String(req.params.type).replace(/[^a-z_]/g, '')
+  const p = resolve(TACTICS_DIR, `${t}.json`)
+  if (!existsSync(p)) {
+    return res.status(404).json({ error: 'no tactics card generated for this type yet' })
+  }
+  try {
+    res.json(JSON.parse(readFileSync(p, 'utf8')))
+  } catch (err) {
+    console.error('[tactics] card read failed:', err)
+    res.status(500).json({ error: 'card unreadable' })
+  }
+})
 
 app.get('/api/doctrine/ask', (req, res) => {
   const q = String(req.query.q ?? '').trim()

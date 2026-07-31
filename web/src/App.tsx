@@ -29,6 +29,8 @@ import { AarPanel } from './components/AarPanel'
 import { StreetViewPanel } from './components/StreetViewPanel'
 import { Compass } from './components/Compass'
 import { ManualsPanel } from './components/ManualsPanel'
+import { TacticsPanel } from './components/TacticsPanel'
+import { WindAdvisory } from './components/WindAdvisory'
 import { TakChatPanel } from './components/TakChatPanel'
 
 /** Floating escape hatch while the camera is at street level. */
@@ -139,6 +141,8 @@ export default function App() {
       <StreetViewPanel />
       <TakChatPanel />
       <ManualsPanel />
+      <TacticsPanel />
+      <WindAdvisory />
       <Compass />
       <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
         <div className="mark">KEYSTONE</div>
