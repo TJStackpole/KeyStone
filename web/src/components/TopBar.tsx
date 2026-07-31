@@ -310,6 +310,66 @@ function IsolateMenu() {
   )
 }
 
+// SITREP / VIDEO / BIO / FLOORS all open tabs of the SAME right-side utility
+// dock — one PANELS dropdown instead of four top-bar chips.
+const PANEL_TABS = [
+  { id: 'sitrep', label: 'SITREP', hint: 'Live situation summary' },
+  { id: 'video', label: 'VIDEO', hint: 'Drone / helicopter / body-cam feeds' },
+  { id: 'bio', label: 'BIO', hint: 'Member biometrics + rotation advisories' },
+  { id: 'floors', label: 'FLOORS', hint: 'Floor-by-floor member accountability' },
+] as const
+
+type PanelTabId = (typeof PANEL_TABS)[number]['id']
+
+function PanelsMenu({
+  utilityTab,
+  toggleTab,
+}: {
+  utilityTab: string | null
+  toggleTab: (tab: PanelTabId) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  const active = PANEL_TABS.find((t) => t.id === utilityTab)
+  return (
+    <div className="panels-wrap" ref={wrapRef}>
+      <button
+        className={`chip chip-btn${active ? ' active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        title="Utility panels — SITREP, video feeds, biometrics, floor accountability"
+      >
+        <span className="dot" /> {active ? `PANELS · ${active.label}` : 'PANELS'} {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="panels-menu glass">
+          {PANEL_TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`panel-item${utilityTab === t.id ? ' on' : ''}`}
+              onClick={() => {
+                toggleTab(t.id)
+                setOpen(false)
+              }}
+              title={t.hint}
+            >
+              <span className="dot" /> {t.label}
+              <i>{t.hint}</i>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const LAYER_LABEL: Record<string, string> = {
   footprints: 'FOOTPRINTS',
   pluto: 'PLUTO',
@@ -397,34 +457,7 @@ export function TopBar() {
             <span className="dot" /> NYCEM
           </button>
         )}
-        <button
-          className={`chip chip-btn${utilityTab === 'sitrep' ? ' active' : ''}`}
-          onClick={() => toggleTab('sitrep')}
-          title="Live situation summary"
-        >
-          <span className="dot" /> SITREP
-        </button>
-        <button
-          className={`chip chip-btn${utilityTab === 'video' ? ' active' : ''}`}
-          onClick={() => toggleTab('video')}
-          title="Drone / helicopter / body-cam feeds"
-        >
-          <span className="dot" /> VIDEO
-        </button>
-        <button
-          className={`chip chip-btn${utilityTab === 'bio' ? ' active' : ''}`}
-          onClick={() => toggleTab('bio')}
-          title="Member biometrics + rotation advisories"
-        >
-          <span className="dot" /> BIO
-        </button>
-        <button
-          className={`chip chip-btn${utilityTab === 'floors' ? ' active' : ''}`}
-          onClick={() => toggleTab('floors')}
-          title="Floor-by-floor member accountability"
-        >
-          <span className="dot" /> FLOORS
-        </button>
+        <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && (
           <button
             className={`chip chip-btn${viewMode === 'topdown' ? ' active' : ''}`}

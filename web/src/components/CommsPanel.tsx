@@ -67,8 +67,7 @@ const CommsLine = memo(function CommsLine({ line }: { line: TranscriptLine }) {
 })
 
 export function CommsPanel() {
-  const { commsOpen, commsChannel, transcripts, commsConfig, incident, scenario, commsAll, commsSource } =
-    useAppState()
+  const { commsOpen, commsChannel, transcripts, commsConfig, scenario, commsAll, commsSource } = useAppState()
   const scrollRef = useRef<HTMLDivElement>(null)
   const scenarioMode = !!scenario
 
@@ -111,7 +110,8 @@ export function CommsPanel() {
     if (el) el.scrollTop = el.scrollHeight
   }, [lines.length, commsChannel, commsOpen])
 
-  if (!incident) return null
+  // Pinned to the bottom AT ALL TIMES (user request) — the citywide radio
+  // picture matters before any incident is stood up, too.
   if (!commsOpen) {
     return (
       <button className="comms-collapsed glass" onClick={() => setAppState({ commsOpen: true })}>

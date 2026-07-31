@@ -747,10 +747,12 @@ html, body {
 
 .takchat-panel {
   position: absolute;
-  right: 360px;
-  bottom: 10px;
+  /* Docked at the bottom, directly above its TAK LINK toggle — the pair
+     reads as one persistent bottom-anchored unit (user request). */
+  right: 14px;
+  bottom: 50px;
   width: 350px;
-  height: 400px;
+  height: 360px;
   border-radius: 6px;
   z-index: 44;
   display: flex;
@@ -978,6 +980,50 @@ html, body {
 
 /* OVERLAYS dropdown (top bar) */
 .overlays-wrap { position: relative; }
+/* PANELS dropdown (SITREP / VIDEO / BIO / FLOORS combined). */
+.panels-wrap { position: relative; }
+.panels-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 250px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 80;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.panel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 9px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+}
+.panel-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan-dim); flex: none; }
+.panel-item i {
+  font-style: normal;
+  font-family: var(--ui);
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  margin-left: auto;
+  text-align: right;
+}
+.panel-item:hover { background: rgba(34, 211, 238, 0.07); border-color: rgba(34, 211, 238, 0.22); color: var(--text); }
+.panel-item.on { border-color: var(--border-strong); background: rgba(34, 211, 238, 0.1); color: var(--cyan); }
+
 /* SCENARIOS dropdown (DEMO + DRILL combined). */
 .scenarios-wrap { position: relative; }
 .scenarios-menu {
