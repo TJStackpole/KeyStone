@@ -15,6 +15,18 @@ const TEXT_HALO = 'rgba(6, 10, 16, 0.92)'
 
 const imageCache = new Map<string, HTMLCanvasElement>()
 
+// Both text caches grow forever as the camera roams the city — LRU-cap them.
+// Eviction is safe: built billboards/primitives hold their own texture
+// copies, and regeneration is a cheap one-off canvas draw.
+function lruTouch(cache: Map<string, HTMLCanvasElement>, key: string, cap: number): void {
+  const hit = cache.get(key)
+  if (hit) {
+    cache.delete(key)
+    cache.set(key, hit)
+  }
+  while (cache.size > cap) cache.delete(cache.keys().next().value!)
+}
+
 /**
  * Crisp text-as-image for billboards: drawn at 2x and rendered at scale 0.5,
  * so it stays sharp on retina displays where Cesium's glyph labels go soft.
@@ -23,7 +35,10 @@ const imageCache = new Map<string, HTMLCanvasElement>()
 export function crispTextImage(text: string, fill = TEXT_FILL, sizePx = 22): HTMLCanvasElement {
   const key = `${fill}|${sizePx}|${text}`
   const cached = imageCache.get(key)
-  if (cached) return cached
+  if (cached) {
+    lruTouch(imageCache, key, 300)
+    return cached
+  }
   const font = `600 ${sizePx}px 'JetBrains Mono', monospace` // 2x, downscaled for crispness
   const canvas = document.createElement('canvas')
   const measure = canvas.getContext('2d')!
@@ -40,6 +55,7 @@ export function crispTextImage(text: string, fill = TEXT_FILL, sizePx = 22): HTM
   ctx.fillStyle = fill
   ctx.fillText(text, 9, canvas.height / 2 + 1)
   imageCache.set(key, canvas)
+  lruTouch(imageCache, key, 300)
   return canvas
 }
 
@@ -63,7 +79,10 @@ const paintCache = new Map<string, HTMLCanvasElement>()
 function streetPaintCanvas(name: string): HTMLCanvasElement {
   const text = name.toUpperCase()
   const cached = paintCache.get(text)
-  if (cached) return cached
+  if (cached) {
+    lruTouch(paintCache, text, 200)
+    return cached
+  }
   const font = `600 ${PAINT_FONT_PX}px 'Inter', -apple-system, sans-serif`
   const canvas = document.createElement('canvas')
   const measure = canvas.getContext('2d')!
@@ -81,6 +100,7 @@ function streetPaintCanvas(name: string): HTMLCanvasElement {
   ctx.fillStyle = TEXT_FILL
   ctx.fillText(text, canvas.width / 2, PAINT_CANVAS_H / 2 + 2)
   paintCache.set(text, canvas)
+  lruTouch(paintCache, text, 200)
   return canvas
 }
 
@@ -98,7 +118,7 @@ function buildPaintPrimitive(s: StreetLabel): Cesium.GroundPrimitive {
     s.lon + lengthM / 2 / lonM,
     s.lat + heightM / 2 / latM,
   )
-  const rotation = rotationFor(s.bearingDeg)
+  const rotation = paintRotation(s)
   return new Cesium.GroundPrimitive({
     geometryInstances: new Cesium.GeometryInstance({
       geometry: new Cesium.RectangleGeometry({
@@ -121,45 +141,84 @@ function buildPaintPrimitive(s: StreetLabel): Cesium.GroundPrimitive {
   })
 }
 
+/**
+ * Cesium rotates RectangleGeometry in PLATE-CARRÉE degree space (lon/lat map
+ * linearly, no cos-lat) — feeding it the true GROUND bearing skews labels
+ * ~6-8° off their streets at NYC's latitude, visibly bleeding long names
+ * onto buildings. Convert the ground angle to projection space first.
+ */
+function paintRotation(s: StreetLabel): number {
+  const thetaGround = rotationFor(s.bearingDeg)
+  const cosLat = Math.cos((s.lat * Math.PI) / 180)
+  return Math.atan2(Math.sin(thetaGround) * cosLat, Math.cos(thetaGround))
+}
+
+interface PaintedLabel {
+  prim: Cesium.GroundPrimitive
+  lat: number
+  lon: number
+  rotation: number
+}
+
+/** Anchor drift below this keeps the existing paint (fetch-jitter, not a move). */
+const REANCHOR_M = 100
+const REROTATE_RAD = Cesium.Math.toRadians(3)
+
 export class StreetLabelLayer {
   private viewer: Cesium.Viewer
-  private byKey = new Map<string, Cesium.GroundPrimitive>()
+  private byName = new Map<string, PaintedLabel>()
   private visible = true
 
   constructor(viewer: Cesium.Viewer) {
     this.viewer = viewer
   }
 
+  /** Remove + destroy — GroundPrimitive does not own its appearance material. */
+  private removePrim(entry: PaintedLabel): void {
+    const mat = entry.prim.appearance?.material as Cesium.Material | undefined
+    this.viewer.scene.groundPrimitives.remove(entry.prim)
+    if (mat && !mat.isDestroyed()) mat.destroy()
+  }
+
   /**
-   * Diff-based update: labels already on the ground stay put (no flicker,
-   * no re-baking); only genuinely new names are built and stale ones removed.
+   * Diff-based update keyed by STREET NAME (the fetch dedupes to one label
+   * per name): paint already on the ground stays put unless its anchor
+   * genuinely moved — the longest-segment anchor jitters between overlapping
+   * camera-follow fetches, and rebuilding on jitter churned primitives on
+   * every pan settle.
    */
   set(labels: StreetLabel[]): void {
     const next = new Set<string>()
     for (const s of labels.slice(0, MAX_LABELS)) {
-      const key = `${s.name}@${s.lat.toFixed(4)},${s.lon.toFixed(4)}`
-      next.add(key)
-      if (this.byKey.has(key)) continue
+      next.add(s.name)
+      const existing = this.byName.get(s.name)
+      if (existing) {
+        const cosLat = Math.cos((s.lat * Math.PI) / 180)
+        const movedM = Math.hypot((s.lat - existing.lat) * 111_320, (s.lon - existing.lon) * 111_320 * cosLat)
+        if (movedM < REANCHOR_M && Math.abs(paintRotation(s) - existing.rotation) < REROTATE_RAD) continue
+        this.removePrim(existing)
+        this.byName.delete(s.name)
+      }
       const prim = buildPaintPrimitive(s)
       prim.show = this.visible
-      this.byKey.set(key, prim)
+      this.byName.set(s.name, { prim, lat: s.lat, lon: s.lon, rotation: paintRotation(s) })
       this.viewer.scene.groundPrimitives.add(prim)
     }
-    for (const [key, prim] of this.byKey) {
-      if (!next.has(key)) {
-        this.viewer.scene.groundPrimitives.remove(prim) // remove() destroys
-        this.byKey.delete(key)
+    for (const [name, entry] of this.byName) {
+      if (!next.has(name)) {
+        this.removePrim(entry)
+        this.byName.delete(name)
       }
     }
   }
 
   setVisible(show: boolean): void {
     this.visible = show
-    for (const prim of this.byKey.values()) prim.show = show
+    for (const entry of this.byName.values()) entry.prim.show = show
   }
 
   clear(): void {
-    for (const prim of this.byKey.values()) this.viewer.scene.groundPrimitives.remove(prim)
-    this.byKey.clear()
+    for (const entry of this.byName.values()) this.removePrim(entry)
+    this.byName.clear()
   }
 }

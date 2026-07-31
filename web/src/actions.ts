@@ -83,6 +83,8 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   hideInspectedModel()
   lastFootprints = null
   getTrafficLayer()?.clear() // stale polylines from the previous location
+  getHazardLayer()?.clear() // old site's wind arrow + collapse zones
+  getUnitLayer()?.setInteriorBounds(null) // old footprint must not snap members
   if (getAppState().groundViewActive) exitGround()
   if (getAppState().viewMode === 'topdown' && scene) {
     setAppState({ viewMode: '3d' })
@@ -93,7 +95,7 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // These run concurrently; each degrades independently per the CLAUDE.md rule.
   void loadFootprints(incident)
   void loadSiteIntel(incident)
-  void persistIncident(incident)
+  lastPersist = persistIncident(incident)
 
   // ACTIVE INCIDENT focus: sharpen the fire building, de-emphasize >4 blocks.
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
@@ -115,6 +117,8 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     stagingPick: 'auto',
     isolateView: 'model', // a LIVE pick must not straddle incidents
     focusedFeedId: null, // manual stand-up — not tracking a feed entry
+    wind: null, // refreshWind repaints for the new site
+    floorRef: null, // loadFootprints republishes for the new target
   })
   getShapeLayer()?.clear()
 }
@@ -156,9 +160,9 @@ function feedIncidentType(feedType: string): IncidentType {
  * incidents. A geocoded hit RELOCATES the incident (camera, footprints,
  * intel — shapes/units/timeline stay); free text corrects the label only.
  */
-export async function editIncidentAddress(update: { label: string; hit?: GeoHit }): Promise<void> {
+export async function editIncidentAddress(update: { label: string; hit?: GeoHit }): Promise<boolean> {
   const incident = getAppState().incident
-  if (!incident) return
+  if (!incident) return false
   const patch: Partial<Incident> = { address: update.label }
   if (update.hit) {
     patch.lat = update.hit.lat
@@ -176,11 +180,19 @@ export async function editIncidentAddress(update: { label: string; hit?: GeoHit 
     if (!res.ok) throw new Error(`address patch ${res.status}`)
   } catch (err) {
     console.error('[incident] address correction failed:', err)
-    return
+    return false
   }
-  const updated = { ...incident, ...patch }
-  setAppState({ incident: updated })
-  if (update.hit) relocateIncidentSite(updated)
+  // Functional merge onto CURRENT state — the incident may have changed
+  // while the PATCH was in flight; a captured-snapshot write would resurrect
+  // it. If it did change, the correction belongs to a dead board: skip.
+  let applied: Incident | null = null
+  setAppState((s) => {
+    if (s.incident?.id !== incident.id) return {}
+    applied = { ...s.incident, ...patch }
+    return { incident: applied }
+  })
+  if (applied && update.hit) relocateIncidentSite(applied)
+  return true
 }
 
 /**
@@ -190,6 +202,10 @@ export async function editIncidentAddress(update: { label: string; hit?: GeoHit 
  */
 export function relocateIncidentSite(incident: Incident): void {
   const scene = getScene()
+  // A running replay owns the globe — its resyncLive() never re-runs the
+  // footprint/intel loads, so relocating "under" it would strand the station
+  // on the old site picture after replay exit.
+  if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
   hideInspectedModel()
   lastFootprints = null
@@ -677,6 +693,14 @@ export function resetIsolate(): void {
   applyIsolate(false)
 }
 
+/**
+ * The most recent incident POST — dispatch must SERIALIZE behind it. The
+ * server dispatches to ITS current state.incident, so a /api/dispatch that
+ * beats the /api/incident POST over the wire sends the assignment to the
+ * PREVIOUS incident's coordinates.
+ */
+let lastPersist: Promise<void> = Promise.resolve()
+
 async function persistIncident(incident: Incident): Promise<void> {
   setLayerStatus('persistence', 'loading')
   try {
@@ -891,6 +915,10 @@ async function loadSiteIntel(incident: Incident): Promise<void> {
 export function toggleLayer(layer: ToggleLayerId): void {
   const next = !getAppState().layerToggles[layer]
   setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: next } }))
+  // ISOLATE parks every background overlay — a chip flipped DURING isolate
+  // must only update the stored toggle (restored on exit), never repaint the
+  // sole-focus scene. The lots branch pioneered this; all overlays honor it.
+  const parked = getAppState().isolateMode
   if (layer === 'footprints') getFootprintLayer()?.setVisible(next)
   if (layer === 'targetbox') {
     // While a LIFTED isolate (or the schematic MODEL view) is active the box
@@ -900,43 +928,42 @@ export function toggleLayer(layer: ToggleLayerId): void {
     const s = getAppState()
     getFootprintLayer()?.setTargetVisible(next && !(s.isolateMode && (s.isolateLiftM > 0 || s.isolateView === 'model')))
   }
-  if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next)
-  if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next)
-  if (layer === 'streets') getStreetLayer()?.setVisible(next)
+  if (layer === 'hydrants') getIntelLayer()?.setHydrantsVisible(next && !parked)
+  if (layer === 'firehouses') getIntelLayer()?.setFirehousesVisible(next && !parked)
+  if (layer === 'streets') getStreetLayer()?.setVisible(next && !parked)
   if (layer === 'traffic') {
-    getTrafficLayer()?.setVisible(next)
-    if (next) void refreshTraffic()
+    getTrafficLayer()?.setVisible(next && !parked)
+    if (next && !parked) void refreshTraffic()
   }
   if (layer === 'lots') {
-    // Parked during isolate — the stored toggle still updates and the
-    // isolate OFF path re-applies it.
-    getLotLayer()?.setVisible(next && !getAppState().isolateMode)
-    if (next) void refreshLots(true)
+    getLotLayer()?.setVisible(next && !parked)
+    if (next && !parked) void refreshLots(true)
   }
   if (layer === 'roads') {
-    getRoadLayer()?.setRoadsVisible(next)
-    if (next) void refreshRoads(true)
+    getRoadLayer()?.setRoadsVisible(next && !parked)
+    if (next && !parked) void refreshRoads(true)
   }
   if (layer === 'wind') {
-    getHazardLayer()?.setWindVisible(next)
-    if (next) void refreshWind()
+    getHazardLayer()?.setWindVisible(next && !parked)
+    if (next && !parked) void refreshWind()
   }
   if (layer === 'collapsezones') {
-    getHazardLayer()?.setCollapseVisible(next)
-    if (next) {
+    getHazardLayer()?.setCollapseVisible(next && !parked)
+    if (next && !parked) {
       const target = lastFootprints?.feats.find((f) => f.bin === lastFootprints?.targetBin)
       if (target) getHazardLayer()?.renderCollapse(target, target.heightM)
     }
   }
   if (layer === 'tunnels') {
-    getRoadLayer()?.setTunnelsVisible(next)
-    if (next) ensureTunnels()
+    getRoadLayer()?.setTunnelsVisible(next && !parked)
+    if (next && !parked) ensureTunnels()
   }
   if (layer.startsWith('poi')) {
     // Citywide facility overlays (FacDB) — lazy-loaded on first enable. A
     // failed fetch reverts the checkbox so it never lies (and retries clean).
+    // During isolate the fetch defers to exit (setOverlaysParked(false)).
     getPoiLayer()
-      ?.setEnabled(layer as PoiKind, next)
+      ?.setEnabled(layer as PoiKind, next && !parked)
       .catch((err) => {
         console.error(`[poi] ${layer} unavailable:`, err)
         setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: false } }))
@@ -944,7 +971,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
   }
   if (layer === 'battalions' || layer === 'divisions') {
     getBoundaryLayer()
-      ?.setVisible(layer, next)
+      ?.setVisible(layer, next && !parked)
       .catch((err) => {
         console.error(`[boundaries] ${layer} unavailable:`, err)
         setAppState((s) => ({ layerToggles: { ...s.layerToggles, [layer]: false } }))
@@ -1843,6 +1870,8 @@ export async function runDemoScenario(): Promise<void> {
 export async function dispatchAssignment(): Promise<void> {
   setAppState({ dispatching: true })
   try {
+    // Serialize behind the incident POST — see lastPersist.
+    await lastPersist.catch(() => {})
     // Give the simulator the building profile so interior crews work real floors.
     const floors = getAppState().intel.pluto?.numFloors
     const res = await fetch('/api/dispatch', {

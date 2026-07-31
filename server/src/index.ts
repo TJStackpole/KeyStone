@@ -81,13 +81,21 @@ wss.on('error', (err) => console.warn('[ws] server error:', err.message))
 // Canonical ws heartbeat: half-open dashboards (sleeping laptops, dropped
 // Wi-Fi) never fire 'close' on their own — ping them and reap the silent.
 const socketAlive = new WeakMap<WebSocket, boolean>()
+const pingBacklog = new WeakMap<WebSocket, number>()
 setInterval(() => {
   for (const client of wss.clients) {
     if (socketAlive.get(client) === false) {
-      client.terminate()
-      continue
+      // No pong — but ws queues pings behind buffered data, so a SLOW client
+      // that is still draining is alive, not half-open. Only terminate when
+      // the backlog has not shrunk since the ping was queued.
+      const atPing = pingBacklog.get(client) ?? 0
+      if (client.bufferedAmount >= atPing) {
+        client.terminate()
+        continue
+      }
     }
     socketAlive.set(client, false)
+    pingBacklog.set(client, client.bufferedAmount)
     client.ping()
   }
 }, 30_000).unref()
@@ -660,8 +668,24 @@ app.patch('/api/incident', (req, res) => {
     }
   }
   if (!Object.keys(patch).length) return res.status(400).json({ error: 'only type/alarmLevel/address are patchable' })
+  const prev = state.incident
   const updated = updateIncident(patch)
   broadcast({ type: 'incident', incident: updated.incident })
+  // Live RELOCATION with the sim running: the assignment was routed to the
+  // OLD coordinates and would keep converging there forever. Re-dispatch at
+  // the corrected site (dispatch() stops the old run via its generation
+  // token, same as POST /api/dispatch).
+  if (
+    patch.lat !== undefined &&
+    (patch.lat !== prev.lat || patch.lon !== prev.lon) &&
+    simulator.active &&
+    updated.incident
+  ) {
+    simChatter.reset()
+    void simulator
+      .dispatch(updated.incident.lat, updated.incident.lon)
+      .catch((err) => console.error('[sim] re-dispatch after relocation failed:', err))
+  }
   res.json(updated)
 })
 

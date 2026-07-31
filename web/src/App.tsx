@@ -31,7 +31,7 @@ import { Compass } from './components/Compass'
 import { ManualsPanel } from './components/ManualsPanel'
 import { TacticsPanel } from './components/TacticsPanel'
 import { WindAdvisory } from './components/WindAdvisory'
-import { TakChatPanel } from './components/TakChatPanel'
+import { TakChatPanel, TakLinkButton } from './components/TakChatPanel'
 
 /** Floating escape hatch while the camera is at street level. */
 function GroundViewExit() {
@@ -69,10 +69,25 @@ function GroundHeightControl() {
   )
 }
 
+/**
+ * Boot veil in its OWN component: App itself must not subscribe to the store
+ * — with ~40 units updating every 1-2 s, an App-level useAppState re-rendered
+ * (reconciled) the entire panel tree on every write. Hoisted here, App
+ * renders once and each panel subscribes independently.
+ */
+function BootVeil({ msg }: { msg: string }) {
+  const { sceneReady } = useAppState()
+  return (
+    <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
+      <div className="mark">KEYSTONE</div>
+      <div className="status">{msg}</div>
+    </div>
+  )
+}
+
 export default function App() {
   const globeRef = useRef<HTMLDivElement>(null)
   const [bootMsg, setBootMsg] = useState('Initializing 3D scene')
-  const { sceneReady } = useAppState()
 
   useEffect(() => {
     let disposed = false
@@ -140,14 +155,12 @@ export default function App() {
       <AarPanel />
       <StreetViewPanel />
       <TakChatPanel />
+      <TakLinkButton />
       <ManualsPanel />
       <TacticsPanel />
       <WindAdvisory />
       <Compass />
-      <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
-        <div className="mark">KEYSTONE</div>
-        <div className="status">{bootMsg}</div>
-      </div>
+      <BootVeil msg={bootMsg} />
     </div>
   )
 }

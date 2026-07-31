@@ -18,6 +18,31 @@ const ROOMS = [
   { id: 'OEM', label: 'OEM' },
 ]
 
+/**
+ * TAK LINK moved out of the top bar: it lives on the bottom row next to the
+ * COMMS panel. Green dot = link up (click for GeoChat); amber = link down.
+ */
+export function TakLinkButton() {
+  const { takConnected } = useAppState()
+  if (takConnected === null) return null
+  if (takConnected === false) {
+    return (
+      <span className="tak-link-btn glass offline" title="TAK server link is down — reconnecting">
+        <span className="dot" /> TAK OFFLINE
+      </span>
+    )
+  }
+  return (
+    <button
+      className="tak-link-btn glass"
+      onClick={() => setAppState((s) => ({ chatOpen: !s.chatOpen }))}
+      title="TAK link is up — click for GeoChat with every unit on the server"
+    >
+      <span className="dot" /> TAK LINK
+    </button>
+  )
+}
+
 export function TakChatPanel() {
   const { chatOpen, chats, takConnected } = useAppState()
   const [room, setRoom] = useState('All Chat Rooms')

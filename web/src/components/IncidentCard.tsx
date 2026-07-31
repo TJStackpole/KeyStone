@@ -79,10 +79,12 @@ function EditableAddress({ incident }: { incident: Incident }) {
     setSaving(false)
   }
   const commit = async (update: { label: string; hit?: GeoHit }) => {
-    if (!update.label.trim()) return
+    if (saving || !update.label.trim()) return // double-commit guard
     setSaving(true)
-    await editIncidentAddress(update)
-    close()
+    setHits([])
+    const ok = await editIncidentAddress(update)
+    if (ok) close()
+    else setSaving(false) // keep the editor open so the correction isn't lost
   }
 
   if (!editing) {
@@ -114,14 +116,14 @@ function EditableAddress({ incident }: { incident: Incident }) {
           if (e.key === 'Escape') close()
         }}
       />
-      <button className="addr-edit-btn" onClick={close} title="Cancel">
+      <button className="addr-edit-btn" onClick={close} disabled={saving} title="Cancel">
         ✕
       </button>
       {hits.length > 0 && (
         <ul className="addr-suggest glass">
           {hits.map((h) => (
             <li key={`${h.label}:${h.lat}`}>
-              <button onClick={() => void commit({ label: h.label, hit: h })}>
+              <button disabled={saving} onClick={() => void commit({ label: h.label, hit: h })}>
                 {h.label}
                 <i>RELOCATES INCIDENT</i>
               </button>

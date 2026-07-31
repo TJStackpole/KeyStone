@@ -166,7 +166,14 @@ function handle(msg: ServerMsg): void {
       const local = getAppState().incident
       if (!msg.incident && local) clearLocalIncident()
       else if (msg.incident && msg.incident.id !== local?.id) adoptIncident(msg.incident)
-      else if (msg.incident) setAppState({ incident: msg.incident })
+      else if (msg.incident) {
+        // Same-id snapshot can still carry a RELOCATION (live address
+        // correction while this station was disconnected) — the coords never
+        // repeat in a later message, so reconcile the site picture here too.
+        const moved = local && (msg.incident.lat !== local.lat || msg.incident.lon !== local.lon)
+        setAppState({ incident: msg.incident })
+        if (moved) relocateIncidentSite(msg.incident)
+      }
       // Drill transport state rides the snapshot too (server restarts). A
       // station that missed the drill's end must also drop the merged comms
       // view and any scenario-only channel whose tab no longer exists. Chats

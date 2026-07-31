@@ -184,6 +184,132 @@ function Clock() {
   )
 }
 
+/** DEMO + DRILL combined — one launcher, two scripted scenarios. */
+function ScenariosMenu() {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  return (
+    <div className="scenarios-wrap" ref={wrapRef}>
+      <button className="demo-btn" onClick={() => setOpen((o) => !o)} title="Scripted scenarios — demo and drill">
+        ▶ SCENARIOS {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="scenarios-menu glass">
+          <button
+            className="scenario-item"
+            onClick={() => {
+              setOpen(false)
+              void runDemoScenario()
+            }}
+          >
+            <b>DEMO</b>
+            <i>Structural fire, 100 Gold St — full flow, plays unattended</i>
+          </button>
+          <button
+            className="scenario-item drill"
+            onClick={() => {
+              setOpen(false)
+              void loadScenario('pabt-drill')
+            }}
+          >
+            <b>DRILL</b>
+            <i>Multi-agency bus fire w/ MCI at the Port Authority Bus Terminal</i>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * ISOLATE cluster as ONE dropdown: the on/off toggle plus the MODEL / LIVE
+ * view and the model's vertical scale — three controls that used to take
+ * three top-bar slots.
+ */
+function IsolateMenu() {
+  const { isolateMode, isolateView, isolateScale } = useAppState()
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  return (
+    <div className="isolate-wrap" ref={wrapRef}>
+      <button
+        className={`chip chip-btn amber${isolateMode ? ' active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        title="Isolate the incident building — clip everything else away; pick MODEL or LIVE view and the model's vertical scale"
+      >
+        <span className="dot" /> ISOLATE {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="isolate-menu glass">
+          <button
+            className={`iso-toggle${isolateMode ? ' on' : ''}`}
+            onClick={toggleIsolateMode}
+            title="Strip every building, tree, and obstruction except the incident building"
+          >
+            {isolateMode ? '◉ ISOLATE ON — click to exit' : '◌ ISOLATE OFF — click to isolate the building'}
+          </button>
+          {isolateMode && (
+            <>
+              <div className="iso-label">VIEW</div>
+              <span className="chip seg">
+                <button
+                  className={`seg-btn${isolateView === 'model' ? ' on' : ''}`}
+                  onClick={() => setIsolateView('model')}
+                  title="Clean schematic 3D model from the building's real data — floors, entrances, estimated egress and stairs"
+                >
+                  MODEL
+                </button>
+                <button
+                  className={`seg-btn${isolateView === 'live' ? ' on' : ''}`}
+                  onClick={() => setIsolateView('live')}
+                  title="The real (clipped) imagery of the building"
+                >
+                  LIVE
+                </button>
+              </span>
+              {isolateView === 'model' && (
+                <>
+                  <div className="iso-label">VERTICAL SCALE</div>
+                  <span
+                    className="chip seg"
+                    title="Stretch the model's floors so unit tracking reads at a glance (real dimensions stay on the header)"
+                  >
+                    {[1, 1.5, 2].map((k) => (
+                      <button
+                        key={k}
+                        className={`seg-btn${isolateScale === k ? ' on' : ''}`}
+                        onClick={() => setIsolateScale(k)}
+                      >
+                        {k}×
+                      </button>
+                    ))}
+                  </span>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const LAYER_LABEL: Record<string, string> = {
   footprints: 'FOOTPRINTS',
   pluto: 'PLUTO',
@@ -197,14 +323,10 @@ export function TopBar() {
   const {
     providerMode,
     layers,
-    takConnected,
     utilityTab,
     incident,
     inspected,
     activeIncidentMode,
-    isolateMode,
-    isolateView,
-    isolateScale,
     viewMode,
     nycemView,
   } = useAppState()
@@ -221,16 +343,7 @@ export function TopBar() {
         </div>
       </div>
       <SearchBar />
-      <button className="demo-btn" onClick={() => void runDemoScenario()} title="Demo scenario: structural fire, 100 Gold St — full flow unattended">
-        ▶ DEMO
-      </button>
-      <button
-        className="demo-btn drill"
-        onClick={() => void loadScenario('pabt-drill')}
-        title="Scripted multi-agency drill: bus fire w/ MCI at the Port Authority Bus Terminal — plays itself"
-      >
-        ▶ DRILL
-      </button>
+      <ScenariosMenu />
       <div className="topbar-right">
         {down.map((k) => (
           <span key={k} className="chip warn">
@@ -254,20 +367,6 @@ export function TopBar() {
             <span className="dot" /> TACTICS
           </button>
         )}
-        {takConnected === true && (
-          <button
-            className="chip chip-btn"
-            onClick={() => setAppState((s) => ({ chatOpen: !s.chatOpen }))}
-            title="TAK link is up — click for GeoChat with every unit on the server"
-          >
-            <span className="dot" /> TAK LINK
-          </button>
-        )}
-        {takConnected === false && (
-          <span className="chip warn">
-            <span className="dot" /> TAK OFFLINE
-          </span>
-        )}
         <button
           className={`chip chip-btn amber${incident && activeIncidentMode ? ' active' : ''}${!incident && !inspected ? ' disabled' : ''}`}
           aria-disabled={!incident && !inspected}
@@ -288,46 +387,7 @@ export function TopBar() {
         >
           <span className="dot" /> ACTIVE INCIDENT
         </button>
-        {incident && activeIncidentMode && (
-          <button
-            className={`chip chip-btn amber${isolateMode ? ' active' : ''}`}
-            onClick={toggleIsolateMode}
-            title="Strip every building, tree, and obstruction except the incident building"
-          >
-            <span className="dot" /> ISOLATE
-          </button>
-        )}
-        {incident && activeIncidentMode && isolateMode && (
-          <span className="chip seg">
-            <button
-              className={`seg-btn${isolateView === 'model' ? ' on' : ''}`}
-              onClick={() => setIsolateView('model')}
-              title="Clean schematic 3D model from the building's real data — floors, entrances, estimated egress and stairs"
-            >
-              MODEL
-            </button>
-            <button
-              className={`seg-btn${isolateView === 'live' ? ' on' : ''}`}
-              onClick={() => setIsolateView('live')}
-              title="The real (clipped) imagery of the building"
-            >
-              LIVE
-            </button>
-          </span>
-        )}
-        {incident && activeIncidentMode && isolateMode && isolateView === 'model' && (
-          <span className="chip seg" title="Vertical scale — stretch the model's floors so unit tracking reads at a glance (real dimensions stay on the header)">
-            {[1, 1.5, 2].map((k) => (
-              <button
-                key={k}
-                className={`seg-btn${isolateScale === k ? ' on' : ''}`}
-                onClick={() => setIsolateScale(k)}
-              >
-                {k}×
-              </button>
-            ))}
-          </span>
-        )}
+        {incident && activeIncidentMode && <IsolateMenu />}
         {incident && (
           <button
             className={`chip chip-btn${nycemView ? ' active' : ''}`}
