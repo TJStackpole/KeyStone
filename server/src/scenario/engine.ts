@@ -151,7 +151,9 @@ export interface EngineDeps {
   /** `tombstone: false` on rewinds — the unit respawns in the same ms and a
    *  tombstone would swallow the respawn's TAK echo (empty drill board). */
   removeUnit: (uid: string, opts?: { tombstone?: boolean }) => void
-  setAlarm: (level: Incident['alarmLevel']) => void
+  /** replay=true when re-applying an already-seen event (rewind restore) —
+   *  the board updates but side channels (ticker) must not re-announce. */
+  setAlarm: (level: Incident['alarmLevel'], replay?: boolean) => void
   // Prompt 11 — NYCEM coordination layer hooks (all optional so older
   // single-incident scenarios keep running untouched):
   portfolioChanged?: () => void
@@ -267,6 +269,10 @@ export class ScenarioEngine extends EventEmitter {
     const raw = await readFile(resolve(SCENARIO_DIR, `${safe}.json`), 'utf8')
     const file = JSON.parse(raw) as ScenarioFile
     file.events.sort((a, b) => a.t - b.t)
+    // The client picks the active chapter by scanning the array in reverse —
+    // an out-of-order chapter (authored or appended) would win the highlight
+    // for the rest of the run. Sort here so file order can't matter.
+    file.chapters?.sort((a, b) => a.t - b.t)
     // Normalize every drill uid/id onto this stack's DRILL-<ns>- namespace.
     // The DRILL- family keys tombstones, the rx-log filter, SIM chat badging,
     // and arrival chatter — an unprefixed uid would silently lose every one
@@ -410,12 +416,16 @@ export class ScenarioEngine extends EventEmitter {
     // are the accountability record the AAR slices by session window.
     if (this.secondary.size) {
       this.secondary.clear()
-      this.requestIds.clear()
       this.deps.portfolioChanged?.()
     }
     if (!keepIncident) {
       this.file = null
       this.maxEmittedCursor = 0 // rewinds keep it — that's its whole purpose
+      // The refId→REQ-id map is the rewind dedupe: it must OUTLIVE rewinds
+      // (clearing it here made every scrub-back re-open all scripted
+      // requests as persisted duplicates) and reset only when the scenario
+      // is actually unloaded.
+      this.requestIds.clear()
       this.exercise = false
       this.exerciseStartedAt = null
     }
@@ -552,7 +562,9 @@ export class ScenarioEngine extends EventEmitter {
         break
       }
       case 'alarm_level': {
-        this.deps.setAlarm(ev.level!)
+        // Replays must still restore the board's alarm level, but the dep's
+        // side channels (ticker) suppress on replay like the timeline does.
+        this.deps.setAlarm(ev.level!, rewind || replayed)
         emitTimeline('alarm', { level: ev.level, drill: true })
         break
       }
@@ -619,6 +631,10 @@ export class ScenarioEngine extends EventEmitter {
         break
       }
       case 'request_transition': {
+        // Requests persist through rewinds (they're the accountability
+        // record), so a replayed transition was already applied — skip it
+        // rather than spamming illegal-transition rejections.
+        if (rewind || replayed) break
         const realId = ev.refId ? this.requestIds.get(ev.refId) : undefined
         if (realId && ev.state) this.deps.transitionRequest?.(realId, ev.state, ev.by ?? 'scenario', ev.reason)
         break

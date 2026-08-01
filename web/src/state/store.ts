@@ -123,7 +123,6 @@ export interface AppState {
   /** Facilitator review screen for a finished exercise (M8). */
   exerciseReview: ExerciseSession | null
   /** IC view <-> NYCEM Watch Command coordination view. */
-  nycemView: boolean
   /** After-action report overlay (auto-opens at scenario end). */
   aarOpen: boolean
   /** TAK GeoChat: every EUD on the TAK server, "All Chat Rooms". */
@@ -272,7 +271,6 @@ const initial: AppState = {
   triggerSuggestions: [],
   triggerRules: [],
   exerciseReview: null,
-  nycemView: false,
   aarOpen: false,
   chats: [],
   chatOpen: false,

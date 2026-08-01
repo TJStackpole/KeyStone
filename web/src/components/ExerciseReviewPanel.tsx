@@ -11,13 +11,20 @@ import type { AarDraft, AarMetric } from '../types'
 
 export function ExerciseReviewPanel() {
   const { exerciseReview } = useAppState()
-  const [draft, setDraft] = useState<AarDraft | null>(null)
+  const [rawDraft, setRawDraft] = useState<AarDraft | null>(null)
   const [library, setLibrary] = useState<{ id: string; scenario: string; startedAt: string; metrics: AarMetric[] }[]>([])
-  const [saved, setSaved] = useState(false)
+  const [saved, setSaved] = useState<'clean' | 'saved' | 'failed'>('clean')
+  const draft = rawDraft
+  // Any further edit invalidates "SAVED ✓" — a lit save indicator over
+  // unsaved edits silently loses them when the panel closes.
+  const setDraft = (next: AarDraft | null) => {
+    setRawDraft(next)
+    setSaved('clean')
+  }
 
   useEffect(() => {
-    setDraft(exerciseReview ? structuredClone(exerciseReview.aar) : null)
-    setSaved(false)
+    setRawDraft(exerciseReview ? structuredClone(exerciseReview.aar) : null)
+    setSaved('clean')
     if (exerciseReview) {
       fetch('/api/exercises')
         .then((r) => r.json())
@@ -30,12 +37,16 @@ export function ExerciseReviewPanel() {
   const session = exerciseReview
 
   const save = async () => {
-    const res = await fetch(`/api/exercises/${encodeURIComponent(session.id)}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ aar: draft }),
-    })
-    setSaved(res.ok)
+    try {
+      const res = await fetch(`/api/exercises/${encodeURIComponent(session.id)}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ aar: draft }),
+      })
+      setSaved(res.ok ? 'saved' : 'failed')
+    } catch {
+      setSaved('failed') // server down mid-review — keep the draft, show it
+    }
   }
 
   // Prior run of the SAME scenario: metric deltas across runs are the point
@@ -53,7 +64,9 @@ export function ExerciseReviewPanel() {
           <span className="card-title">{draft.title}</span>
           <span className="exr-id">{session.id}</span>
           <div className="exr-btns noprint">
-            <button onClick={() => void save()}>{saved ? 'SAVED ✓' : 'SAVE EDITS'}</button>
+            <button onClick={() => void save()}>
+              {saved === 'saved' ? 'SAVED ✓' : saved === 'failed' ? 'SAVE FAILED — RETRY' : 'SAVE EDITS'}
+            </button>
             <button onClick={() => window.print()} title="Export via the system print dialog (PDF). Never auto-distributed.">
               EXPORT PDF
             </button>

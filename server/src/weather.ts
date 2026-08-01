@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { triggerRules, type EocLevel, type TriggerRule } from './nycem.js'
 
 // ---------------------------------------------------------------------------
@@ -56,18 +59,92 @@ const OBS_URL = 'https://api.weather.gov/stations/KNYC/observations/latest'
 
 const SNOOZE_MS = 30 * 60_000
 
+// Suggestions and the fired map persist like the rest of the coordination
+// state: without this, a server restart during an active product re-fires
+// every suggestion the operator already decided (duplicate ticker/timeline
+// entries, and SUG- ids restart at 1, cross-linking old decisions).
+const STATE_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../data/weather-state.json')
+
+/** ruleId+alertId pairs already suggested; JSON-composed so ids containing
+ *  delimiters can't collide or mis-parse. */
+const firedKey = (ruleId: string, alertId: string) => JSON.stringify([ruleId, alertId])
+
 export class WeatherWatch extends EventEmitter {
   private alerts: NwsAlert[] = []
   private obs: WeatherObs | null = null
   private suggestions: TriggerSuggestion[] = []
   private suggestionSeq = 1
-  /** ruleId|alertId pairs already suggested — a product fires a rule ONCE
-   *  (snooze re-arms it after SNOOZE_MS). */
+  /** A product fires a rule ONCE (snooze re-arms it after SNOOZE_MS). */
   private fired = new Map<string, number>()
+  private flushTimer: ReturnType<typeof setTimeout> | null = null
+
+  constructor() {
+    super()
+    this.loadPersisted()
+    // Same shutdown contract as nycem/incidentStore: 'exit' misses signals,
+    // and tsx watch SIGTERMs on every save. Signals coalesce, so the extra
+    // re-raise from the sibling modules' handlers is harmless.
+    process.on('exit', () => {
+      if (this.flushTimer) this.flushNow()
+    })
+    for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+      process.once(sig, () => {
+        if (this.flushTimer) this.flushNow()
+        process.kill(process.pid, sig)
+      })
+    }
+  }
 
   start(): void {
     void this.poll()
     setInterval(() => void this.poll(), POLL_MS).unref?.()
+  }
+
+  private loadPersisted(): void {
+    try {
+      const parsed = JSON.parse(readFileSync(STATE_PATH, 'utf8')) as {
+        suggestions?: TriggerSuggestion[]
+        fired?: [string, number | null][]
+        suggestionSeq?: number
+      }
+      if (Array.isArray(parsed.suggestions)) {
+        // Pending suggestions for SIMULATED products belong to a scenario
+        // that died with the old process — decided ones stay as history.
+        this.suggestions = parsed.suggestions.filter(
+          (s) => s && typeof s === 'object' && !(s.state === 'pending' && s.product?.simulated),
+        )
+      }
+      if (Array.isArray(parsed.fired)) {
+        for (const [k, v] of parsed.fired) {
+          if (typeof k === 'string') this.fired.set(k, v === null ? Infinity : v) // Infinity JSON-encodes as null
+        }
+      }
+      if (typeof parsed.suggestionSeq === 'number') this.suggestionSeq = parsed.suggestionSeq
+    } catch {
+      // first boot — nothing persisted yet
+    }
+  }
+
+  private flushNow(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer)
+      this.flushTimer = null
+    }
+    try {
+      mkdirSync(dirname(STATE_PATH), { recursive: true })
+      writeFileSync(
+        STATE_PATH,
+        JSON.stringify({ suggestions: this.suggestions, fired: [...this.fired.entries()], suggestionSeq: this.suggestionSeq }),
+      )
+    } catch (err) {
+      console.error('[weather] failed to write weather-state.json:', err)
+    }
+  }
+
+  private flush(): void {
+    if (this.flushTimer) return
+    this.flushTimer = setTimeout(() => this.flushNow(), 4000)
+    this.flushTimer.unref?.()
   }
 
   snapshot() {
@@ -99,11 +176,14 @@ export class WeatherWatch extends EventEmitter {
         const sims = this.alerts.filter((a) => a.simulated && (!a.ends || Date.parse(a.ends) > Date.now()))
         this.alerts = [...live, ...sims]
         this.emit('weather', this.snapshot())
-        for (const alert of this.alerts) this.evaluate(alert)
       }
     } catch (err) {
       console.error('[weather] NWS alerts unavailable:', err) // degrade, never crash
     }
+    // Evaluate OUTSIDE the fetch branch: snooze re-arm and SIMULATED exercise
+    // products must keep working through an NWS outage or a fully offline
+    // exercise room — otherwise snooze silently becomes a permanent dismiss.
+    for (const alert of this.alerts) this.evaluate(alert)
     try {
       const res = await fetch(OBS_URL, UA)
       if (res.ok) {
@@ -135,28 +215,63 @@ export class WeatherWatch extends EventEmitter {
 
   private evaluate(alert: NwsAlert): void {
     for (const rule of triggerRules()) {
-      if (!rule.enabled) continue
-      const hit = rule.eventMatch.some((m) => alert.event.toLowerCase().includes(m.toLowerCase()))
-      if (!hit) continue
-      const key = `${rule.id}|${alert.id}`
-      const armedAt = this.fired.get(key)
-      if (armedAt !== undefined && Date.now() < armedAt) continue
-      this.fired.set(key, Infinity) // fires once; snooze() re-arms with a deadline
-      const suggestion: TriggerSuggestion = {
-        id: `SUG-${this.suggestionSeq++}`,
-        ruleId: rule.id,
-        plan: rule.plan,
-        suggestedEocLevel: rule.suggestedEocLevel,
-        suggestedActions: rule.suggestedActions,
-        firedAt: new Date().toISOString(),
-        product: alert,
-        state: 'pending',
-        validateSme: rule.validateSme,
+      // Rules are sanitized at every entry point, but one bad rule must
+      // never silently kill evaluation of the others (the throw would be
+      // swallowed by poll()'s catch and mislabeled a network failure).
+      try {
+        if (!rule.enabled) continue
+        const hit = rule.eventMatch.some((m) => alert.event.toLowerCase().includes(m.toLowerCase()))
+        if (!hit) continue
+        const key = firedKey(rule.id, alert.id)
+        const armedAt = this.fired.get(key)
+        if (armedAt !== undefined && Date.now() < armedAt) continue
+        this.fired.set(key, Infinity) // fires once; snooze() re-arms with a deadline
+        const suggestion: TriggerSuggestion = {
+          id: `SUG-${this.suggestionSeq++}`,
+          ruleId: rule.id,
+          plan: rule.plan,
+          suggestedEocLevel: rule.suggestedEocLevel,
+          suggestedActions: rule.suggestedActions,
+          firedAt: new Date().toISOString(),
+          product: alert,
+          state: 'pending',
+          validateSme: rule.validateSme,
+        }
+        this.suggestions.push(suggestion)
+        if (this.suggestions.length > 50) this.suggestions.shift()
+        this.flush()
+        this.emit('suggestion', suggestion)
+      } catch (err) {
+        console.error(`[weather] rule ${(rule as { id?: string })?.id ?? '?'} evaluation failed:`, err)
       }
-      this.suggestions.push(suggestion)
-      if (this.suggestions.length > 50) this.suggestions.shift()
-      this.emit('suggestion', suggestion)
     }
+  }
+
+  /**
+   * Scenario lifecycle reset: drop exercise-injected products, their fired
+   * keys, and any still-pending suggestions they produced. Without this,
+   * re-running an exercise in the same server process never re-fires its
+   * scripted trigger (the fixed SIM product id stays in the fired map
+   * forever — accept/dismiss/pending all block, only snooze re-arms).
+   * Decided suggestions stay as history.
+   */
+  clearSimulated(): void {
+    const simIds = new Set<string>()
+    for (const a of this.alerts) if (a.simulated) simIds.add(a.id)
+    for (const s of this.suggestions) if (s.product?.simulated) simIds.add(s.product.id)
+    if (!simIds.size) return
+    this.alerts = this.alerts.filter((a) => !a.simulated)
+    for (const key of [...this.fired.keys()]) {
+      try {
+        const [, alertId] = JSON.parse(key) as [string, string]
+        if (simIds.has(alertId)) this.fired.delete(key)
+      } catch {
+        this.fired.delete(key) // pre-persistence legacy key shape
+      }
+    }
+    this.suggestions = this.suggestions.filter((s) => !(s.product?.simulated && s.state === 'pending'))
+    this.flush()
+    this.emit('weather', this.snapshot())
   }
 
   /** Human decision — accept / snooze / dismiss. ALL THREE log upstream. */
@@ -167,8 +282,9 @@ export class WeatherWatch extends EventEmitter {
     s.decidedBy = by
     s.decidedAt = new Date().toISOString()
     if (action === 'snoozed') {
-      this.fired.set(`${s.ruleId}|${s.product.id}`, Date.now() + SNOOZE_MS)
+      this.fired.set(firedKey(s.ruleId, s.product.id), Date.now() + SNOOZE_MS)
     }
+    this.flush()
     this.emit('weather', this.snapshot())
     return s
   }

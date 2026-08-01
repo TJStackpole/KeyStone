@@ -160,6 +160,8 @@ export interface TickerEvent {
   agency?: string
   borough?: string
   severity?: number
+  /** Simulated origin (dispatch feed, drill script) — row shows a SIM chip. */
+  sim?: boolean
 }
 
 export type EocLevel = 1 | 2 | 3 | 4

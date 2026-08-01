@@ -46,6 +46,9 @@ export interface TickerEvent {
   agency?: string
   borough?: string
   severity?: number
+  /** Event originates from simulation (dispatch feed, drill script) — the
+   *  ticker row must visibly label it per the no-silent-simulation rule. */
+  sim?: boolean
 }
 
 export interface PlanActivation {
@@ -152,14 +155,32 @@ const STARTER_RULES: TriggerRule[] = [
   },
 ]
 
+/**
+ * Coordination state is mutated by an auth-less HTTP surface and read back
+ * from a hand-editable JSON file, so every array is validated at the trust
+ * boundary: a malformed shape must degrade to a safe default, never crash
+ * the boot path or poison the weather engine (see sanitizeTriggerRules).
+ */
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value.filter((e) => e && typeof e === 'object') as T[]) : []
+}
+
 function load(): NycemFile {
   try {
     const parsed = JSON.parse(readFileSync(DATA_PATH, 'utf8')) as Partial<NycemFile>
+    const requests = safeArray<InteragencyRequest>(parsed.requests)
+    for (const r of requests) {
+      if (!Array.isArray(r.transitions)) r.transitions = []
+      if (!Array.isArray(r.updates)) r.updates = []
+    }
+    // Lenient on restore: keep whatever rules are still valid, fall back to
+    // the starters only when nothing survives.
+    const rules = sanitizeTriggerRules(parsed.rules)?.rules ?? []
     return {
-      eocHistory: parsed.eocHistory ?? [],
-      plans: parsed.plans ?? [],
-      requests: parsed.requests ?? [],
-      rules: parsed.rules?.length ? parsed.rules : STARTER_RULES,
+      eocHistory: safeArray<EocChange>(parsed.eocHistory),
+      plans: safeArray<PlanActivation>(parsed.plans),
+      requests,
+      rules: rules.length ? rules : STARTER_RULES,
     }
   } catch {
     return { eocHistory: [], plans: [], requests: [], rules: STARTER_RULES }
@@ -189,9 +210,20 @@ function flush(): void {
   flushTimer.unref?.()
 }
 
+// Signals skip 'exit' handlers (same gotcha incidentStore.ts documents), and
+// tsx watch SIGTERMs on every source save — without these, any EOC change /
+// request transition / rules edit made in the 4 s debounce window is
+// acknowledged to clients but lost on disk. Both modules' once-handlers run
+// before the re-raise terminates the process.
 process.on('exit', () => {
   if (flushTimer) flushNow()
 })
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(sig, () => {
+    if (flushTimer) flushNow()
+    process.kill(process.pid, sig)
+  })
+}
 
 // ------------------------------- EOC level ----------------------------------
 
@@ -340,14 +372,16 @@ export function appendRequestUpdate(id: string, by: string, text: string): Inter
 export function requestMetrics(fromIso?: string, toIso?: string) {
   const from = fromIso ? Date.parse(fromIso) : -Infinity
   const to = toIso ? Date.parse(toIso) : Infinity
-  const buckets = new Map<string, { ackMs: number[]; completeMs: number[]; count: number }>()
+  // pair/priority ride along in the bucket rather than being re-split out of
+  // the key — agency strings are operator input and may contain delimiters.
+  const buckets = new Map<string, { pair: string; priority: string; ackMs: number[]; completeMs: number[]; count: number }>()
   for (const r of state.requests) {
     const created = Date.parse(r.createdAt)
     if (created < from || created > to) continue
-    const key = `${r.requestingAgency}→${r.assignedAgency}|${r.priority}`
+    const key = `${r.requestingAgency} ${r.assignedAgency} ${r.priority}`
     let b = buckets.get(key)
     if (!b) {
-      b = { ackMs: [], completeMs: [], count: 0 }
+      b = { pair: `${r.requestingAgency}→${r.assignedAgency}`, priority: r.priority, ackMs: [], completeMs: [], count: 0 }
       buckets.set(key, b)
     }
     b.count++
@@ -361,22 +395,63 @@ export function requestMetrics(fromIso?: string, toIso?: string) {
     const s = [...xs].sort((a, b) => a - b)
     return s[Math.floor(s.length / 2)]
   }
-  return [...buckets.entries()].map(([key, b]) => {
-    const [pair, priority] = key.split('|')
-    return {
-      pair,
-      priority,
-      count: b.count,
-      medianAckMs: median(b.ackMs),
-      medianCompleteMs: median(b.completeMs),
-    }
-  })
+  return [...buckets.values()].map((b) => ({
+    pair: b.pair,
+    priority: b.priority,
+    count: b.count,
+    medianAckMs: median(b.ackMs),
+    medianCompleteMs: median(b.completeMs),
+  }))
 }
 
 // ------------------------------ Trigger rules --------------------------------
 
 export function triggerRules(): TriggerRule[] {
   return state.rules
+}
+
+/**
+ * Validate an untrusted rules payload (PUT body or nycem-state.json). A
+ * single malformed element would otherwise persist, throw inside every
+ * 5-minute weather poll (silently killing the trigger engine across
+ * restarts) and crash the rules editor render on every dashboard.
+ * Returns the sanitized rules plus how many elements had to be dropped —
+ * the endpoint rejects writes with any drops; load() keeps the survivors.
+ */
+export function sanitizeTriggerRules(input: unknown): { rules: TriggerRule[]; dropped: number } | null {
+  if (!Array.isArray(input)) return null
+  const rules: TriggerRule[] = []
+  let dropped = 0
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') {
+      dropped++
+      continue
+    }
+    const r = raw as Record<string, unknown>
+    const id = typeof r.id === 'string' && r.id.trim() ? r.id.trim() : null
+    const plan = typeof r.plan === 'string' && r.plan.trim() ? r.plan.trim() : null
+    const eventMatch = Array.isArray(r.eventMatch)
+      ? r.eventMatch.filter((s): s is string => typeof s === 'string').map((s) => s.trim()).filter(Boolean)
+      : null
+    const lvl = r.suggestedEocLevel
+    const level: EocLevel | null = lvl === 1 || lvl === 2 || lvl === 3 || lvl === 4 ? lvl : null
+    if (!id || !plan || !eventMatch || !level) {
+      dropped++
+      continue
+    }
+    rules.push({
+      id,
+      plan,
+      enabled: r.enabled === true,
+      eventMatch,
+      suggestedEocLevel: level,
+      suggestedActions: Array.isArray(r.suggestedActions)
+        ? r.suggestedActions.filter((s): s is string => typeof s === 'string')
+        : [],
+      validateSme: r.validateSme === true,
+    })
+  }
+  return { rules, dropped }
 }
 
 export function saveTriggerRules(rules: TriggerRule[]): void {

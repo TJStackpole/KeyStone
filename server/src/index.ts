@@ -23,6 +23,7 @@ import {
   REQUEST_THRESHOLDS_MS,
   requestMetrics,
   requests,
+  sanitizeTriggerRules,
   saveTriggerRules,
   setEocLevel,
   tickerFeed,
@@ -158,6 +159,11 @@ wss.on('connection', (socket) => {
       requests: requests(),
       requestThresholds: REQUEST_THRESHOLDS_MS,
       weather: weather.snapshot(),
+      // Rules ride the snapshot too — the client never GETs them, and the
+      // only other writer is the PUT broadcast, so a fresh dashboard would
+      // otherwise show an empty (dead) rules editor while the server is
+      // actively evaluating three enabled rules.
+      rules: triggerRules(),
     }),
   )
 })
@@ -630,25 +636,32 @@ const dispatchFeed = new DispatchFeed()
 dispatchFeed.on('update', (incidents: FeedIncident[]) => {
   broadcast({ type: 'dispatch.feed', incidents })
   // Ticker: new boxes and closed boxes from the simulated dispatch centers.
+  // The FIRST update after boot is the feed's seeded inventory, not news —
+  // announcing it re-tickers every existing box on every server restart.
   const ids = new Set(incidents.map((i) => i.id))
-  for (const i of incidents) {
-    if (!knownFeedIds.has(i.id)) {
-      ticker('new-incident', `${i.source} dispatch: ${i.type} — ${i.address}, ${i.borough}`, {
-        incidentId: i.id,
-        agency: i.source,
-        borough: i.borough,
-        severity: 1,
-      })
+  if (feedSeeded) {
+    for (const i of incidents) {
+      if (!knownFeedIds.has(i.id)) {
+        ticker('new-incident', `${i.source} dispatch: ${i.type} — ${i.address}, ${i.borough}`, {
+          incidentId: i.id,
+          agency: i.source,
+          borough: i.borough,
+          severity: 1,
+          sim: true,
+        })
+      }
+    }
+    for (const id of knownFeedIds) {
+      if (!ids.has(id)) ticker('incident-closed', `Box closed: ${id}`, { incidentId: id, sim: true })
     }
   }
-  for (const id of knownFeedIds) {
-    if (!ids.has(id)) ticker('incident-closed', `Box closed: ${id}`, { incidentId: id })
-  }
+  feedSeeded = true
   knownFeedIds.clear()
   for (const id of ids) knownFeedIds.add(id)
   broadcastPortfolio()
 })
 const knownFeedIds = new Set<string>()
+let feedSeeded = false
 // NOTE: dispatchFeed.start() is deferred until after the scenario engine is
 // constructed — the update listener walks portfolio(), which reads it.
 
@@ -818,9 +831,17 @@ app.post('/api/nycem/plans/:id/deactivate', (req, res) => {
 app.get('/api/nycem/rules', (_req, res) => res.json({ rules: triggerRules() }))
 
 app.put('/api/nycem/rules', (req, res) => {
-  const { rules } = req.body as { rules?: TriggerRule[] }
-  if (!Array.isArray(rules)) return res.status(400).json({ error: 'rules array required' })
-  saveTriggerRules(rules)
+  // Full shape validation: one malformed element would persist, silently
+  // kill trigger evaluation on every poll, and crash the rules editor on
+  // every dashboard — reject the whole write instead of dropping entries.
+  const sanitized = sanitizeTriggerRules((req.body as { rules?: unknown }).rules)
+  if (!sanitized) return res.status(400).json({ error: 'rules array required' })
+  if (sanitized.dropped > 0) {
+    return res.status(400).json({
+      error: `${sanitized.dropped} rule(s) malformed — each rule needs id, plan, eventMatch[] and suggestedEocLevel 1-4`,
+    })
+  }
+  saveTriggerRules(sanitized.rules)
   weather.reevaluate()
   broadcast({ type: 'rules', rules: triggerRules() })
   res.json({ rules: triggerRules() })
@@ -835,7 +856,7 @@ weather.on('suggestion', (s: TriggerSuggestion) => {
   ticker(
     'weather',
     `NWS ${s.product.event}${s.product.simulated ? ' (SIMULATED)' : ''} meets ${s.plan} trigger criteria — suggest EOC Level ${s.suggestedEocLevel}`,
-    { severity: 4 },
+    { severity: 4, sim: !!s.product.simulated },
   )
   broadcast({ type: 'weather', ...weather.snapshot() })
 })
@@ -879,21 +900,34 @@ function afterRequestChange(req2: InteragencyRequest, verb: string, by: string):
 
 app.get('/api/requests', (_req, res) => res.json({ requests: requests(), thresholds: REQUEST_THRESHOLDS_MS }))
 
+/** Trim an untrusted string field; null unless it's a real non-empty string. */
+function cleanStr(v: unknown, max = 120): string | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim().slice(0, max)
+  return s || null
+}
+
 app.post('/api/requests', (req, res) => {
   const b = req.body as Partial<InteragencyRequest>
-  if (!b.requestingAgency || !b.assignedAgency || !b.description?.trim() || !b.createdBy?.trim()) {
-    return res.status(400).json({ error: 'requestingAgency, assignedAgency, description, createdBy required' })
+  // Type-checked, not just truthiness: a non-string agency ({} passes `!b.x`)
+  // would persist to nycem-state.json and crash every tracker render.
+  const requestingAgency = cleanStr(b.requestingAgency, 40)
+  const assignedAgency = cleanStr(b.assignedAgency, 40)
+  const description = cleanStr(b.description, 300)
+  const createdBy = cleanStr(b.createdBy)
+  if (!requestingAgency || !assignedAgency || !description || !createdBy) {
+    return res.status(400).json({ error: 'requestingAgency, assignedAgency, description, createdBy required (strings)' })
   }
   const priority = (['routine', 'urgent', 'immediate'] as const).includes(b.priority as RequestPriority)
     ? (b.priority as RequestPriority)
     : 'routine'
   const created = openRequest({
-    incidentId: b.incidentId ?? null,
-    requestingAgency: b.requestingAgency,
-    assignedAgency: b.assignedAgency,
-    description: b.description.trim().slice(0, 300),
+    incidentId: cleanStr(b.incidentId),
+    requestingAgency,
+    assignedAgency,
+    description,
     priority,
-    createdBy: b.createdBy.trim(),
+    createdBy,
   })
   afterRequestChange(created, 'opened', created.createdBy)
   res.status(201).json(created)
@@ -960,7 +994,23 @@ app.get('/api/exercises/:id', (req, res) => {
 
 app.put('/api/exercises/:id', (req, res) => {
   const { aar } = req.body as { aar?: AarDraft }
-  if (!aar) return res.status(400).json({ error: 'aar required' })
+  // Structural check: a truthy non-AAR body ({"aar":42}) would persist to
+  // the session file and crash every future same-scenario review (the panel
+  // reads prior.metrics for run-over-run deltas).
+  if (
+    !aar ||
+    typeof aar !== 'object' ||
+    typeof aar.overview !== 'object' ||
+    !aar.overview ||
+    !Array.isArray(aar.keyEvents) ||
+    !Array.isArray(aar.objectives) ||
+    !Array.isArray(aar.strengths) ||
+    !Array.isArray(aar.improvements) ||
+    !Array.isArray(aar.improvementPlan) ||
+    !Array.isArray(aar.metrics)
+  ) {
+    return res.status(400).json({ error: 'aar must be a full AAR draft object' })
+  }
   if (!updateExercise(req.params.id, aar)) return res.status(404).json({ error: 'no such exercise' })
   res.json({ ok: true })
 })
@@ -1158,11 +1208,13 @@ const scenario = new ScenarioEngine({
       ticker('mayday', `MAYDAY — ${String((payload as { callsign?: string }).callsign ?? 'unknown unit')}`, {
         incidentId: getState().incident?.id,
         severity: 5,
+        sim: true, // only the drill engine routes through this dep
       })
     } else if (String(payload?.event ?? kind).toLowerCase().includes('mci')) {
       ticker('mci', `MCI declared — ${getState().incident?.address ?? ''}`, {
         incidentId: getState().incident?.id,
         severity: 4,
+        sim: true,
       })
     }
   },
@@ -1178,13 +1230,18 @@ const scenario = new ScenarioEngine({
   upsertShape,
   removeShape,
   removeUnit: (uid, opts) => registry.remove(uid, opts?.tombstone !== false),
-  setAlarm: (level) => {
+  setAlarm: (level, replay) => {
     const updated = updateIncident({ alarmLevel: level })
     broadcast({ type: 'incident', incident: updated.incident })
-    ticker('alarm', `Alarm level ${String(level).toUpperCase()} (drill) — ${updated.incident?.address ?? ''}`, {
-      incidentId: updated.incident?.id,
-      severity: ALARM_SEVERITY[level ?? '10-75'] ?? 2,
-    })
+    // Rewind replays restore the board's alarm level but must not re-announce
+    // it — each scrub would otherwise add another "Alarm level 2ND" ticker row.
+    if (!replay) {
+      ticker('alarm', `Alarm level ${String(level).toUpperCase()} (drill) — ${updated.incident?.address ?? ''}`, {
+        incidentId: updated.incident?.id,
+        severity: ALARM_SEVERITY[level ?? '10-75'] ?? 2,
+        sim: true,
+      })
+    }
     broadcastPortfolio()
   },
   // Prompt 11 hooks — the coordination layer rides the scenario:
@@ -1229,6 +1286,9 @@ app.post('/api/scenario/load', async (req, res) => {
   const { name, exercise } = req.body as { name?: string; exercise?: boolean }
   if (!name) return res.status(400).json({ error: 'name required' })
   try {
+    // A previous run's SIMULATED products would block this run's scripted
+    // trigger from ever re-firing (the fired map dedupes by product id).
+    weather.clearSimulated()
     await scenario.load(name)
     // Exercise mode (M8): live human interactions record alongside the
     // script; /api/exercises/finish builds the HSEEP AAR from the window.
@@ -1283,6 +1343,7 @@ app.post('/api/scenario/seek', (req, res) => {
 
 app.post('/api/scenario/stop', (_req, res) => {
   scenario.stop()
+  weather.clearSimulated() // the run's injected products end with it
   res.json(scenario.status())
 })
 

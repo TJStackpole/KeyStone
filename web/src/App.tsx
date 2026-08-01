@@ -23,7 +23,6 @@ import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
 import { ScenarioBar } from './components/ScenarioBar'
-import { NycemPanel } from './components/NycemPanel'
 import { MaydayAlert } from './components/MaydayAlert'
 import { AarPanel } from './components/AarPanel'
 import { StreetViewPanel } from './components/StreetViewPanel'
@@ -152,7 +151,6 @@ export default function App() {
       <GroundViewExit />
       <GroundHeightControl />
       <ScenarioBar />
-      <NycemPanel />
       <MaydayAlert />
       <AarPanel />
       <StreetViewPanel />

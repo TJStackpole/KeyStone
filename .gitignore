@@ -10,6 +10,7 @@ server/data/doctrine/
 server/data/tactics/
 # Runtime coordination state (NYCEM EOC/requests/ticker) + saved exercise AARs
 server/data/nycem-state.json
+server/data/weather-state.json
 server/data/exercises/
 .DS_Store
 *.log

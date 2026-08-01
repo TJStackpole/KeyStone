@@ -249,6 +249,12 @@ function EocChip() {
   const [open, setOpen] = useState(false)
   const [by, setBy] = useState(() => localStorage.getItem('ks-operator') ?? '')
   const wrapRef = useRef<HTMLDivElement>(null)
+  // Re-sync from the shared operator identity on every open — the Watch
+  // Command panel writes ks-operator after this chip mounted, and a stale
+  // mount-time read left the field empty (levels disabled) for the session.
+  useEffect(() => {
+    if (open) setBy((prev) => prev || (localStorage.getItem('ks-operator') ?? ''))
+  }, [open])
   useEffect(() => {
     if (!open) return
     const onDocClick = (e: MouseEvent) => {

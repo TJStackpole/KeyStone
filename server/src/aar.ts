@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -161,11 +161,23 @@ export function generateAar(input: {
   const improvements: AarFinding[] = []
   for (const r of requests) {
     const ack = r.transitions.find((t) => t.state === 'acknowledged')
-    const ackMs = ack ? Date.parse(ack.at) - Date.parse(r.createdAt) : t1 - Date.parse(r.createdAt)
+    // Terminal requests stop the clock at their terminal transition: a prompt
+    // decline is a documented, attributed decision, not a coordination
+    // failure. This matches the live board, where terminal requests never
+    // breach — the AAR must not flag what never flashed.
+    const terminal =
+      r.state === 'complete' || r.state === 'declined' ? r.transitions[r.transitions.length - 1] : null
+    const endMs = ack ? Date.parse(ack.at) : terminal ? Date.parse(terminal.at) : t1
+    const ackMs = endMs - Date.parse(r.createdAt)
     if (ackMs > REQUEST_THRESHOLDS_MS[r.priority]) {
+      const how = ack
+        ? `took ${fmtMs(ackMs)} to acknowledge`
+        : terminal
+          ? `was never acknowledged before being ${r.state === 'declined' ? 'declined' : 'completed'} (${fmtMs(ackMs)})`
+          : 'was never acknowledged'
       improvements.push({
         area: 'Interagency coordination',
-        finding: `${r.priority.toUpperCase()} request "${r.description}" (${r.requestingAgency}→${r.assignedAgency}) ${ack ? `took ${fmtMs(ackMs)} to acknowledge` : 'was never acknowledged'} — exceeds the ${fmtMs(REQUEST_THRESHOLDS_MS[r.priority])} threshold (threshold VALIDATE—SME).`,
+        finding: `${r.priority.toUpperCase()} request "${r.description}" (${r.requestingAgency}→${r.assignedAgency}) ${how} — exceeds the ${fmtMs(REQUEST_THRESHOLDS_MS[r.priority])} threshold (threshold VALIDATE—SME).`,
         sources: [r.id],
       })
     }
@@ -217,11 +229,21 @@ export function generateAar(input: {
   }
 
   // ---- objectives (generic HSEEP-style; facilitator edits) -----------------
+  // A dismissed or snoozed trigger IS a documented, attributed decision —
+  // only a still-pending suggestion counts against the objective. And the
+  // COP objective must report what actually happened, including "none":
+  // an HSEEP draft that fabricates "multiple incidents" at zero is false.
+  const concurrentIncidents = new Set(
+    input.ticker.filter((e) => e.kind === 'new-incident' && inWindow(e.ts)).map((e) => e.incidentId),
+  ).size
+  const firstDecided = suggestions.find((s) => s.state !== 'pending')
   const objectives: AarDraft['objectives'] = [
     {
       objective: 'Establish a common operating picture across all concurrent incidents',
-      observed: `Watch Command view tracked ${new Set(input.ticker.filter((e) => e.kind === 'new-incident' && inWindow(e.ts)).map((e) => e.incidentId)).size || 'multiple'} incidents concurrently.`,
-      met: 'met',
+      observed: concurrentIncidents
+        ? `Watch Command view tracked ${concurrentIncidents} incident${concurrentIncidents === 1 ? '' : 's'} concurrently.`
+        : 'No new incidents appeared during the exercise window.',
+      met: concurrentIncidents >= 2 ? 'met' : concurrentIncidents === 1 ? 'partial' : 'not observed',
     },
     {
       objective: 'Track interagency requests through their full lifecycle with attribution',
@@ -232,10 +254,12 @@ export function generateAar(input: {
       objective: 'Recognize weather triggers and make a documented activation decision',
       observed: firstAccepted
         ? `Trigger accepted; EOC moved per plan suggestion.`
-        : suggestions.length
-          ? 'Trigger fired but decision pending at exercise end.'
-          : 'No trigger fired during the window.',
-      met: firstAccepted ? 'met' : suggestions.length ? 'partial' : 'not observed',
+        : firstDecided
+          ? `Trigger ${firstDecided.state} by ${firstDecided.decidedBy ?? 'operator'} — documented decision; plan not activated.`
+          : suggestions.length
+            ? 'Trigger fired but decision pending at exercise end.'
+            : 'No trigger fired during the window.',
+      met: firstAccepted || firstDecided ? 'met' : suggestions.length ? 'partial' : 'not observed',
     },
   ]
 
@@ -275,21 +299,35 @@ export function generateAar(input: {
 
 export function saveExercise(session: ExerciseSession): void {
   mkdirSync(EXERCISE_DIR, { recursive: true })
-  writeFileSync(resolve(EXERCISE_DIR, `${session.id}.json`), JSON.stringify(session))
+  // Atomic write: a crash mid-write must not leave a truncated session file
+  // (the library skips corrupt entries, but a whole run is worth more).
+  const path = resolve(EXERCISE_DIR, `${session.id}.json`)
+  writeFileSync(`${path}.tmp`, JSON.stringify(session))
+  renameSync(`${path}.tmp`, path)
 }
 
 export function listExercises(): { id: string; scenario: string; startedAt: string; metrics: AarMetric[] }[] {
+  let files: string[]
   try {
-    return readdirSync(EXERCISE_DIR)
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => {
-        const s = JSON.parse(readFileSync(resolve(EXERCISE_DIR, f), 'utf8')) as ExerciseSession
-        return { id: s.id, scenario: s.scenario, startedAt: s.startedAt, metrics: s.aar.metrics }
-      })
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    files = readdirSync(EXERCISE_DIR).filter((f) => f.endsWith('.json'))
   } catch {
-    return []
+    return [] // library not created yet
   }
+  const out: { id: string; scenario: string; startedAt: string; metrics: AarMetric[] }[] = []
+  for (const f of files) {
+    // One corrupt or foreign file must hide only itself, never the library —
+    // run-over-run metric deltas are the point of keeping it.
+    try {
+      const s = JSON.parse(readFileSync(resolve(EXERCISE_DIR, f), 'utf8')) as ExerciseSession
+      if (typeof s?.id !== 'string' || typeof s?.startedAt !== 'string' || !Array.isArray(s?.aar?.metrics)) {
+        throw new Error('not an exercise session')
+      }
+      out.push({ id: s.id, scenario: s.scenario, startedAt: s.startedAt, metrics: s.aar.metrics })
+    } catch (err) {
+      console.error(`[aar] skipping unreadable exercise file ${f}:`, err)
+    }
+  }
+  return out.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
 }
 
 export function getExercise(id: string): ExerciseSession | null {

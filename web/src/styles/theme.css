@@ -2202,6 +2202,10 @@ html, body {
   display: flex; flex-direction: column; z-index: 32; border-radius: 10px; padding: 10px; gap: 10px;
   overflow-y: auto;
 }
+/* GeoChat is bottom-right pinned (z 44) and would cover the last ~190px of
+   the Watch Command right column — request form, rules editor. While the
+   citywide view is up, slide the chat left of the column instead. */
+body:has(.wc-right) .takchat-panel { right: 450px; }
 .wc-head { display: flex; align-items: center; gap: 10px; }
 .wc-count { font-family: var(--mono); font-size: 10px; color: var(--amber-bright); letter-spacing: 0.1em; }
 .wc-operator {
@@ -2231,6 +2235,12 @@ html, body {
 .wc-tick-ts { font-family: var(--mono); font-size: 9px; color: var(--text-faint); flex: none; }
 .wc-tick-kind { font-family: var(--mono); font-size: 8px; color: var(--cyan-dim); letter-spacing: 0.08em; flex: none; text-transform: uppercase; }
 .wc-tick-text { color: var(--text); }
+/* No-silent-simulation rule: dispatch-feed / drill-script rows carry a chip. */
+.wc-sim-chip {
+  flex: none; font-family: var(--mono); font-size: 7.5px; letter-spacing: 0.08em;
+  color: var(--amber-bright); border: 1px solid rgba(245,158,11,0.55); border-radius: 3px;
+  padding: 0 3px; line-height: 12px; align-self: center;
+}
 .wc-empty { font-family: var(--mono); font-size: 10px; color: var(--text-faint); padding: 8px 0; }
 .wc-obs { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
 .wc-endex {
@@ -2310,7 +2320,9 @@ html, body {
   color: var(--text-dim); font-family: var(--mono); font-size: 9.5px; padding: 4px 7px; outline: none;
 }
 
-.wc-banners { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 620px; max-width: 80vw; }
+/* Below the drill transport bar (top:64px + ~44px tall) — a suggestion
+   banner must never cover the pause/scrub controls mid-exercise. */
+.wc-banners { position: absolute; top: 116px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 620px; max-width: 80vw; }
 .wc-banner { display: flex; gap: 10px; align-items: center; border: 1px solid rgba(245,158,11,0.6); border-radius: 8px; padding: 10px 12px; box-shadow: var(--glow-amber); }
 .wc-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .wc-banner-text b { font-size: 12px; color: var(--amber-bright); }
@@ -2389,4 +2401,10 @@ html, body {
   .exr-veil { position: static; background: #fff; padding: 0; overflow: visible; }
   .exr-panel { width: 100%; max-width: none; border: none; color: #111; background: #fff; }
   .exr-panel, .exr-panel * { color: #111 !important; background: #fff !important; border-color: #999 !important; }
+  /* The drill AAR overlay (its own @media print block re-shows .aar-panel)
+     can be mounted UNDER the exercise review — the script's final aar event
+     opens it silently. When the exercise review is up, it owns the print;
+     without this the two panels superimpose in the exported PDF. */
+  body:has(.exr-veil) .aar-backdrop,
+  body:has(.exr-veil) .aar-backdrop * { visibility: hidden !important; display: none !important; }
 }

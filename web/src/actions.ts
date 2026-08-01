@@ -91,6 +91,9 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     setAppState({ viewMode: '3d' })
     void setTopDown(scene, false)
   }
+  // Standing up an incident is a deliberate move to the tactical board —
+  // the citywide chrome and its pick handlers must not linger on top.
+  leaveWatchCommandSilently()
   if (scene) flyToTactical(scene.viewer, hit.lat, hit.lon)
 
   // These run concurrently; each degrades independently per the CLAUDE.md rule.
@@ -684,6 +687,11 @@ export function reconcileProviderUpgrade(): void {
       scene.extrudeFootprints && !getAppState().isolateMode,
     )
   }
+  // Street labels baked against the keyless globe anchored at height 0 with
+  // a "good" sample — the upgraded tileset's streets sit ~-30 m, leaving
+  // those labels floating. Rebuild them against the new geometry.
+  getStreetLayer()?.clear()
+  void refreshStreetLabels(true)
   if (getAppState().isolateMode) applyIsolate(true)
 }
 
@@ -750,6 +758,10 @@ export function enterWatchCommand(): void {
   const scene = getScene()
   if (!scene) return
   if (getAppState().groundViewActive) exitGround()
+  // Isolate clips every building but the incident out of the scene — the
+  // citywide portfolio over a clipped-away city is unreadable. Unwind it
+  // like the other special view modes.
+  if (getAppState().isolateMode) toggleIsolateMode()
   if (getAppState().viewMode === 'topdown') {
     setAppState({ viewMode: '3d' })
     void setTopDown(scene, false)
@@ -767,12 +779,23 @@ export function enterWatchCommand(): void {
 }
 
 export function exitWatchCommand(): void {
-  setAppState({ watchCommand: false, portfolioHoverId: null })
-  getPortfolioLayer()?.setActive(false)
+  leaveWatchCommandSilently()
   // Breadcrumb behavior: return to the tactical board if one is up.
   const inc = getAppState().incident
   const scene = getScene()
   if (inc && scene) flyToTactical(scene.viewer, inc.lat, inc.lon)
+}
+
+/**
+ * Drop the citywide chrome WITHOUT the breadcrumb flight — for tactical
+ * actions (search-bar stand-up, feed pick, drill load) that fly the camera
+ * themselves. Without this, those paths left the Watch Command panels,
+ * markers, and pick handlers live on top of the tactical board.
+ */
+function leaveWatchCommandSilently(): void {
+  if (!getAppState().watchCommand) return
+  setAppState({ watchCommand: false, portfolioHoverId: null })
+  getPortfolioLayer()?.setActive(false)
 }
 
 /**
@@ -792,8 +815,7 @@ export function focusPortfolioIncident(id: string): void {
   if (pi.source === 'feed') {
     const feed = getAppState().dispatchFeed.find((f) => f.id === id)
     if (feed) {
-      setAppState({ watchCommand: false, portfolioHoverId: null })
-      getPortfolioLayer()?.setActive(false)
+      leaveWatchCommandSilently()
       void focusFeedIncident(feed)
     }
     return
@@ -826,19 +848,24 @@ export async function changeEocLevel(level: 1 | 2 | 3 | 4, changedBy: string): P
   }
 }
 
+/** Returns whether the decision was recorded — ACCEPT must not activate the
+ *  plan when the logged decision itself failed (audit gap), or when another
+ *  station already decided it (404 → duplicate activation). */
 export async function decideSuggestion(
   id: string,
   action: 'accepted' | 'snoozed' | 'dismissed',
   by: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    await fetch(`/api/nycem/suggestions/${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/nycem/suggestions/${encodeURIComponent(id)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action, by }),
     })
+    return res.ok
   } catch (err) {
     console.error('[nycem] suggestion decision failed:', err)
+    return false
   }
 }
 
@@ -1195,7 +1222,11 @@ export function adoptIncident(incident: Incident): void {
     setAppState({ viewMode: '3d' })
     void setTopDown(scene, false)
   }
-  if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
+  // Adoption is server-initiated (another station or a drill script stood
+  // this up). An operator monitoring the citywide view keeps that view —
+  // the incident arrives as the focused portfolio marker, not a camera yank
+  // underneath the still-open Watch Command panels.
+  if (scene && !getAppState().watchCommand) flyToTactical(scene.viewer, incident.lat, incident.lon)
   void loadFootprints(incident)
   void loadSiteIntel(incident)
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
@@ -1205,7 +1236,7 @@ export function adoptIncident(incident: Incident): void {
 // Scenario playback controls (Prompt 8A)
 // ---------------------------------------------------------------------------
 
-async function scenarioPost(path: string, body?: Record<string, unknown>): Promise<void> {
+async function scenarioPost(path: string, body?: Record<string, unknown>): Promise<boolean> {
   try {
     const res = await fetch(`/api/scenario/${path}`, {
       method: 'POST',
@@ -1213,26 +1244,33 @@ async function scenarioPost(path: string, body?: Record<string, unknown>): Promi
       body: JSON.stringify(body ?? {}),
     })
     if (!res.ok) throw new Error(`scenario ${path} ${res.status}`)
+    return true
   } catch (err) {
     console.error('[scenario] control failed:', err)
+    return false
   }
 }
 
 export async function loadScenario(name: string, opts: { exercise?: boolean } = {}): Promise<void> {
   // Merged command view is the right default for multi-channel drill traffic.
-  setAppState({ aarOpen: false, alert: null, nycemView: false, commsAll: true, commsOpen: true })
-  await scenarioPost('load', { name, exercise: !!opts.exercise })
+  setAppState({ aarOpen: false, alert: null, commsAll: true, commsOpen: true })
+  // A plain drill is a tactical activity: drop the citywide chrome BEFORE the
+  // load so the drill's incident broadcast flies the camera to the board.
+  if (!opts.exercise) leaveWatchCommandSilently()
+  // A failed load (bad name, server down) must not play whatever stale
+  // scenario is loaded or open the exercise chrome over nothing.
+  if (!(await scenarioPost('load', { name, exercise: !!opts.exercise }))) return
   await scenarioPost('play')
   // Exercises are a Watch Command activity — open the portfolio view.
   if (opts.exercise) enterWatchCommand()
 }
 
-export const playScenario = (): Promise<void> => scenarioPost('play')
-export const pauseScenario = (): Promise<void> => scenarioPost('pause')
-export const setScenarioSpeed = (x: number): Promise<void> => scenarioPost('speed', { x })
-export const jumpScenarioChapter = (id: string): Promise<void> => scenarioPost('chapter', { id })
+export const playScenario = (): Promise<boolean> => scenarioPost('play')
+export const pauseScenario = (): Promise<boolean> => scenarioPost('pause')
+export const setScenarioSpeed = (x: number): Promise<boolean> => scenarioPost('speed', { x })
+export const jumpScenarioChapter = (id: string): Promise<boolean> => scenarioPost('chapter', { id })
 /** Progress-bar scrub: seek to an arbitrary scenario second (fwd or back). */
-export const seekScenario = (t: number): Promise<void> => scenarioPost('seek', { t })
+export const seekScenario = (t: number): Promise<boolean> => scenarioPost('seek', { t })
 
 export async function stopScenario(): Promise<void> {
   await scenarioPost('stop')
@@ -1278,7 +1316,6 @@ export function clearLocalIncident(): void {
     scenario: null,
     alert: null,
     aarOpen: false,
-    nycemView: false,
     streetViewOpen: false,
     commsChannel: 'fdny',
     commsAll: false,
@@ -1622,7 +1659,10 @@ export async function refreshStreetLabels(force = false): Promise<void> {
   if (!center || center.heightM > ROAD_MAX_CAMERA_M) return
   const { lat, lon } = center
   const radiusM = Math.min(1000, Math.max(400, center.heightM * 0.8))
-  if (!force && !movedEnough(lastStreetFetch, lat, lon, radiusM)) return
+  // Labels painted mid-fly-in fall back to height 0 (destination tiles not
+  // rendered yet) — keep refreshing past the movement gate until set() can
+  // sample real street heights, or they sit ~30 m above google-mode roads.
+  if (!force && !layer.needsHeightRetry() && !movedEnough(lastStreetFetch, lat, lon, radiusM)) return
   const seq = ++streetSeq
   streetAbort?.abort()
   streetAbort = new AbortController()

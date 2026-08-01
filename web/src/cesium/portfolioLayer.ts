@@ -57,7 +57,9 @@ export class PortfolioLayer {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: `${pi.primaryAgency} · ${pi.type}`,
+          // No silent simulation: feed boxes and drill secondaries carry the
+          // SIM tag right on the marker, not only in the hover card.
+          text: `${pi.primaryAgency} · ${pi.type}${pi.source !== 'board' ? ' · SIM' : ''}`,
           font: `600 10px 'JetBrains Mono', monospace`,
           fillColor: Cesium.Color.fromCssColorString('#dbe4f0'),
           showBackground: true,

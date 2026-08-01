@@ -91,8 +91,22 @@ function HoverCard() {
 
 function SuggestionBanners({ operator }: { operator: string }) {
   const { triggerSuggestions } = useAppState()
+  // In-flight guard: the banner only disappears after the weather broadcast
+  // round-trip, so an un-guarded double-click (or two stations racing) would
+  // activate the plan twice; and the plan must only activate when the logged
+  // decision itself succeeded — an unrecorded activation is an audit gap.
+  const [busyId, setBusyId] = useState<string | null>(null)
   const pending = triggerSuggestions.filter((s) => s.state === 'pending')
   if (!pending.length) return null
+  const decide = (s: (typeof pending)[number], action: 'accepted' | 'snoozed' | 'dismissed') => {
+    if (busyId) return
+    setBusyId(s.id)
+    void (async () => {
+      const recorded = await decideSuggestion(s.id, action, operator || 'unnamed operator')
+      if (recorded && action === 'accepted') await activatePlanAction(s.plan, operator || 'unnamed operator')
+      setBusyId(null)
+    })()
+  }
   return (
     <div className="wc-banners">
       {pending.map((s) => (
@@ -111,18 +125,16 @@ function SuggestionBanners({ operator }: { operator: string }) {
           <div className="wc-banner-btns">
             <button
               className="wc-accept"
-              onClick={() => {
-                void decideSuggestion(s.id, 'accepted', operator || 'unnamed operator')
-                void activatePlanAction(s.plan, operator || 'unnamed operator')
-              }}
+              disabled={busyId !== null}
+              onClick={() => decide(s, 'accepted')}
               title="Accept: logs the decision AND activates the plan (timeline band). Suggestions only — nothing auto-activates."
             >
               ACCEPT
             </button>
-            <button onClick={() => void decideSuggestion(s.id, 'snoozed', operator || 'unnamed operator')}>
+            <button disabled={busyId !== null} onClick={() => decide(s, 'snoozed')}>
               SNOOZE
             </button>
-            <button onClick={() => void decideSuggestion(s.id, 'dismissed', operator || 'unnamed operator')}>
+            <button disabled={busyId !== null} onClick={() => decide(s, 'dismissed')}>
               DISMISS
             </button>
           </div>
@@ -178,6 +190,7 @@ function Ticker() {
           <div key={e.id} className={`wc-tick sev${Math.min(5, e.severity ?? 1)}`}>
             <span className="wc-tick-ts">{e.ts.slice(11, 19)}</span>
             <span className="wc-tick-kind">{e.kind}</span>
+            {e.sim && <span className="wc-sim-chip" title="Simulated source (dispatch feed / drill script)">SIM</span>}
             <span className="wc-tick-text">{e.text}</span>
           </div>
         ))}
@@ -214,6 +227,9 @@ function StatusBoard() {
           <button className={`wc-inc-row${pi.focused ? ' focused' : ''}`} onClick={() => setOpen(open === pi.id ? null : pi.id)}>
             <span className={`wc-sev s${Math.min(5, pi.severity)}`} />
             <span className="wc-inc-addr">{pi.address}</span>
+            {pi.source !== 'board' && (
+              <span className="wc-sim-chip" title="Simulated incident (dispatch feed / drill script)">SIM</span>
+            )}
             <span className="wc-inc-meta">
               {pi.primaryAgency} · {pi.openRequests ? `${pi.openRequests} REQ · ` : ''}
               {fmtAge(pi.startedAt)}
@@ -280,7 +296,9 @@ function RequestBoard({ operator }: { operator: string }) {
     a.href = URL.createObjectURL(blob)
     a.download = 'keystone-request-metrics.csv'
     a.click()
-    URL.revokeObjectURL(a.href)
+    // Revoking synchronously races the download start — give the browser
+    // time to open the blob before the URL dies.
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
   }
 
   const card = (r: InteragencyRequest) => {
@@ -420,15 +438,22 @@ function RequestBoard({ operator }: { operator: string }) {
           onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
         <button
-          disabled={!form.description.trim() || !operator}
-          title={operator ? 'Open the request (logs with your name)' : 'Enter your name above first'}
+          disabled={!form.description.trim() || !operator.trim()}
+          title={operator.trim() ? 'Open the request (logs with your name)' : 'Enter your name above first'}
           onClick={() => {
+            // Clear optimistically but restore on failure — wiping the
+            // description before the POST resolves loses the operator's text
+            // exactly when they need to retry.
+            const description = form.description
+            setForm({ ...form, description: '' })
             void openInteragencyRequest({
               incidentId: incident?.id ?? null,
               ...form,
-              createdBy: operator,
+              description,
+              createdBy: operator.trim(),
+            }).then((ok) => {
+              if (!ok) setForm((f) => ({ ...f, description }))
             })
-            setForm({ ...form, description: '' })
           }}
         >
           OPEN
@@ -441,6 +466,10 @@ function RequestBoard({ operator }: { operator: string }) {
 function RulesEditor() {
   const { triggerRules } = useAppState()
   const [draft, setDraft] = useState<TriggerRule[] | null>(null)
+  // Raw text per rule id while editing: round-tripping every keystroke
+  // through split/trim/filter ate trailing commas and spaces, making it
+  // impossible to type a new comma-separated event name.
+  const [matchText, setMatchText] = useState<Record<string, string>>({})
   const rules = draft ?? triggerRules
   const edit = (i: number, patch: Partial<TriggerRule>) => {
     const next = rules.map((r, j) => (j === i ? { ...r, ...patch } : r))
@@ -470,9 +499,12 @@ function RulesEditor() {
           </label>
           <input
             className="wc-rule-match"
-            value={r.eventMatch.join(', ')}
+            value={matchText[r.id] ?? r.eventMatch.join(', ')}
             title="NWS product event names that fire this rule (comma-separated)"
-            onChange={(e) => edit(i, { eventMatch: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+            onChange={(e) => {
+              setMatchText((m) => ({ ...m, [r.id]: e.target.value }))
+              edit(i, { eventMatch: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })
+            }}
           />
         </div>
       ))}
@@ -480,7 +512,12 @@ function RulesEditor() {
         <button
           className="wc-open-btn"
           onClick={() => {
-            void saveRules(draft).then((ok) => ok && setDraft(null))
+            void saveRules(draft).then((ok) => {
+              if (ok) {
+                setDraft(null)
+                setMatchText({}) // saved rules re-render from the parsed form
+              }
+            })
           }}
         >
           SAVE RULES
@@ -534,6 +571,16 @@ export function WatchCommandPanel() {
   useEffect(() => {
     refreshWatchLayers()
   }, [watchCommand, portfolio, weatherAlerts])
+
+  // The identity may have been written after mount (EOC chip, another view's
+  // input) — the mount-time localStorage read would miss it for the session.
+  useEffect(() => {
+    if (watchCommand && !operator) {
+      const stored = localStorage.getItem('ks-operator')
+      if (stored) setOperator(stored)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCommand])
 
   if (!watchCommand) return null
 

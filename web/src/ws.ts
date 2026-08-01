@@ -43,6 +43,7 @@ interface SnapshotMsg {
   requests?: InteragencyRequest[]
   requestThresholds?: Record<RequestPriority, number>
   weather?: { alerts: NwsAlert[]; obs: WeatherObsNycem | null; suggestions: TriggerSuggestion[] }
+  rules?: TriggerRule[]
 }
 interface DispatchFeedMsg {
   type: 'dispatch.feed'
@@ -255,6 +256,9 @@ function handle(msg: ServerMsg): void {
         planActivations: msg.plans ?? s.planActivations,
         interagencyRequests: msg.requests ?? s.interagencyRequests,
         requestThresholds: msg.requestThresholds ?? s.requestThresholds,
+        // The rules editor is snapshot-fed: nothing else delivers rules to a
+        // fresh client (the 'rules' broadcast only fires on another PUT).
+        triggerRules: msg.rules ?? s.triggerRules,
         ...(msg.weather
           ? {
               weatherAlerts: msg.weather.alerts,
@@ -371,7 +375,13 @@ function handle(msg: ServerMsg): void {
       setAppState({ portfolio: msg.incidents })
       break
     case 'ticker':
-      setAppState((s) => ({ tickerFeed: [...s.tickerFeed, msg.event].slice(-300) }))
+      // Dedupe by id: a reconnect snapshot plus an in-flight broadcast can
+      // deliver the same event twice (same guard the transcript stream has).
+      setAppState((s) =>
+        s.tickerFeed.some((e) => e.id === msg.event.id)
+          ? s
+          : { tickerFeed: [...s.tickerFeed, msg.event].slice(-300) },
+      )
       break
     case 'eoc':
       setAppState({ eoc: { level: msg.level, history: msg.history } })

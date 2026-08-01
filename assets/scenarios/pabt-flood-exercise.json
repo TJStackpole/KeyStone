@@ -16,6 +16,11 @@
    "title": "Initial Alarm"
   },
   {
+   "id": "flood",
+   "t": 100,
+   "title": "Queens flash flood spawns"
+  },
+  {
    "id": "ch2",
    "t": 360,
    "title": "Escalation + MCI"
@@ -34,11 +39,6 @@
    "id": "ch5",
    "t": 1680,
    "title": "Wind-down"
-  },
-  {
-   "id": "flood",
-   "t": 100,
-   "title": "Queens flash flood spawns"
   }
  ],
  "events": [

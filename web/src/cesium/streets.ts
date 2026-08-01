@@ -253,6 +253,21 @@ export class StreetLabelLayer {
     }
   }
 
+  /**
+   * True while any painted label used the height-0 fallback (built during a
+   * fly-in, before the destination's tiles rendered — sampleHeight only sees
+   * geometry in the current view). The refresh gate must keep calling set()
+   * until real street heights land, or google-mode labels stay ~30 m above
+   * the road for as long as the operator works the scene.
+   */
+  needsHeightRetry(): boolean {
+    if (!this.viewer.scene.sampleHeightSupported) return false // keyless: 0 IS ground
+    for (const entry of this.byName.values()) {
+      if (!entry.heightOk) return true
+    }
+    return false
+  }
+
   setVisible(show: boolean): void {
     this.visible = show
     for (const entry of this.byName.values()) entry.prim.show = show
