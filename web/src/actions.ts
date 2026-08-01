@@ -829,9 +829,10 @@ export function focusPortfolioIncident(id: string): void {
 
 /** Keep the citywide markers/weather in sync while Watch Command is up. */
 export function refreshWatchLayers(): void {
-  if (!getAppState().watchCommand) return
-  getPortfolioLayer()?.setIncidents(getAppState().portfolio)
-  getPortfolioLayer()?.setWeather(getAppState().weatherAlerts)
+  const s = getAppState()
+  if (!s.watchCommand) return
+  getPortfolioLayer()?.setIncidents(s.portfolio, s.portfolioHoverId)
+  getPortfolioLayer()?.setWeather(s.weatherAlerts)
 }
 
 export async function changeEocLevel(level: 1 | 2 | 3 | 4, changedBy: string): Promise<boolean> {
@@ -1252,14 +1253,16 @@ async function scenarioPost(path: string, body?: Record<string, unknown>): Promi
 }
 
 export async function loadScenario(name: string, opts: { exercise?: boolean } = {}): Promise<void> {
-  // Merged command view is the right default for multi-channel drill traffic.
-  setAppState({ aarOpen: false, alert: null, commsAll: true, commsOpen: true })
   // A plain drill is a tactical activity: drop the citywide chrome BEFORE the
   // load so the drill's incident broadcast flies the camera to the board.
+  // (Deliberate operator action — restoring it on failure would flap the UI.)
   if (!opts.exercise) leaveWatchCommandSilently()
   // A failed load (bad name, server down) must not play whatever stale
-  // scenario is loaded or open the exercise chrome over nothing.
+  // scenario is loaded, open the exercise chrome over nothing, or apply the
+  // comms-view mutations below — nothing about the request needs them first.
   if (!(await scenarioPost('load', { name, exercise: !!opts.exercise }))) return
+  // Merged command view is the right default for multi-channel drill traffic.
+  setAppState({ aarOpen: false, alert: null, commsAll: true, commsOpen: true })
   await scenarioPost('play')
   // Exercises are a Watch Command activity — open the portfolio view.
   if (opts.exercise) enterWatchCommand()
@@ -1648,6 +1651,8 @@ export function ensureTunnels(): void {
 // in view is named when zoomed to a readable range.
 let streetSeq = 0
 let lastStreetFetch: { lat: number; lon: number; radiusM: number } | null = null
+/** Last successful fetch — height-only retries rebuild from this, fetch-free. */
+let lastStreetLabels: Awaited<ReturnType<typeof fetchStreetLabels>> | null = null
 
 let streetAbort: AbortController | null = null
 
@@ -1659,10 +1664,15 @@ export async function refreshStreetLabels(force = false): Promise<void> {
   if (!center || center.heightM > ROAD_MAX_CAMERA_M) return
   const { lat, lon } = center
   const radiusM = Math.min(1000, Math.max(400, center.heightM * 0.8))
-  // Labels painted mid-fly-in fall back to height 0 (destination tiles not
-  // rendered yet) — keep refreshing past the movement gate until set() can
-  // sample real street heights, or they sit ~30 m above google-mode roads.
-  if (!force && !layer.needsHeightRetry() && !movedEnough(lastStreetFetch, lat, lon, radiusM)) return
+  if (!force && !movedEnough(lastStreetFetch, lat, lon, radiusM)) {
+    // Labels painted mid-fly-in fall back to height 0 (destination tiles not
+    // rendered yet) — retry from the CACHED fetch until set() can sample real
+    // heights or each label exhausts its attempt cap. No Socrata traffic:
+    // an off-frustum label that never samples must not refetch on every
+    // moveEnd for the rest of the session.
+    if (layer.needsHeightRetry() && lastStreetLabels) layer.set(lastStreetLabels)
+    return
+  }
   const seq = ++streetSeq
   streetAbort?.abort()
   streetAbort = new AbortController()
@@ -1676,6 +1686,7 @@ export async function refreshStreetLabels(force = false): Promise<void> {
       lastStreetFetch = prevGate
       return
     }
+    lastStreetLabels = streets
     layer.set(streets)
   } catch (err) {
     if (seq === streetSeq) lastStreetFetch = prevGate

@@ -379,7 +379,7 @@ function handle(msg: ServerMsg): void {
       // deliver the same event twice (same guard the transcript stream has).
       setAppState((s) =>
         s.tickerFeed.some((e) => e.id === msg.event.id)
-          ? s
+          ? {} // empty patch engages the store's no-op short-circuit
           : { tickerFeed: [...s.tickerFeed, msg.event].slice(-300) },
       )
       break

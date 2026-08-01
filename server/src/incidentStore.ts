@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IcsShape, Incident, IncidentFile, TimelineEvent } from './types.js'
@@ -37,8 +37,10 @@ function flushNow(): void {
   try {
     mkdirSync(dirname(DATA_PATH), { recursive: true })
     // Compact JSON: pretty-printing a multi-MB timeline roughly doubles the
-    // stringify+write cost of every flush.
-    writeFileSync(DATA_PATH, JSON.stringify(state))
+    // stringify+write cost of every flush. Atomic (tmp+rename) so a hard
+    // kill mid-write can't leave a truncated file that load() discards.
+    writeFileSync(`${DATA_PATH}.tmp`, JSON.stringify(state))
+    renameSync(`${DATA_PATH}.tmp`, DATA_PATH)
   } catch (err) {
     // Persistence failure must never take the incident down — state stays in memory.
     console.error('[incidentStore] failed to write incident.json:', err)

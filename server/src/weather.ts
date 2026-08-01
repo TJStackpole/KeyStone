@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { triggerRules, type EocLevel, type TriggerRule } from './nycem.js'
@@ -63,7 +63,10 @@ const SNOOZE_MS = 30 * 60_000
 // state: without this, a server restart during an active product re-fires
 // every suggestion the operator already decided (duplicate ticker/timeline
 // entries, and SUG- ids restart at 1, cross-linking old decisions).
-const STATE_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../data/weather-state.json')
+// Env override is a TEST seam (points state at a scratch dir) — never
+// required at runtime, per the keyless/zero-config rule.
+const STATE_PATH =
+  process.env.WEATHER_STATE_PATH ?? resolve(dirname(fileURLToPath(import.meta.url)), '../data/weather-state.json')
 
 /** ruleId+alertId pairs already suggested; JSON-composed so ids containing
  *  delimiters can't collide or mis-parse. */
@@ -76,6 +79,11 @@ export class WeatherWatch extends EventEmitter {
   private suggestionSeq = 1
   /** A product fires a rule ONCE (snooze re-arms it after SNOOZE_MS). */
   private fired = new Map<string, number>()
+  /** fired keys that belong to SIMULATED products — exercise-scoped, so they
+   *  are NEVER persisted (a restart with a pending sim suggestion would
+   *  otherwise orphan the key: no alert and no suggestion left to identify
+   *  it, silently blocking the scripted trigger's next run). */
+  private simFired = new Set<string>()
   private flushTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
@@ -107,7 +115,11 @@ export class WeatherWatch extends EventEmitter {
         fired?: [string, number | null][]
         suggestionSeq?: number
       }
+      // Identify sim product ids from the RAW suggestion list (before the
+      // pending filter) so legacy files' orphaned sim fired keys get purged.
+      const simIds = new Set<string>()
       if (Array.isArray(parsed.suggestions)) {
+        for (const s of parsed.suggestions) if (s?.product?.simulated) simIds.add(s.product.id)
         // Pending suggestions for SIMULATED products belong to a scenario
         // that died with the old process — decided ones stay as history.
         this.suggestions = parsed.suggestions.filter(
@@ -116,7 +128,14 @@ export class WeatherWatch extends EventEmitter {
       }
       if (Array.isArray(parsed.fired)) {
         for (const [k, v] of parsed.fired) {
-          if (typeof k === 'string') this.fired.set(k, v === null ? Infinity : v) // Infinity JSON-encodes as null
+          if (typeof k !== 'string') continue
+          try {
+            const [, alertId] = JSON.parse(k) as [string, string]
+            if (simIds.has(alertId)) continue // sim keys are exercise-scoped
+          } catch {
+            continue // pre-persistence legacy key shape — drop
+          }
+          this.fired.set(k, v === null ? Infinity : v) // Infinity JSON-encodes as null
         }
       }
       if (typeof parsed.suggestionSeq === 'number') this.suggestionSeq = parsed.suggestionSeq
@@ -132,10 +151,16 @@ export class WeatherWatch extends EventEmitter {
     }
     try {
       mkdirSync(dirname(STATE_PATH), { recursive: true })
-      writeFileSync(
-        STATE_PATH,
-        JSON.stringify({ suggestions: this.suggestions, fired: [...this.fired.entries()], suggestionSeq: this.suggestionSeq }),
-      )
+      // Atomic write (tmp+rename): a hard kill mid-write must not leave a
+      // truncated file that silently resets seq/fired on the next boot.
+      // Sim-product fired keys stay memory-only (exercise-scoped).
+      const body = JSON.stringify({
+        suggestions: this.suggestions,
+        fired: [...this.fired.entries()].filter(([k]) => !this.simFired.has(k)),
+        suggestionSeq: this.suggestionSeq,
+      })
+      writeFileSync(`${STATE_PATH}.tmp`, body)
+      renameSync(`${STATE_PATH}.tmp`, STATE_PATH)
     } catch (err) {
       console.error('[weather] failed to write weather-state.json:', err)
     }
@@ -226,6 +251,7 @@ export class WeatherWatch extends EventEmitter {
         const armedAt = this.fired.get(key)
         if (armedAt !== undefined && Date.now() < armedAt) continue
         this.fired.set(key, Infinity) // fires once; snooze() re-arms with a deadline
+        if (alert.simulated) this.simFired.add(key)
         const suggestion: TriggerSuggestion = {
           id: `SUG-${this.suggestionSeq++}`,
           ruleId: rule.id,
@@ -259,8 +285,12 @@ export class WeatherWatch extends EventEmitter {
     const simIds = new Set<string>()
     for (const a of this.alerts) if (a.simulated) simIds.add(a.id)
     for (const s of this.suggestions) if (s.product?.simulated) simIds.add(s.product.id)
-    if (!simIds.size) return
+    if (!simIds.size && !this.simFired.size) return
     this.alerts = this.alerts.filter((a) => !a.simulated)
+    // simFired is authoritative for this process; the id scan additionally
+    // catches keys restored from legacy files (belt and suspenders).
+    for (const key of this.simFired) this.fired.delete(key)
+    this.simFired.clear()
     for (const key of [...this.fired.keys()]) {
       try {
         const [, alertId] = JSON.parse(key) as [string, string]
@@ -282,7 +312,9 @@ export class WeatherWatch extends EventEmitter {
     s.decidedBy = by
     s.decidedAt = new Date().toISOString()
     if (action === 'snoozed') {
-      this.fired.set(firedKey(s.ruleId, s.product.id), Date.now() + SNOOZE_MS)
+      const key = firedKey(s.ruleId, s.product.id)
+      this.fired.set(key, Date.now() + SNOOZE_MS)
+      if (s.product.simulated) this.simFired.add(key)
     }
     this.flush()
     this.emit('weather', this.snapshot())

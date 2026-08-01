@@ -14,17 +14,43 @@ export function ExerciseReviewPanel() {
   const [rawDraft, setRawDraft] = useState<AarDraft | null>(null)
   const [library, setLibrary] = useState<{ id: string; scenario: string; startedAt: string; metrics: AarMetric[] }[]>([])
   const [saved, setSaved] = useState<'clean' | 'saved' | 'failed'>('clean')
+  const [dirty, setDirty] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
   const draft = rawDraft
   // Any further edit invalidates "SAVED ✓" — a lit save indicator over
   // unsaved edits silently loses them when the panel closes.
   const setDraft = (next: AarDraft | null) => {
     setRawDraft(next)
     setSaved('clean')
+    setDirty(true)
   }
+
+  // Closing discards the local draft — unsaved edits get a two-step confirm
+  // (matching End Incident's pattern) instead of silent loss.
+  const requestClose = () => {
+    if (dirty && !confirmClose) {
+      setConfirmClose(true)
+      return
+    }
+    setAppState({ exerciseReview: null })
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      requestClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   useEffect(() => {
     setRawDraft(exerciseReview ? structuredClone(exerciseReview.aar) : null)
     setSaved('clean')
+    setDirty(false)
+    setConfirmClose(false)
     if (exerciseReview) {
       fetch('/api/exercises')
         .then((r) => r.json())
@@ -44,6 +70,10 @@ export function ExerciseReviewPanel() {
         body: JSON.stringify({ aar: draft }),
       })
       setSaved(res.ok ? 'saved' : 'failed')
+      if (res.ok) {
+        setDirty(false)
+        setConfirmClose(false)
+      }
     } catch {
       setSaved('failed') // server down mid-review — keep the draft, show it
     }
@@ -70,8 +100,12 @@ export function ExerciseReviewPanel() {
             <button onClick={() => window.print()} title="Export via the system print dialog (PDF). Never auto-distributed.">
               EXPORT PDF
             </button>
-            <button className="panel-close" onClick={() => setAppState({ exerciseReview: null })}>
-              ✕
+            <button
+              className={`panel-close${confirmClose ? ' confirm' : ''}`}
+              onClick={requestClose}
+              title={confirmClose ? 'Unsaved edits will be lost — click again to discard' : 'Close the review'}
+            >
+              {confirmClose ? 'DISCARD EDITS?' : '✕'}
             </button>
           </div>
         </div>

@@ -71,7 +71,10 @@ export interface ExerciseSession {
   }
 }
 
-const EXERCISE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../data/exercises')
+// Env override is a TEST seam (points the library at a scratch dir) — never
+// required at runtime, per the keyless/zero-config rule.
+const EXERCISE_DIR =
+  process.env.AAR_EXERCISE_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../data/exercises')
 
 const fmtMs = (ms: number) => {
   const m = Math.floor(ms / 60_000)

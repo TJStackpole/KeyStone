@@ -23,6 +23,7 @@ import {
   REQUEST_THRESHOLDS_MS,
   requestMetrics,
   requests,
+  requestsWire,
   sanitizeTriggerRules,
   saveTriggerRules,
   setEocLevel,
@@ -156,7 +157,9 @@ wss.on('connection', (socket) => {
       ticker: tickerFeed(),
       eoc: { level: eocLevel(), history: eocHistory() },
       plans: plans(),
-      requests: requests(),
+      // Wire slice: active + recent terminal — the full accountability set
+      // stays server-side for metrics/AAR (it accretes by design).
+      requests: requestsWire(),
       requestThresholds: REQUEST_THRESHOLDS_MS,
       weather: weather.snapshot(),
       // Rules ride the snapshot too — the client never GETs them, and the
@@ -894,7 +897,7 @@ function afterRequestChange(req2: InteragencyRequest, verb: string, by: string):
     `Request ${verb.toUpperCase()}: ${req2.description} (${req2.requestingAgency}→${req2.assignedAgency}, ${req2.priority})`,
     { incidentId: req2.incidentId ?? undefined, agency: req2.assignedAgency, severity: req2.priority === 'immediate' ? 4 : req2.priority === 'urgent' ? 3 : 1 },
   )
-  broadcast({ type: 'requests', requests: requests() })
+  broadcast({ type: 'requests', requests: requestsWire() })
   broadcastPortfolio() // open-request counts ride the portfolio cards
 }
 
@@ -947,7 +950,7 @@ app.post('/api/requests/:id/update', (req, res) => {
   if (!by?.trim() || !text?.trim()) return res.status(400).json({ error: 'by and text required' })
   const result = appendRequestUpdate(req.params.id, by.trim(), text.trim().slice(0, 500))
   if (!result) return res.status(404).json({ error: 'no such request' })
-  broadcast({ type: 'requests', requests: requests() })
+  broadcast({ type: 'requests', requests: requestsWire() })
   res.json(result)
 })
 
@@ -1286,10 +1289,12 @@ app.post('/api/scenario/load', async (req, res) => {
   const { name, exercise } = req.body as { name?: string; exercise?: boolean }
   if (!name) return res.status(400).json({ error: 'name required' })
   try {
-    // A previous run's SIMULATED products would block this run's scripted
-    // trigger from ever re-firing (the fired map dedupes by product id).
-    weather.clearSimulated()
     await scenario.load(name)
+    // AFTER the load succeeds: a previous run's SIMULATED products would
+    // block this run's scripted trigger from re-firing — but a failed load
+    // (typo'd name) keeps the OLD scenario running, and clearing first
+    // would strip its live products and pending banner from every station.
+    weather.clearSimulated()
     // Exercise mode (M8): live human interactions record alongside the
     // script; /api/exercises/finish builds the HSEEP AAR from the window.
     scenario.setExercise(!!exercise)

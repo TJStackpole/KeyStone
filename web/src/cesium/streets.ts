@@ -192,7 +192,14 @@ interface PaintedLabel {
   rotation: number
   /** False = built before ground geometry streamed in; rebuild next set(). */
   heightOk: boolean
+  /** Failed height-sample builds so far — retries give up at the cap (a
+   *  label anchored outside the frustum may NEVER sample; without a cap it
+   *  keeps the whole layer in retry mode forever). */
+  attempts: number
 }
+
+/** Give up on a label's height after this many failed samples. */
+const MAX_HEIGHT_ATTEMPTS = 4
 
 /** Anchor drift below this keeps the existing paint (fetch-jitter, not a move). */
 const REANCHOR_M = 100
@@ -230,11 +237,10 @@ export class StreetLabelLayer {
       if (existing) {
         const cosLat = Math.cos((s.lat * Math.PI) / 180)
         const movedM = Math.hypot((s.lat - existing.lat) * 111_320, (s.lon - existing.lon) * 111_320 * cosLat)
-        if (
-          existing.heightOk &&
-          movedM < REANCHOR_M &&
-          Math.abs(paintRotation(s) - existing.rotation) < REROTATE_RAD
-        ) {
+        // Retry-exhausted labels count as settled — the fallback height is
+        // better than rebuilding an unsampleable primitive forever.
+        const settled = existing.heightOk || existing.attempts >= MAX_HEIGHT_ATTEMPTS
+        if (settled && movedM < REANCHOR_M && Math.abs(paintRotation(s) - existing.rotation) < REROTATE_RAD) {
           continue
         }
         this.removePrim(existing)
@@ -242,7 +248,14 @@ export class StreetLabelLayer {
       }
       const { prim, heightOk } = buildPaintPrimitive(s, this.viewer)
       prim.show = this.visible
-      this.byName.set(s.name, { prim, lat: s.lat, lon: s.lon, rotation: paintRotation(s), heightOk })
+      this.byName.set(s.name, {
+        prim,
+        lat: s.lat,
+        lon: s.lon,
+        rotation: paintRotation(s),
+        heightOk,
+        attempts: heightOk ? 0 : (existing?.heightOk === false ? existing.attempts : 0) + 1,
+      })
       this.viewer.scene.primitives.add(prim)
     }
     for (const [name, entry] of this.byName) {
@@ -263,7 +276,7 @@ export class StreetLabelLayer {
   needsHeightRetry(): boolean {
     if (!this.viewer.scene.sampleHeightSupported) return false // keyless: 0 IS ground
     for (const entry of this.byName.values()) {
-      if (!entry.heightOk) return true
+      if (!entry.heightOk && entry.attempts < MAX_HEIGHT_ATTEMPTS) return true
     }
     return false
   }

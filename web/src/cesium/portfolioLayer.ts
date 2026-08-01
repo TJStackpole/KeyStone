@@ -44,14 +44,15 @@ export class PortfolioLayer {
     this.weatherSource.show = false
   }
 
-  setIncidents(incidents: PortfolioIncident[]): void {
+  setIncidents(incidents: PortfolioIncident[], hoverId: string | null = null): void {
     this.source.entities.removeAll()
     for (const pi of incidents) {
       this.source.entities.add({
         id: `pf:${pi.id}`,
         position: Cesium.Cartesian3.fromDegrees(pi.lon, pi.lat, 0),
         billboard: {
-          image: markerIcon(pi.severity, pi.focused),
+          // Hover from the map OR from a status-board row rings the marker.
+          image: markerIcon(pi.severity, pi.focused || pi.id === hoverId),
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -117,6 +118,7 @@ export class PortfolioLayer {
       h.setInputAction((m: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
         const picked = this.viewer.scene.pick(m.endPosition) as { id?: { id?: string } } | undefined
         const id = typeof picked?.id?.id === 'string' && picked.id.id.startsWith('pf:') ? picked.id.id.slice(3) : null
+        this.viewer.scene.canvas.style.cursor = id ? 'pointer' : ''
         setAppState((s) => (s.portfolioHoverId === id ? {} : { portfolioHoverId: id }))
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE)
       h.setInputAction((c: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
@@ -128,6 +130,7 @@ export class PortfolioLayer {
     } else if (!on && this.handler) {
       this.handler.destroy()
       this.handler = null
+      this.viewer.scene.canvas.style.cursor = ''
       setAppState({ portfolioHoverId: null })
     }
   }

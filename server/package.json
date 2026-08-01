@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/sim/ns.test.ts src/scenario/engine.test.ts",
+    "test": "node --import tsx --test src/sim/ns.test.ts src/scenario/engine.test.ts src/scenario/engine.requests.test.ts src/aar.test.ts src/nycem.sanitize.test.ts src/weather.test.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {

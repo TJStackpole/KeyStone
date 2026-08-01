@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useReducer, useState } from 'react'
 import {
   activatePlanAction,
   decideSuggestion,
@@ -10,7 +10,7 @@ import {
   requestTransition,
   saveRules,
 } from '../actions'
-import { useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { InteragencyRequest, RequestPriority, RequestState, TriggerRule } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -42,10 +42,13 @@ const fmtAge = (iso: string) => {
   return min < 60 ? `${min}m` : `${Math.floor(min / 60)}h${min % 60}m`
 }
 
-/** Elapsed-in-current-state, and whether it breaches the priority threshold. */
-function requestElapsed(r: InteragencyRequest, thresholds: Record<RequestPriority, number>) {
+/** Elapsed-in-current-state, and whether it breaches the priority threshold.
+ *  Exported: the WATCH CMD chip badge applies the same breach rule. */
+export function requestElapsed(r: InteragencyRequest, thresholds: Record<RequestPriority, number>) {
+  // transitions can be [] on a request restored from a hand-edited state
+  // file (the server normalizes null → []) — fall back to createdAt.
   const last = r.transitions[r.transitions.length - 1]
-  const inStateMs = Date.now() - Date.parse(last.at)
+  const inStateMs = Date.now() - Date.parse(last?.at ?? r.createdAt)
   const openMs = Date.now() - Date.parse(r.createdAt)
   const active = r.state !== 'complete' && r.state !== 'declined'
   const acked = r.transitions.some((t) => t.state === 'acknowledged')
@@ -54,7 +57,7 @@ function requestElapsed(r: InteragencyRequest, thresholds: Record<RequestPriorit
 }
 
 function HoverCard() {
-  const { portfolio, portfolioHoverId } = useAppState()
+  const { portfolio, portfolioHoverId } = useAppSlice((s) => ({ portfolio: s.portfolio, portfolioHoverId: s.portfolioHoverId }))
   const pi = portfolio.find((p) => p.id === portfolioHoverId)
   if (!pi) return null
   return (
@@ -90,7 +93,7 @@ function HoverCard() {
 }
 
 function SuggestionBanners({ operator }: { operator: string }) {
-  const { triggerSuggestions } = useAppState()
+  const { triggerSuggestions } = useAppSlice((s) => ({ triggerSuggestions: s.triggerSuggestions }))
   // In-flight guard: the banner only disappears after the weather broadcast
   // round-trip, so an un-guarded double-click (or two stations racing) would
   // activate the plan twice; and the plan must only activate when the logged
@@ -145,7 +148,7 @@ function SuggestionBanners({ operator }: { operator: string }) {
 }
 
 function Ticker() {
-  const { tickerFeed } = useAppState()
+  const { tickerFeed } = useAppSlice((s) => ({ tickerFeed: s.tickerFeed }))
   const [agency, setAgency] = useState('')
   const [borough, setBorough] = useState('')
   const [minSev, setMinSev] = useState(0)
@@ -200,7 +203,7 @@ function Ticker() {
 }
 
 function StatusBoard() {
-  const { portfolio } = useAppState()
+  const { portfolio } = useAppSlice((s) => ({ portfolio: s.portfolio }))
   const [open, setOpen] = useState<string | null>(null)
   const rollup = useMemo(() => {
     const byAgency = new Map<string, number>()
@@ -224,7 +227,12 @@ function StatusBoard() {
       </div>
       {portfolio.map((pi) => (
         <div key={pi.id}>
-          <button className={`wc-inc-row${pi.focused ? ' focused' : ''}`} onClick={() => setOpen(open === pi.id ? null : pi.id)}>
+          <button
+            className={`wc-inc-row${pi.focused ? ' focused' : ''}`}
+            onClick={() => setOpen(open === pi.id ? null : pi.id)}
+            onMouseEnter={() => setAppState({ portfolioHoverId: pi.id })}
+            onMouseLeave={() => setAppState((s) => (s.portfolioHoverId === pi.id ? { portfolioHoverId: null } : {}))}
+          >
             <span className={`wc-sev s${Math.min(5, pi.severity)}`} />
             <span className="wc-inc-addr">{pi.address}</span>
             {pi.source !== 'board' && (
@@ -259,13 +267,28 @@ function StatusBoard() {
 }
 
 function RequestBoard({ operator }: { operator: string }) {
-  const { interagencyRequests, requestThresholds, incident } = useAppState()
+  const { interagencyRequests, requestThresholds, incident } = useAppSlice((s) => ({
+    interagencyRequests: s.interagencyRequests,
+    requestThresholds: s.requestThresholds,
+    incident: s.incident,
+  }))
   const [tab, setTab] = useState<'kanban' | 'queue' | 'metrics'>('kanban')
   const [queueAgency, setQueueAgency] = useState('NYPD')
   const [metrics, setMetrics] = useState<
     { pair: string; priority: string; count: number; medianAckMs: number | null; medianCompleteMs: number | null }[]
   >([])
   const [form, setForm] = useState({ requestingAgency: 'OEM', assignedAgency: 'NYPD', description: '', priority: 'routine' })
+  // Inline decline flow (replaces window.prompt — the console's only native
+  // browser dialog, and it blocked the ws-driven UI while open).
+  const [declining, setDeclining] = useState<{ id: string; reason: string } | null>(null)
+  // Breach detection is wall-clock: with slice subscriptions nothing else
+  // re-renders this board on a quiet night, so an immediate-priority breach
+  // (120s threshold) could appear ~25-50s late. A 5s tick bounds staleness.
+  const [, tick] = useReducer((x: number) => x + 1, 0)
+  useEffect(() => {
+    const t = setInterval(tick, 5000)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     if (tab !== 'metrics') return
@@ -314,20 +337,47 @@ function RequestBoard({ operator }: { operator: string }) {
         </div>
         <div className="wc-req-desc">{r.description}</div>
         {r.state === 'declined' && r.declineReason && <div className="wc-req-decline">DECLINED: {r.declineReason}</div>}
-        <div className="wc-req-actions">
-          {nextStates(r.state).map((s) => (
+        {declining?.id === r.id ? (
+          <div className="wc-req-declineform">
+            <input
+              autoFocus
+              placeholder="Decline reason (required)"
+              value={declining.reason}
+              onChange={(e) => setDeclining({ id: r.id, reason: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setDeclining(null)
+                if (e.key === 'Enter' && declining.reason.trim()) {
+                  void requestTransition(r.id, 'declined', operator || 'unnamed operator', declining.reason.trim())
+                  setDeclining(null)
+                }
+              }}
+            />
             <button
-              key={s}
+              disabled={!declining.reason.trim()}
               onClick={() => {
-                const reason = s === 'declined' ? (window.prompt('Decline reason (required):') ?? '') : undefined
-                if (s === 'declined' && !reason) return
-                void requestTransition(r.id, s, operator || 'unnamed operator', reason)
+                void requestTransition(r.id, 'declined', operator || 'unnamed operator', declining.reason.trim())
+                setDeclining(null)
               }}
             >
-              {s.replace('_', ' ').toUpperCase()}
+              CONFIRM
             </button>
-          ))}
-        </div>
+            <button onClick={() => setDeclining(null)}>✕</button>
+          </div>
+        ) : (
+          <div className="wc-req-actions">
+            {nextStates(r.state).map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  if (s === 'declined') setDeclining({ id: r.id, reason: '' })
+                  else void requestTransition(r.id, s, operator || 'unnamed operator')
+                }}
+              >
+                {s.replace('_', ' ').toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -354,7 +404,10 @@ function RequestBoard({ operator }: { operator: string }) {
           METRICS
         </button>
       </div>
-      {tab === 'kanban' && (
+      {tab === 'kanban' && interagencyRequests.length === 0 && (
+        <div className="wc-empty">NO INTERAGENCY REQUESTS — OPEN ONE BELOW</div>
+      )}
+      {tab === 'kanban' && interagencyRequests.length > 0 && (
         <div className="wc-kanban">
           {REQ_STATES.map((s) => {
             const list = interagencyRequests.filter((r) => r.state === s)
@@ -380,9 +433,12 @@ function RequestBoard({ operator }: { operator: string }) {
             <i className="wc-caveat">everything assigned to {queueAgency} right now</i>
           </div>
           <div className="wc-queue">
-            {interagencyRequests
-              .filter((r) => r.assignedAgency === queueAgency && r.state !== 'complete' && r.state !== 'declined')
-              .map(card)}
+            {(() => {
+              const q = interagencyRequests.filter(
+                (r) => r.assignedAgency === queueAgency && r.state !== 'complete' && r.state !== 'declined',
+              )
+              return q.length ? q.map(card) : <div className="wc-empty">NOTHING ASSIGNED TO {queueAgency}</div>
+            })()}
           </div>
         </>
       )}
@@ -399,6 +455,13 @@ function RequestBoard({ operator }: { operator: string }) {
               </tr>
             </thead>
             <tbody>
+              {metrics.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="wc-empty">
+                    NO REQUESTS LOGGED YET
+                  </td>
+                </tr>
+              )}
               {metrics.map((m, i) => (
                 <tr key={i}>
                   <td>{m.pair}</td>
@@ -410,7 +473,7 @@ function RequestBoard({ operator }: { operator: string }) {
               ))}
             </tbody>
           </table>
-          <button className="wc-open-btn" onClick={exportCsv}>
+          <button className="wc-open-btn" disabled={!metrics.length} onClick={exportCsv}>
             EXPORT CSV
           </button>
         </div>
@@ -464,12 +527,13 @@ function RequestBoard({ operator }: { operator: string }) {
 }
 
 function RulesEditor() {
-  const { triggerRules } = useAppState()
+  const { triggerRules } = useAppSlice((s) => ({ triggerRules: s.triggerRules }))
   const [draft, setDraft] = useState<TriggerRule[] | null>(null)
   // Raw text per rule id while editing: round-tripping every keystroke
   // through split/trim/filter ate trailing commas and spaces, making it
   // impossible to type a new comma-separated event name.
   const [matchText, setMatchText] = useState<Record<string, string>>({})
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const rules = draft ?? triggerRules
   const edit = (i: number, patch: Partial<TriggerRule>) => {
     const next = rules.map((r, j) => (j === i ? { ...r, ...patch } : r))
@@ -478,7 +542,10 @@ function RulesEditor() {
   return (
     <div className="wc-section">
       <div className="wc-section-title">
-        WEATHER TRIGGER RULES <i className="wc-caveat">THRESHOLDS VALIDATE—SME — EDIT AND SAVE IN MINUTES</i>
+        WEATHER TRIGGER RULES{' '}
+        <i className="wc-caveat">
+          {draft ? 'UNSAVED EDITS' : 'THRESHOLDS VALIDATE—SME — EDIT AND SAVE IN MINUTES'}
+        </i>
       </div>
       {rules.map((r, i) => (
         <div key={r.id} className="wc-rule">
@@ -508,19 +575,26 @@ function RulesEditor() {
           />
         </div>
       ))}
-      {draft && (
+      {(draft || saveState === 'saved') && (
         <button
-          className="wc-open-btn"
+          className={`wc-open-btn${saveState === 'failed' ? ' failed' : ''}`}
+          disabled={saveState === 'saving' || saveState === 'saved'}
           onClick={() => {
+            if (!draft) return
+            setSaveState('saving')
             void saveRules(draft).then((ok) => {
               if (ok) {
                 setDraft(null)
                 setMatchText({}) // saved rules re-render from the parsed form
+                setSaveState('saved')
+                setTimeout(() => setSaveState('idle'), 1500)
+              } else {
+                setSaveState('failed') // silent failure loses a facilitator's threshold edits
               }
             })
           }}
         >
-          SAVE RULES
+          {saveState === 'saving' ? 'SAVING…' : saveState === 'saved' ? 'SAVED ✓' : saveState === 'failed' ? 'SAVE FAILED — RETRY' : 'SAVE RULES'}
         </button>
       )}
     </div>
@@ -529,14 +603,20 @@ function RulesEditor() {
 
 /** EOC level history + plan-activation bands over the last two hours. */
 function TimelineStrip() {
-  const { eoc, planActivations } = useAppState()
+  const { eoc, planActivations } = useAppSlice((s) => ({ eoc: s.eoc, planActivations: s.planActivations }))
   const now = Date.now()
   const SPAN = 2 * 3600_000
   const x = (iso: string) => Math.max(0, Math.min(100, 100 - ((now - Date.parse(iso)) / SPAN) * 100))
+  const anyInWindow =
+    eoc.history.some((c) => now - Date.parse(c.changedAt) < SPAN) ||
+    planActivations.some((p) => now - Date.parse(p.activatedAt) < SPAN || !p.deactivatedAt)
   return (
     <div className="wc-strip glass">
-      <div className="wc-strip-title">EOC / PLANS · LAST 2H</div>
-      <div className="wc-strip-lane">
+      <div className="wc-strip-title">
+        EOC / PLANS · LAST 2H
+        {!anyInWindow && <i className="wc-strip-empty">L{eoc.level} STEADY STATE — NO ACTIVATIONS IN WINDOW</i>}
+      </div>
+      <div className="wc-strip-lane" data-lane="PLANS">
         {planActivations
           .filter((p) => now - Date.parse(p.activatedAt) < SPAN || !p.deactivatedAt)
           .map((p) => (
@@ -550,7 +630,7 @@ function TimelineStrip() {
             </div>
           ))}
       </div>
-      <div className="wc-strip-lane eoc">
+      <div className="wc-strip-lane eoc" data-lane="EOC">
         {eoc.history
           .filter((c) => now - Date.parse(c.changedAt) < SPAN)
           .map((c, i) => (
@@ -559,18 +639,45 @@ function TimelineStrip() {
             </div>
           ))}
       </div>
+      <div className="wc-strip-axis">
+        <span>-2H</span>
+        <span>-1H</span>
+        <span>NOW</span>
+      </div>
     </div>
   )
 }
 
 export function WatchCommandPanel() {
-  const { watchCommand, portfolio, weatherAlerts, weatherObs, scenario } = useAppState()
+  const { watchCommand, portfolio, weatherAlerts, weatherObs, scenario, portfolioHoverId } = useAppSlice((s) => ({
+    watchCommand: s.watchCommand,
+    portfolio: s.portfolio,
+    weatherAlerts: s.weatherAlerts,
+    weatherObs: s.weatherObs,
+    scenario: s.scenario,
+    portfolioHoverId: s.portfolioHoverId,
+  }))
   const [operator, setOperator] = useOperator()
 
-  // Markers + weather polygons track state while the view is up.
+  // Markers + weather polygons track state while the view is up; the hover
+  // id re-rings the hovered incident's marker (row-to-map link).
   useEffect(() => {
     refreshWatchLayers()
-  }, [watchCommand, portfolio, weatherAlerts])
+  }, [watchCommand, portfolio, weatherAlerts, portfolioHoverId])
+
+  // Escape leaves the citywide view like every other full-screen surface —
+  // unless the operator is typing in a field.
+  useEffect(() => {
+    if (!watchCommand) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      exitWatchCommand()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [watchCommand])
 
   // The identity may have been written after mount (EOC chip, another view's
   // input) — the mount-time localStorage read would miss it for the session.

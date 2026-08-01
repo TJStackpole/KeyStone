@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import type { BuildingSafety, CofoRecord, Firehouse, Hydrant, PlutoAttributes } from '../api/nyc'
 import type {
   Agency,
@@ -316,14 +316,42 @@ export function setLayerStatus(layer: DataLayerId, status: LayerStatus): void {
   setAppState((s) => ({ layers: { ...s.layers, [layer]: status } }))
 }
 
+function subscribe(cb: () => void): () => void {
+  listeners.add(cb)
+  return () => listeners.delete(cb)
+}
+
 export function useAppState(): AppState {
-  return useSyncExternalStore(
-    (cb) => {
-      listeners.add(cb)
-      return () => listeners.delete(cb)
-    },
-    getAppState,
-  )
+  return useSyncExternalStore(subscribe, getAppState)
+}
+
+/**
+ * Slice subscription: re-renders only when the SELECTED keys change (shallow
+ * compare). The whole-store hook re-renders every subscriber on every store
+ * write — during a drill that is units.batch (≤5/s) + scenario.status (1/s)
+ * reconciling the entire Watch Command tree for messages it never displays.
+ * Selector must return a flat object of store values.
+ */
+export function useAppSlice<T extends Record<string, unknown>>(selector: (s: AppState) => T): T {
+  // Ref-cached snapshot: getSnapshot must return a STABLE reference while the
+  // selected values are unchanged, or useSyncExternalStore loops forever.
+  const cache = useRef<T | null>(null)
+  return useSyncExternalStore(subscribe, () => {
+    const next = selector(state)
+    const prev = cache.current
+    if (prev) {
+      let same = true
+      for (const k in next) {
+        if (!Object.is(prev[k], next[k])) {
+          same = false
+          break
+        }
+      }
+      if (same) return prev
+    }
+    cache.current = next
+    return next
+  })
 }
 
 if (import.meta.env.DEV) {

@@ -2206,6 +2206,53 @@ html, body {
    the Watch Command right column — request form, rules editor. While the
    citywide view is up, slide the chat left of the column instead. */
 body:has(.wc-right) .takchat-panel { right: 450px; }
+/* Tactical chrome that bleeds under/over the citywide panels: the map-nav
+   cluster floats above the ticker (z 40 > 32), and HOME / fly-to-incident
+   are dead-ends in this view; the Site Intel panel pokes out below the
+   right column. Hidden while Watch Command is up. */
+body:has(.wc-left) .compass,
+body:has(.wc-left) .home-btn,
+body:has(.wc-left) .incident-btn,
+body:has(.wc-left) .intel-panel,
+body:has(.wc-left) .draw-toolbar { display: none; }
+/* Interaction parity with the rest of the console (chips transition ~120ms). */
+.wc-inc-row, .wc-open-btn, .wc-filters button, .wc-req-actions button,
+.wc-banner-btns button, .wc-endex, .eoc-item { transition: all 120ms; }
+/* WATCH CMD chip attention badge: pending suggestions + SLA breaches are
+   invisible from the tactical board without it. */
+.wc-chip-badge {
+  font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0;
+  color: #0a0e14; background: var(--amber-bright); border-radius: 7px;
+  padding: 1px 5px; margin-left: 6px; animation: pulse 1.6s ease-in-out infinite;
+}
+/* Inline decline flow (replaces the console's only native browser dialog). */
+.wc-req-declineform { display: flex; gap: 5px; margin-top: 5px; }
+.wc-req-declineform input {
+  flex: 1; background: rgba(7,12,20,0.85); border: 1px solid rgba(239,68,68,0.55);
+  border-radius: 4px; color: var(--text); font: 500 10.5px var(--ui); padding: 4px 7px; outline: none;
+}
+.wc-req-declineform button {
+  background: none; border: 1px solid rgba(148,163,184,0.35); border-radius: 4px;
+  color: var(--text-dim); font: 600 9px var(--mono); padding: 3px 7px; cursor: pointer; transition: all 120ms;
+}
+.wc-req-declineform button:first-of-type:not(:disabled) { border-color: rgba(239,68,68,0.55); color: #fca5a5; }
+.wc-req-declineform button:disabled { opacity: 0.4; cursor: default; }
+/* Timeline strip: axis + steady-state note (two bare gray lanes read as broken). */
+.wc-strip-axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 7.5px; color: var(--text-faint); padding-top: 2px; }
+.wc-strip-empty { font-style: normal; font-family: var(--mono); font-size: 8px; color: var(--text-faint); margin-left: 10px; letter-spacing: 0.06em; }
+.wc-strip-lane { position: relative; }
+.wc-strip-lane::before {
+  content: attr(data-lane); position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  font-family: var(--mono); font-size: 7px; color: var(--text-faint); letter-spacing: 0.08em; pointer-events: none;
+}
+/* Failed-save affordance (rules editor / EOC menu). */
+.wc-open-btn.failed { border-color: rgba(239,68,68,0.65); color: #fca5a5; }
+.eoc-note.failed { color: #fca5a5; }
+/* Dirty-close confirm on the exercise review (base .panel-close is 22px sq). */
+.exr-btns .panel-close.confirm {
+  width: auto; padding: 0 8px; color: var(--amber-bright);
+  border-color: rgba(245,158,11,0.6); font: 700 9px var(--mono); letter-spacing: 0.06em;
+}
 .wc-head { display: flex; align-items: center; gap: 10px; }
 .wc-count { font-family: var(--mono); font-size: 10px; color: var(--amber-bright); letter-spacing: 0.1em; }
 .wc-operator {

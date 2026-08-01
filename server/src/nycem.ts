@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -106,7 +106,10 @@ interface NycemFile {
   rules: TriggerRule[]
 }
 
-const DATA_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../data/nycem-state.json')
+// Env override is a TEST seam (points state at a scratch dir) — never
+// required at runtime, per the keyless/zero-config rule.
+const DATA_PATH =
+  process.env.NYCEM_DATA_PATH ?? resolve(dirname(fileURLToPath(import.meta.url)), '../data/nycem-state.json')
 
 /**
  * Starter rules for the three plans in NYCEM's PUBLIC doctrine. Exact
@@ -198,7 +201,11 @@ function flushNow(): void {
   }
   try {
     mkdirSync(dirname(DATA_PATH), { recursive: true })
-    writeFileSync(DATA_PATH, JSON.stringify(state))
+    // Atomic (tmp+rename): a hard kill mid-write must not leave a truncated
+    // file — load() would silently replace operator-authored rules with the
+    // starters and wipe the EOC/request history.
+    writeFileSync(`${DATA_PATH}.tmp`, JSON.stringify(state))
+    renameSync(`${DATA_PATH}.tmp`, DATA_PATH)
   } catch (err) {
     console.error('[nycem] failed to write nycem-state.json:', err)
   }
@@ -314,6 +321,22 @@ let requestSeq = 1
 
 export function requests(): InteragencyRequest[] {
   return state.requests
+}
+
+/**
+ * Live-wire slice: every non-terminal request plus the most recent terminal
+ * ones. The FULL set accretes on disk by design (the accountability record
+ * requestMetrics and the AAR slice by window), but re-broadcasting months of
+ * completed history on every transition — and rendering it all in the kanban
+ * COMPLETE/DECLINED columns — grows without bound.
+ */
+const WIRE_TERMINAL_CAP = 40
+
+export function requestsWire(): InteragencyRequest[] {
+  const active: InteragencyRequest[] = []
+  const terminal: InteragencyRequest[] = []
+  for (const r of state.requests) (r.state === 'complete' || r.state === 'declined' ? terminal : active).push(r)
+  return [...active, ...terminal.slice(-WIRE_TERMINAL_CAP)]
 }
 
 export function openRequest(input: {

@@ -14,9 +14,10 @@ import {
   toggleLayer,
   toggleTopDownView,
 } from '../actions'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice, useAppState } from '../state/store'
 import type { FeedIncident, ToggleLayerId } from '../types'
 import { SearchBar } from './SearchBar'
+import { requestElapsed } from './WatchCommandPanel'
 
 // Map overlays that live in the top-bar OVERLAYS dropdown rather than the
 // (incident-gated) Site Intel chip row — they're useful with no incident up.
@@ -248,12 +249,14 @@ function EocChip() {
   const { eoc } = useAppState()
   const [open, setOpen] = useState(false)
   const [by, setBy] = useState(() => localStorage.getItem('ks-operator') ?? '')
+  const [failed, setFailed] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
-  // Re-sync from the shared operator identity on every open — the Watch
-  // Command panel writes ks-operator after this chip mounted, and a stale
-  // mount-time read left the field empty (levels disabled) for the session.
+  // Re-sync from the shared operator identity on every open — both this chip
+  // and the Watch Command panel persist every edit to ks-operator, so the
+  // stored value is always the latest handoff. A fill-only-when-empty guard
+  // would keep logging EOC changes under the PREVIOUS operator's name.
   useEffect(() => {
-    if (open) setBy((prev) => prev || (localStorage.getItem('ks-operator') ?? ''))
+    if (open) setBy(localStorage.getItem('ks-operator') ?? '')
   }, [open])
   useEffect(() => {
     if (!open) return
@@ -293,14 +296,21 @@ function EocChip() {
               key={l}
               className={`eoc-item${eoc.level === l ? ' on' : ''}`}
               disabled={!by.trim()}
+              title={by.trim() ? undefined : 'Enter "changed by" first — every change logs with attribution'}
               onClick={() => {
-                void changeEocLevel(l as 1 | 2 | 3 | 4, by.trim())
-                setOpen(false)
+                setFailed(false)
+                void changeEocLevel(l as 1 | 2 | 3 | 4, by.trim()).then((ok) => {
+                  // A failed change must not look identical to a successful
+                  // one — keep the menu open and say so.
+                  if (ok) setOpen(false)
+                  else setFailed(true)
+                })
               }}
             >
               {LABELS[l]}
             </button>
           ))}
+          {failed && <div className="eoc-note failed">CHANGE FAILED — SERVER UNREACHABLE</div>}
           <div className="eoc-note">Manual change only · immutable history on the citywide timeline</div>
         </div>
       )}
@@ -458,6 +468,35 @@ const LAYER_LABEL: Record<string, string> = {
   persistence: 'PERSISTENCE',
 }
 
+/** WATCH CMD chip with an attention badge: pending weather suggestions and
+ *  ack-threshold breaches only render inside the citywide view, so without
+ *  this an operator on the tactical board never learns they exist. */
+function WatchCmdChip({ watchCommand }: { watchCommand: boolean }) {
+  const { triggerSuggestions, interagencyRequests, requestThresholds } = useAppSlice((s) => ({
+    triggerSuggestions: s.triggerSuggestions,
+    interagencyRequests: s.interagencyRequests,
+    requestThresholds: s.requestThresholds,
+  }))
+  const pending = triggerSuggestions.filter((s) => s.state === 'pending').length
+  const breaches = interagencyRequests.filter((r) => requestElapsed(r, requestThresholds).breach).length
+  const n = pending + breaches
+  const attention = n > 0 && !watchCommand
+  return (
+    <button
+      className={`chip chip-btn${watchCommand ? ' active' : ''}${attention ? ' amber active' : ''}`}
+      onClick={() => (watchCommand ? exitWatchCommand() : enterWatchCommand())}
+      title={
+        attention
+          ? `${pending ? `${pending} pending weather suggestion${pending === 1 ? '' : 's'}` : ''}${pending && breaches ? ' · ' : ''}${breaches ? `${breaches} request${breaches === 1 ? '' : 's'} past ack threshold` : ''} — open Watch Command`
+          : 'Watch Command — citywide multi-incident portfolio view (NYCEM coordination layer)'
+      }
+    >
+      <span className="dot" /> {watchCommand ? '← TACTICAL' : 'WATCH CMD'}
+      {attention && <span className="wc-chip-badge">{n}</span>}
+    </button>
+  )
+}
+
 export function TopBar() {
   const {
     providerMode,
@@ -527,13 +566,7 @@ export function TopBar() {
           <span className="dot" /> ACTIVE INCIDENT
         </button>
         {incident && activeIncidentMode && <IsolateMenu />}
-        <button
-          className={`chip chip-btn${watchCommand ? ' active' : ''}`}
-          onClick={() => (watchCommand ? exitWatchCommand() : enterWatchCommand())}
-          title="Watch Command — citywide multi-incident portfolio view (NYCEM coordination layer)"
-        >
-          <span className="dot" /> {watchCommand ? '← TACTICAL' : 'WATCH CMD'}
-        </button>
+        <WatchCmdChip watchCommand={watchCommand} />
         <EocChip />
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && (
