@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
+import { useProfile } from '../profiles/manifest'
+import { memberDetailAllowed, usePolicy } from '../profiles/policy'
 import { useAppState } from '../state/store'
 import { airMinutesLeft, crewOf, type Agency, type Unit, type UnitCategory } from '../types'
 
@@ -171,6 +173,13 @@ function MemberRow({ u }: { u: Unit }) {
 
 function CrewBlock({ crew, members }: { crew: string; members: Unit[] }) {
   const { memberCrewToggles } = useAppState()
+  const profile = useProfile()
+  const policy = usePolicy()
+  // Prompt 12 — per-field visibility enforcement: when the policy restricts
+  // member-level PAR for a coordinating profile, this block renders unit
+  // COUNTS only (per-crew accountability without member rows). Hot-reloads
+  // with the policy — no page reload.
+  const memberDetail = memberDetailAllowed(profile, policy, 'par_member_names')
   const visible = memberCrewToggles[crew] !== false
   const interior = members.filter((m) => (m.floor ?? 0) >= 1).length
   return (
@@ -187,9 +196,13 @@ function CrewBlock({ crew, members }: { crew: string; members: Unit[] }) {
         </span>
         <span className="eye">{visible ? '◉' : '◌'}</span>
       </button>
-      {members.map((u) => (
-        <MemberRow key={u.uid} u={u} />
-      ))}
+      {memberDetail ? (
+        members.map((u) => <MemberRow key={u.uid} u={u} />)
+      ) : (
+        <div className="crew-aggregate" title="Member-level PAR is aggregate-only for this profile (visibility policy)">
+          {members.length} MEMBERS · {interior} INTERIOR · AGGREGATE VIEW (POLICY)
+        </div>
+      )}
     </div>
   )
 }

@@ -2248,6 +2248,77 @@ body:has(.wc-left) .draw-toolbar { display: none; }
 /* Failed-save affordance (rules editor / EOC menu). */
 .wc-open-btn.failed { border-color: rgba(239,68,68,0.65); color: #fca5a5; }
 .eoc-note.failed { color: #fca5a5; }
+/* ------------------- Prompt 12: workspace profiles ------------------------ */
+/* Wordmark doubles as the profile switcher. */
+.profile-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; transition: color 120ms;
+}
+.profile-btn:hover { color: var(--cyan-bright); }
+.profile-menu {
+  position: absolute; top: 52px; left: 10px; z-index: 70; border-radius: 8px;
+  padding: 6px; display: flex; flex-direction: column; gap: 4px; width: 300px;
+}
+.profile-item {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  padding: 8px 10px; cursor: pointer; transition: all 120ms;
+}
+.profile-item b { font: 700 12px var(--ui); color: var(--text); letter-spacing: 0.04em; }
+.profile-item i { font-style: normal; font: 500 9.5px var(--mono); color: var(--text-dim); }
+.profile-item:hover { border-color: var(--border-strong); }
+.profile-item.on { border-color: rgba(34, 211, 238, 0.5); }
+.profile-item.on b { color: var(--cyan-bright); }
+/* Always-on watermark: screenshots and demos are self-identifying. */
+.profile-watermark {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 90; pointer-events: none; font: 700 9px var(--mono);
+  letter-spacing: 0.28em; color: rgba(148, 163, 184, 0.4); text-shadow: 0 0 6px rgba(10, 14, 20, 0.9);
+}
+/* FDNY "My Agency Requests" — slim, tactical-view resident. */
+.agency-req {
+  position: absolute; left: 10px; bottom: 254px; width: 300px; z-index: 30;
+  border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;
+  max-height: 300px;
+}
+.agency-req-head {
+  display: flex; align-items: center; gap: 8px; background: none; border: none;
+  cursor: pointer; padding: 0; color: var(--text);
+}
+.agency-req-head b { font: 700 9px var(--mono); color: var(--amber-bright); margin-left: auto; }
+.agency-req-head i { font-style: normal; color: var(--text-dim); }
+.agency-req-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.agency-req-row { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.agency-req-row.breach { border-color: rgba(239, 68, 68, 0.7); animation: pulse 1.2s ease-in-out infinite; }
+.agency-req-meta { display: flex; align-items: center; gap: 6px; font: 600 8px var(--mono); }
+.agency-req-role { color: var(--cyan-dim); letter-spacing: 0.06em; }
+.agency-req-pair { color: var(--text-dim); }
+.agency-req-meta em { font-style: normal; margin-left: auto; color: var(--text-faint); }
+.agency-req-desc { font: 500 10.5px var(--ui); color: var(--text); margin: 4px 0; }
+/* Policy editor (admin). */
+.policy-editor {
+  position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+  width: 520px; z-index: 80; border-radius: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.policy-head { display: flex; align-items: center; }
+.policy-note { font: 500 10px var(--ui); color: var(--text-dim); line-height: 1.5; }
+.policy-row { display: flex; align-items: center; gap: 10px; }
+.policy-label { flex: 1; display: flex; flex-direction: column; }
+.policy-label b { font: 600 11px var(--ui); color: var(--text); }
+.policy-label i { font-style: normal; font: 500 8.5px var(--mono); color: var(--text-faint); }
+.policy-row select {
+  background: rgba(7, 12, 20, 0.85); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text); font: 600 10px var(--mono); padding: 5px 8px; outline: none;
+}
+.policy-failed { font: 700 9px var(--mono); color: #fca5a5; letter-spacing: 0.06em; }
+/* Aggregate-only (policy) presentation. */
+.crew-aggregate, .floor-aggregate {
+  font: 600 8.5px var(--mono); color: var(--text-faint); letter-spacing: 0.05em;
+  padding: 3px 6px; font-style: normal;
+}
+.comms-policy-note { font: 700 8px var(--mono); color: var(--amber-bright); letter-spacing: 0.06em; align-self: center; padding: 0 6px; }
+
 /* Dirty-close confirm on the exercise review (base .panel-close is 22px sq). */
 .exr-btns .panel-close.confirm {
   width: auto; padding: 0 8px; color: var(--amber-bright);

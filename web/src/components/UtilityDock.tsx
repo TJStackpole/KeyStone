@@ -1,6 +1,8 @@
 import { memo, useMemo } from 'react'
 import { flyToUnit } from '../actions'
 import { getUnitLayer } from '../cesium/scene'
+import { useProfile } from '../profiles/manifest'
+import { memberDetailAllowed, usePolicy } from '../profiles/policy'
 import { setAppState, useAppState } from '../state/store'
 import { airMinutesLeft, bioStatusOf, crewOf, type BioStatus, type Unit } from '../types'
 import { droneStreamFor } from './DronePanel'
@@ -96,6 +98,9 @@ function FloorsContent() {
   )
   const interior = members.filter((m) => (m.floor ?? 0) > 0)
   const exterior = members.filter((m) => !m.floor || m.floor === 0)
+  // Prompt 12 — member-level detail is policy-gated per profile; floor
+  // counts (the accountability number) stay in every profile.
+  const memberDetail = memberDetailAllowed(useProfile(), usePolicy(), 'par_member_names')
 
   const byFloor = useMemo(() => {
     const map = new Map<number, Unit[]>()
@@ -133,9 +138,11 @@ function FloorsContent() {
             {floor === fireFloor && <i>FIRE</i>}
           </span>
           <span className="floor-members">
-            {list.map((m) => (
-              <MemberChip key={m.uid} m={m} />
-            ))}
+            {memberDetail ? (
+              list.map((m) => <MemberChip key={m.uid} m={m} />)
+            ) : (
+              <i className="floor-aggregate">AGGREGATE (POLICY)</i>
+            )}
           </span>
           <span className="floor-count">{list.length}</span>
         </div>
@@ -144,9 +151,11 @@ function FloorsContent() {
         <div className="floor-row exterior">
           <span className="floor-label">EXT</span>
           <span className="floor-members">
-            {exterior.map((m) => (
-              <MemberChip key={m.uid} m={m} />
-            ))}
+            {memberDetail ? (
+              exterior.map((m) => <MemberChip key={m.uid} m={m} />)
+            ) : (
+              <i className="floor-aggregate">AGGREGATE (POLICY)</i>
+            )}
           </span>
           <span className="floor-count">{exterior.length}</span>
         </div>
@@ -274,6 +283,9 @@ function BioContent() {
     return [...map.entries()].sort((a, b) => a[1].min - b[1].min)
   }, [members])
   const lowAir = members.filter((m) => !inRehab(m) && m.bio.airPsi >= 0 && m.bio.airPsi <= 1100)
+  // Prompt 12 — status counts and per-company SCBA are aggregate (stay in
+  // every profile); member-name rows/advisories are policy-gated.
+  const memberDetail = memberDetailAllowed(useProfile(), usePolicy(), 'par_member_names')
 
   return (
     <div className="dock-scroll">
@@ -299,7 +311,10 @@ function BioContent() {
           </div>
         </>
       )}
-      {lowAir.length > 0 && (
+      {!memberDetail && (
+        <div className="bio-footnote">MEMBER-LEVEL DETAIL AGGREGATE-ONLY FOR THIS PROFILE (VISIBILITY POLICY)</div>
+      )}
+      {memberDetail && lowAir.length > 0 && (
         <div className="bio-advisory">
           ⚠ LOW AIR (≤1100 psi):{' '}
           {lowAir
@@ -308,7 +323,7 @@ function BioContent() {
           — begin exit / relieve now.
         </div>
       )}
-      {rotate.length > 0 && (
+      {memberDetail && rotate.length > 0 && (
         <div className="bio-advisory">
           ⚠ ROTATION ADVISED: {rotate.map((m) => m.callsign).join(', ')} — relieve and send to rehab.
         </div>
@@ -316,7 +331,7 @@ function BioContent() {
       {members.length === 0 && (
         <div className="roster-empty">NO MEMBER TELEMETRY — PERSONNEL DISMOUNT WHEN APPARATUS ARRIVES</div>
       )}
-      {members.map((m) => {
+      {memberDetail && members.map((m) => {
         const s = inRehab(m) ? 'ok' : bioStatusOf(m.bio)
         const chipLabel = inRehab(m) ? 'REHAB' : s.toUpperCase()
         return (

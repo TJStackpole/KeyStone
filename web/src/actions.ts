@@ -736,7 +736,10 @@ export async function restoreIncident(): Promise<void> {
     setAppState({ incident: body.incident })
     setLayerStatus('persistence', 'ok')
     const scene = getScene()
-    if (scene) flyToTactical(scene.viewer, body.incident.lat, body.incident.lon)
+    // A profile landing in Watch Command keeps its citywide frame — the
+    // restored incident arrives as the focused portfolio marker instead
+    // (same rule as adoption).
+    if (scene && !getAppState().watchCommand) flyToTactical(scene.viewer, body.incident.lat, body.incident.lon)
     void loadFootprints(body.incident)
     void loadSiteIntel(body.incident)
     getFocusLayer()?.apply(body.incident, getAppState().activeIncidentMode)
@@ -750,6 +753,46 @@ export async function restoreIncident(): Promise<void> {
 // exercises). KeyStone is a neutral read-and-coordinate layer: these actions
 // record and suggest; they never claim command authority for NYCEM.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Prompt 12 — workspace profile switch. Instant, preserves map position and
+// the selected incident (both profiles have incident access), swaps chrome
+// only. Logged to the event log now — it becomes the audit trail when real
+// identity arrives.
+// ---------------------------------------------------------------------------
+
+export function setProfile(next: 'fdny' | 'nycem'): void {
+  const prev = getAppState().profile
+  if (next === prev) return
+  localStorage.setItem('ks-profile', next)
+  setAppState({ profile: next })
+  if (next === 'nycem') {
+    // Coordination posture: open the Watch Command chrome WITHOUT the
+    // citywide camera flight — switching must preserve map position (the
+    // flight belongs to landing/toggling, not to changing hats).
+    openWatchCommandChrome()
+  } else {
+    // Tactical posture: NYCEM-only chrome must not linger. Camera stays put.
+    leaveWatchCommandSilently()
+  }
+  void fetch('/api/timeline', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      kind: 'profile_switch',
+      payload: { from: prev, to: next, by: localStorage.getItem('ks-operator') ?? 'unnamed operator' },
+    }),
+  }).catch((err) => console.error('[profile] switch log failed:', err))
+}
+
+/** Watch Command panels + layers without moving the camera. */
+function openWatchCommandChrome(): void {
+  setAppState({ watchCommand: true })
+  const now = getAppState()
+  getPortfolioLayer()?.setIncidents(now.portfolio, now.portfolioHoverId)
+  getPortfolioLayer()?.setWeather(now.weatherAlerts)
+  getPortfolioLayer()?.setActive(true, (id) => focusPortfolioIncident(id))
+}
 
 /** NYC citywide framing for the Watch Command portfolio view. */
 const WATCH_VIEW = { lon: -73.94, lat: 40.55, height: 62_000, pitchDeg: -55 }
@@ -766,16 +809,24 @@ export function enterWatchCommand(): void {
     setAppState({ viewMode: '3d' })
     void setTopDown(scene, false)
   }
-  setAppState({ watchCommand: true })
-  const now = getAppState()
-  getPortfolioLayer()?.setIncidents(now.portfolio)
-  getPortfolioLayer()?.setWeather(now.weatherAlerts)
-  getPortfolioLayer()?.setActive(true, (id) => focusPortfolioIncident(id))
+  openWatchCommandChrome()
   scene.viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(WATCH_VIEW.lon, WATCH_VIEW.lat, WATCH_VIEW.height),
     orientation: { heading: 0, pitch: Cesium.Math.toRadians(WATCH_VIEW.pitchDeg), roll: 0 },
     duration: 1.8,
   })
+}
+
+/**
+ * Prompt 12 — the flagship two-screen pitch: this window becomes the FDNY
+ * tactical display, a second window opens as NYCEM Watch Command, and the
+ * server-side scenario engine drives both over the same ws clock (no sync
+ * layer — one playback authority).
+ */
+export async function launchDualScreenDemo(): Promise<void> {
+  setProfile('fdny')
+  window.open(`${location.origin}${location.pathname}?profile=nycem`, 'keystone-nycem', 'width=1680,height=1050')
+  await loadScenario('pabt-flood-exercise')
 }
 
 export function exitWatchCommand(): void {

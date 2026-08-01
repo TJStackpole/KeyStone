@@ -4,6 +4,7 @@ import { initScene } from './cesium/providers'
 import { registerScene, unregisterScene } from './cesium/scene'
 import {
   ensureTunnels,
+  enterWatchCommand,
   exitGround,
   reconcileProviderUpgrade,
   refreshLots,
@@ -12,7 +13,7 @@ import {
   restoreIncident,
   setGroundHeightFt,
 } from './actions'
-import { setAppState, useAppState } from './state/store'
+import { getAppState, setAppState, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { CommandStrip } from './components/CommandStrip'
@@ -33,6 +34,20 @@ import { WindAdvisory } from './components/WindAdvisory'
 import { TakChatPanel, TakLinkButton } from './components/TakChatPanel'
 import { WatchCommandPanel } from './components/WatchCommandPanel'
 import { ExerciseReviewPanel } from './components/ExerciseReviewPanel'
+import { MyAgencyRequestsPanel } from './components/MyAgencyRequestsPanel'
+import { PolicyEditorPanel } from './components/PolicyEditorPanel'
+import { ProfileWatermark } from './components/ProfileWatermark'
+import { hasCapability, useCapability } from './profiles/manifest'
+
+/**
+ * Prompt 12 — manifest gate: children render only when the active profile
+ * has the capability. App stays store-subscription-free; each Gate
+ * subscribes to the profile slice only.
+ */
+function Gate({ cap, children }: { cap: string; children: React.ReactNode }) {
+  const on = useCapability(cap)
+  return on ? <>{children}</> : null
+}
 
 /** Floating escape hatch while the camera is at street level. */
 function GroundViewExit() {
@@ -111,6 +126,11 @@ export default function App() {
         performance.mark('keystone:scene-ready')
         setAppState({ sceneReady: true, providerMode: handle.mode })
         connectWs()
+        // Prompt 12 — the NYCEM profile's home is Watch Command (coordination
+        // posture). Land there BEFORE the incident restore, so an adopted
+        // incident arrives as the focused portfolio marker, not a camera yank.
+        const { profile } = getAppState()
+        if (hasCapability(profile, 'watchcommand.portfolio')) enterWatchCommand()
         void restoreIncident()
         // Camera-following overlays: lots, the yellow road network, and
         // street labels refresh whenever a pan/zoom settles low enough
@@ -152,14 +172,27 @@ export default function App() {
       <GroundHeightControl />
       <ScenarioBar />
       <MaydayAlert />
-      <AarPanel />
+      <Gate cap="aar.drill-debrief">
+        <AarPanel />
+      </Gate>
       <StreetViewPanel />
       <TakChatPanel />
       <TakLinkButton />
-      <WatchCommandPanel />
-      <ExerciseReviewPanel />
-      <ManualsPanel />
-      <TacticsPanel />
+      <Gate cap="watchcommand.portfolio">
+        <WatchCommandPanel />
+      </Gate>
+      <Gate cap="aar.hseep-exercise">
+        <ExerciseReviewPanel />
+      </Gate>
+      <Gate cap="doctrine.manuals">
+        <ManualsPanel />
+      </Gate>
+      <Gate cap="tactics.engine">
+        <TacticsPanel />
+      </Gate>
+      <MyAgencyRequestsPanel />
+      <PolicyEditorPanel />
+      <ProfileWatermark />
       <WindAdvisory />
       <Compass />
       <BootVeil msg={bootMsg} />

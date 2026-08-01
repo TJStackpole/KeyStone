@@ -108,6 +108,13 @@ export interface AppState {
   // ------------------- Prompt 11: NYCEM coordination layer -------------------
   /** Watch Command mode: the citywide multi-incident portfolio view. */
   watchCommand: boolean
+  /** Prompt 12 — active workspace profile. All rendering gates flow from the
+   *  capability manifest keyed by this. */
+  profile: 'fdny' | 'nycem'
+  /** Prompt 12 — cross-agency visibility policy (server-owned, hot-reloads). */
+  visibilityPolicy: import('../profiles/policy').VisibilityPolicy
+  /** Prompt 12 — admin visibility-policy editor. */
+  policyEditorOpen: boolean
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -259,6 +266,16 @@ const initial: AppState = {
   dispatchFeed: [],
   focusedFeedId: null,
   watchCommand: false,
+  // URL param (dual-screen launcher) beats the remembered choice beats FDNY.
+  // Inlined rather than imported from profiles/ — the manifest imports THIS
+  // module's hooks, and an import back would be a runtime cycle.
+  profile: (() => {
+    const q = new URLSearchParams(window.location.search).get('profile')
+    if (q === 'fdny' || q === 'nycem') return q
+    return localStorage.getItem('ks-profile') === 'nycem' ? ('nycem' as const) : ('fdny' as const)
+  })(),
+  visibilityPolicy: { par_member_names: 'full', riding_lists: 'full', radio_channels: 'all' },
+  policyEditorOpen: false,
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],

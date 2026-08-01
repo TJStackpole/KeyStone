@@ -1,4 +1,6 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
+import { useProfile } from '../profiles/manifest'
+import { radioChannelsAllowed, usePolicy } from '../profiles/policy'
 import { setAppState, useAppState } from '../state/store'
 import type { CommsChannel, TranscriptLine } from '../types'
 
@@ -68,6 +70,12 @@ const CommsLine = memo(function CommsLine({ line }: { line: TranscriptLine }) {
 
 export function CommsPanel() {
   const { commsOpen, commsChannel, transcripts, commsConfig, scenario, commsAll, commsSource } = useAppState()
+  // Prompt 12 — the visibility policy can restrict a coordinating profile to
+  // the merged command view (no per-channel tactical audio). Hot-reloads.
+  const allChannels = radioChannelsAllowed(useProfile(), usePolicy())
+  useEffect(() => {
+    if (!allChannels && scenario?.loaded && !commsAll) setAppState({ commsAll: true })
+  }, [allChannels, scenario?.loaded, commsAll])
   const scrollRef = useRef<HTMLDivElement>(null)
   const scenarioMode = !!scenario
 
@@ -133,7 +141,12 @@ export function CommsPanel() {
   return (
     <section className="comms-panel glass">
       <div className="comms-tabs">
-        {(scenarioMode ? SCENARIO_CHANNELS : CHANNELS).map((c) => (
+        {!allChannels && (
+          <span className="comms-policy-note" title="Per-channel radio is restricted for this profile (visibility policy)">
+            COMMAND VIEW ONLY · POLICY
+          </span>
+        )}
+        {(allChannels ? (scenarioMode ? SCENARIO_CHANNELS : CHANNELS) : scenarioMode ? [] : CHANNELS.slice(0, 1)).map((c) => (
           <button
             key={c.id}
             className={`comms-tab${!commsAll && commsChannel === c.id ? ' on' : ''}`}

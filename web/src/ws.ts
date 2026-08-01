@@ -44,6 +44,11 @@ interface SnapshotMsg {
   requestThresholds?: Record<RequestPriority, number>
   weather?: { alerts: NwsAlert[]; obs: WeatherObsNycem | null; suggestions: TriggerSuggestion[] }
   rules?: TriggerRule[]
+  visibilityPolicy?: Record<string, string>
+}
+interface PolicyMsg {
+  type: 'policy'
+  policy: Record<string, string>
 }
 interface DispatchFeedMsg {
   type: 'dispatch.feed'
@@ -142,6 +147,7 @@ interface ChatWsMsg {
 }
 type ServerMsg =
   | SnapshotMsg
+  | PolicyMsg
   | IncidentMsg
   | UnitMsg
   | UnitsBatchMsg
@@ -219,6 +225,7 @@ const REPLAY_SAFE = new Set([
   'requests',
   'weather',
   'rules',
+  'policy',
 ])
 
 function handle(msg: ServerMsg): void {
@@ -259,6 +266,7 @@ function handle(msg: ServerMsg): void {
         // The rules editor is snapshot-fed: nothing else delivers rules to a
         // fresh client (the 'rules' broadcast only fires on another PUT).
         triggerRules: msg.rules ?? s.triggerRules,
+        visibilityPolicy: msg.visibilityPolicy ? { ...s.visibilityPolicy, ...msg.visibilityPolicy } : s.visibilityPolicy,
         ...(msg.weather
           ? {
               weatherAlerts: msg.weather.alerts,
@@ -397,6 +405,11 @@ function handle(msg: ServerMsg): void {
       break
     case 'rules':
       setAppState({ triggerRules: msg.rules })
+      break
+    case 'policy':
+      // Hot-reload: the admin editor tightened/relaxed the visibility policy —
+      // every gated surface re-renders against it immediately.
+      setAppState((s) => ({ visibilityPolicy: { ...s.visibilityPolicy, ...msg.policy } }))
       break
     case 'unit.remove':
       setAppState((s) => {

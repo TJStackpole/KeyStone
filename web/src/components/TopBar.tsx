@@ -5,7 +5,9 @@ import {
   enterWatchCommand,
   exitWatchCommand,
   focusFeedIncident,
+  launchDualScreenDemo,
   loadScenario,
+  setProfile,
   runDemoScenario,
   setIsolateScale,
   setIsolateView,
@@ -16,6 +18,7 @@ import {
 } from '../actions'
 import { setAppState, useAppSlice, useAppState } from '../state/store'
 import type { FeedIncident, ToggleLayerId } from '../types'
+import { PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
 import { SearchBar } from './SearchBar'
 import { requestElapsed } from './WatchCommandPanel'
 
@@ -237,6 +240,16 @@ function ScenariosMenu() {
             <b>EXERCISE</b>
             <i>PABT drill + Queens flash flood, two incidents — live participants, HSEEP AAR at the end</i>
           </button>
+          <button
+            className="scenario-item"
+            onClick={() => {
+              setOpen(false)
+              void launchDualScreenDemo()
+            }}
+          >
+            <b>DUAL-SCREEN DEMO</b>
+            <i>This window → KeyStone FDNY tactical; opens KeyStone NYCEM Watch Command in a second window, same live clock</i>
+          </button>
         </div>
       )}
     </div>
@@ -439,6 +452,16 @@ function PanelsMenu({
       </button>
       {open && (
         <div className="panels-menu glass">
+          <button
+            className="panel-item"
+            onClick={() => {
+              setOpen(false)
+              setAppState({ policyEditorOpen: true })
+            }}
+            title="Cross-agency visibility policy — hot-reloads on every dashboard (admin)"
+          >
+            POLICY · ADMIN
+          </button>
           {PANEL_TABS.map((t) => (
             <button
               key={t.id}
@@ -466,6 +489,59 @@ const LAYER_LABEL: Record<string, string> = {
   firehouses: 'FIREHOUSES',
   safety: 'DOB DATA',
   persistence: 'PERSISTENCE',
+}
+
+/**
+ * Prompt 12 — the workspace profile switcher lives in the wordmark. Anyone
+ * can switch instantly (PROFILE_SWITCHABLE flips to role-locked when sign-in
+ * lands); the switch preserves map position and logs to the event log.
+ */
+function ProfileSwitcher() {
+  const profile = useProfile()
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  const active = PROFILES.find((p) => p.id === profile) ?? PROFILES[0]
+  return (
+    <div className="wordmark" ref={wrapRef}>
+      <span className="sub">{active.sub}</span>
+      <div className="brand-row">
+        <button
+          className="name profile-btn"
+          disabled={!PROFILE_SWITCHABLE}
+          onClick={() => setOpen((o) => !o)}
+          title="Switch workspace profile — instant, map position preserved, logged"
+        >
+          {active.label.toUpperCase()} {open ? '▴' : '▾'}
+        </button>
+        <IncidentsMenu />
+      </div>
+      {open && (
+        <div className="profile-menu glass">
+          {PROFILES.map((p) => (
+            <button
+              key={p.id}
+              className={`profile-item${p.id === profile ? ' on' : ''}`}
+              onClick={() => {
+                setOpen(false)
+                setProfile(p.id)
+              }}
+            >
+              <b>{p.label}</b>
+              <i>{p.sub}</i>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** WATCH CMD chip with an attention badge: pending weather suggestions and
@@ -508,18 +584,16 @@ export function TopBar() {
     viewMode,
     watchCommand,
   } = useAppState()
+  const canManuals = useCapability('doctrine.manuals')
+  const canTactics = useCapability('tactics.engine')
+  const canWatch = useCapability('watchcommand.portfolio')
+  const canEoc = useCapability('eoc.level-chip')
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
   return (
     <header className="topbar glass">
-      <div className="wordmark">
-        <span className="sub">Common Operating Picture · FDNY / NYCEM</span>
-        <div className="brand-row">
-          <span className="name">KEYSTONE</span>
-          <IncidentsMenu />
-        </div>
-      </div>
+      <ProfileSwitcher />
       <SearchBar />
       <ScenariosMenu />
       <div className="topbar-right">
@@ -529,14 +603,16 @@ export function TopBar() {
           </span>
         ))}
         <OverlaysMenu />
-        <button
-          className="chip chip-btn"
-          onClick={() => setAppState((s) => ({ manualsOpen: !s.manualsOpen }))}
-          title="Ask the Manuals — cited answers from the local FDNY publications corpus"
-        >
-          <span className="dot" /> MANUALS
-        </button>
-        {incident && (
+        {canManuals && (
+          <button
+            className="chip chip-btn"
+            onClick={() => setAppState((s) => ({ manualsOpen: !s.manualsOpen }))}
+            title="Ask the Manuals — cited answers from the local FDNY publications corpus"
+          >
+            <span className="dot" /> MANUALS
+          </button>
+        )}
+        {incident && canTactics && (
           <button
             className="chip chip-btn amber"
             onClick={() => setAppState((s) => ({ tacticsOpen: !s.tacticsOpen }))}
@@ -566,8 +642,8 @@ export function TopBar() {
           <span className="dot" /> ACTIVE INCIDENT
         </button>
         {incident && activeIncidentMode && <IsolateMenu />}
-        <WatchCmdChip watchCommand={watchCommand} />
-        <EocChip />
+        {canWatch && <WatchCmdChip watchCommand={watchCommand} />}
+        {canEoc && <EocChip />}
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && (
           <button

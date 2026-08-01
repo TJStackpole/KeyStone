@@ -37,6 +37,7 @@ import {
   type TickerEvent,
   type TriggerRule,
 } from './nycem.js'
+import { POLICY_SCHEMA, setVisibilityPolicy, visibilityPolicy } from './policy.js'
 import { WeatherWatch, type TriggerSuggestion } from './weather.js'
 import {
   appendTimeline,
@@ -167,6 +168,8 @@ wss.on('connection', (socket) => {
       // otherwise show an empty (dead) rules editor while the server is
       // actively evaluating three enabled rules.
       rules: triggerRules(),
+      // Prompt 12 — cross-agency visibility policy (hot-reloads via PUT).
+      visibilityPolicy: visibilityPolicy(),
     }),
   )
 })
@@ -1016,6 +1019,21 @@ app.put('/api/exercises/:id', (req, res) => {
   }
   if (!updateExercise(req.params.id, aar)) return res.status(404).json({ error: 'no such exercise' })
   res.json({ ok: true })
+})
+
+// ------------------- Visibility policy (Prompt 12, admin) -------------------
+
+app.get('/api/policy', (_req, res) => res.json({ policy: visibilityPolicy(), schema: POLICY_SCHEMA }))
+
+app.put('/api/policy', (req, res) => {
+  const next = setVisibilityPolicy((req.body as { policy?: unknown }).policy)
+  if (!next) return res.status(400).json({ error: 'unknown policy field or value', schema: POLICY_SCHEMA })
+  appendTimeline('policy.changed', { policy: next })
+  ticker('plan', `Visibility policy updated — ${Object.entries(next).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+  // Hot reload: every connected dashboard re-renders against the new policy
+  // immediately — the "tighten it live in a meeting" path.
+  broadcast({ type: 'policy', policy: next })
+  res.json({ policy: next })
 })
 
 app.get('/api/nycem/state', (_req, res) =>
