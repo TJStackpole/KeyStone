@@ -23,6 +23,7 @@ export function ExerciseReviewPanel() {
     setRawDraft(next)
     setSaved('clean')
     setDirty(true)
+    setAppState({ exerciseReviewDirty: true }) // profile switcher checks this
   }
 
   // Closing discards the local draft — unsaved edits get a two-step confirm
@@ -32,7 +33,7 @@ export function ExerciseReviewPanel() {
       setConfirmClose(true)
       return
     }
-    setAppState({ exerciseReview: null })
+    setAppState({ exerciseReview: null, exerciseReviewDirty: false })
   }
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export function ExerciseReviewPanel() {
     setSaved('clean')
     setDirty(false)
     setConfirmClose(false)
+    setAppState({ exerciseReviewDirty: false })
     if (exerciseReview) {
       fetch('/api/exercises')
         .then((r) => r.json())
@@ -73,6 +75,7 @@ export function ExerciseReviewPanel() {
       if (res.ok) {
         setDirty(false)
         setConfirmClose(false)
+        setAppState({ exerciseReviewDirty: false })
       }
     } catch {
       setSaved('failed') // server down mid-review — keep the draft, show it

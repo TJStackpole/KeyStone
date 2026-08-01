@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   activateInspectedIncident,
   changeEocLevel,
@@ -16,9 +16,9 @@ import {
   toggleLayer,
   toggleTopDownView,
 } from '../actions'
-import { setAppState, useAppSlice, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { FeedIncident, ToggleLayerId } from '../types'
-import { PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
+import { hasCapability, PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
 import { SearchBar } from './SearchBar'
 import { requestElapsed } from './WatchCommandPanel'
 
@@ -38,7 +38,7 @@ const OVERLAYS: { id: ToggleLayerId; label: string; hint: string }[] = [
 ]
 
 function OverlaysMenu() {
-  const { layerToggles } = useAppState()
+  const { layerToggles } = useAppSlice((s) => ({ layerToggles: s.layerToggles }))
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -93,7 +93,7 @@ function feedElapsed(startedAt: string): string {
  * stand-up at its location plus the responding assignment.
  */
 function IncidentsMenu() {
-  const { dispatchFeed, focusedFeedId } = useAppState()
+  const { dispatchFeed, focusedFeedId } = useAppSlice((s) => ({ dispatchFeed: s.dispatchFeed, focusedFeedId: s.focusedFeedId }))
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -106,15 +106,19 @@ function IncidentsMenu() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [open])
 
-  // Division -> Battalion -> incidents, all numerically ordered.
-  const byDivision = new Map<number, Map<number, FeedIncident[]>>()
-  for (const fi of dispatchFeed) {
-    if (!byDivision.has(fi.division)) byDivision.set(fi.division, new Map())
-    const byBn = byDivision.get(fi.division)!
-    if (!byBn.has(fi.battalion)) byBn.set(fi.battalion, [])
-    byBn.get(fi.battalion)!.push(fi)
-  }
-  const divisions = [...byDivision.entries()].sort((a, b) => a[0] - b[0])
+  // Division -> Battalion -> incidents, all numerically ordered. Built only
+  // while the dropdown is open — closed, this ran on every feed update.
+  const divisions = useMemo(() => {
+    if (!open) return []
+    const byDivision = new Map<number, Map<number, FeedIncident[]>>()
+    for (const fi of dispatchFeed) {
+      if (!byDivision.has(fi.division)) byDivision.set(fi.division, new Map())
+      const byBn = byDivision.get(fi.division)!
+      if (!byBn.has(fi.battalion)) byBn.set(fi.battalion, [])
+      byBn.get(fi.battalion)!.push(fi)
+    }
+    return [...byDivision.entries()].sort((a, b) => a[0] - b[0])
+  }, [open, dispatchFeed])
 
   const pick = (fi: FeedIncident) => {
     setOpen(false)
@@ -193,6 +197,7 @@ function Clock() {
 
 /** DEMO + DRILL combined — one launcher, two scripted scenarios. */
 function ScenariosMenu() {
+  const canExercise = useCapability('aar.hseep-exercise')
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -230,16 +235,18 @@ function ScenariosMenu() {
             <b>DRILL</b>
             <i>Multi-agency bus fire w/ MCI at the Port Authority Bus Terminal</i>
           </button>
-          <button
-            className="scenario-item drill"
-            onClick={() => {
-              setOpen(false)
-              void loadScenario('pabt-flood-exercise', { exercise: true })
-            }}
-          >
-            <b>EXERCISE</b>
-            <i>PABT drill + Queens flash flood, two incidents — live participants, HSEEP AAR at the end</i>
-          </button>
+          {canExercise && (
+            <button
+              className="scenario-item drill"
+              onClick={() => {
+                setOpen(false)
+                void loadScenario('pabt-flood-exercise', { exercise: true })
+              }}
+            >
+              <b>EXERCISE</b>
+              <i>PABT drill + Queens flash flood, two incidents — live participants, HSEEP AAR at the end</i>
+            </button>
+          )}
           <button
             className="scenario-item"
             onClick={() => {
@@ -259,7 +266,7 @@ function ScenariosMenu() {
 /** EOC activation level chip (Prompt 11): Level 4 Watch Command is the
  *  always-on default; every change requires "changed by" and logs. */
 function EocChip() {
-  const { eoc } = useAppState()
+  const { eoc } = useAppSlice((s) => ({ eoc: s.eoc }))
   const [open, setOpen] = useState(false)
   const [by, setBy] = useState(() => localStorage.getItem('ks-operator') ?? '')
   const [failed, setFailed] = useState(false)
@@ -337,7 +344,7 @@ function EocChip() {
  * three top-bar slots.
  */
 function IsolateMenu() {
-  const { isolateMode, isolateView, isolateScale } = useAppState()
+  const { isolateMode, isolateView, isolateScale } = useAppSlice((s) => ({ isolateMode: s.isolateMode, isolateView: s.isolateView, isolateScale: s.isolateScale }))
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -498,7 +505,11 @@ const LAYER_LABEL: Record<string, string> = {
  */
 function ProfileSwitcher() {
   const profile = useProfile()
+  const { exerciseReviewDirty } = useAppSlice((s) => ({ exerciseReviewDirty: s.exerciseReviewDirty }))
   const [open, setOpen] = useState(false)
+  // Switching to a profile without the AAR capability unmounts the review
+  // panel and destroys unsaved facilitator edits — arm a two-step confirm.
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -525,19 +536,28 @@ function ProfileSwitcher() {
       </div>
       {open && (
         <div className="profile-menu glass">
-          {PROFILES.map((p) => (
-            <button
-              key={p.id}
-              className={`profile-item${p.id === profile ? ' on' : ''}`}
-              onClick={() => {
-                setOpen(false)
-                setProfile(p.id)
-              }}
-            >
-              <b>{p.label}</b>
-              <i>{p.sub}</i>
-            </button>
-          ))}
+          {PROFILES.map((p) => {
+            const losesAar = exerciseReviewDirty && !hasCapability(p.id, 'aar.hseep-exercise')
+            const armed = confirmId === p.id
+            return (
+              <button
+                key={p.id}
+                className={`profile-item${p.id === profile ? ' on' : ''}${armed ? ' warn' : ''}`}
+                onClick={() => {
+                  if (losesAar && !armed) {
+                    setConfirmId(p.id)
+                    return
+                  }
+                  setOpen(false)
+                  setConfirmId(null)
+                  setProfile(p.id)
+                }}
+              >
+                <b>{armed ? 'DISCARD UNSAVED AAR EDITS?' : p.label}</b>
+                <i>{armed ? 'This profile has no AAR review — switching loses your edits. Click again to proceed.' : p.sub}</i>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
@@ -574,16 +594,7 @@ function WatchCmdChip({ watchCommand }: { watchCommand: boolean }) {
 }
 
 export function TopBar() {
-  const {
-    providerMode,
-    layers,
-    utilityTab,
-    incident,
-    inspected,
-    activeIncidentMode,
-    viewMode,
-    watchCommand,
-  } = useAppState()
+  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand }))
   const canManuals = useCapability('doctrine.manuals')
   const canTactics = useCapability('tactics.engine')
   const canWatch = useCapability('watchcommand.portfolio')

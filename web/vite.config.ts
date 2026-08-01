@@ -16,6 +16,17 @@ export default defineConfig({
       cesiumBuildRootPath: cesiumBuildRoot,
       cesiumBuildPath: path.join(cesiumBuildRoot, 'Cesium/'),
     }),
+    {
+      // vite-plugin-cesium injects a CLASSIC script tag for the 5.9 MB
+      // Cesium.js into <head> — parser-blocking, so prod first paint waits
+      // for the full download+parse. defer keeps execution order (deferred
+      // scripts run before module scripts) while unblocking the dark shell.
+      name: 'defer-cesium-script',
+      enforce: 'post' as const,
+      transformIndexHtml(html: string) {
+        return html.replace(/<script src="([^"]*cesium[^"]*\.js)">/i, '<script defer src="$1">')
+      },
+    },
   ],
   // One .env at the repo root serves web + server. Only the two 3D-provider keys
   // are ever exposed to the client (they are client-side keys by design).

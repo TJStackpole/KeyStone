@@ -1,4 +1,4 @@
-import { adoptIncident, clearLocalIncident, flyToAlert, relocateIncidentSite, unitMapVisible } from './actions'
+import { adoptIncident, applyUnitVisibility, clearLocalIncident, flyToAlert, relocateIncidentSite, unitMapVisible } from './actions'
 import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
 import { getAppState, setAppState } from './state/store'
 import type {
@@ -408,8 +408,10 @@ function handle(msg: ServerMsg): void {
       break
     case 'policy':
       // Hot-reload: the admin editor tightened/relaxed the visibility policy —
-      // every gated surface re-renders against it immediately.
+      // every gated surface re-renders against it immediately, including the
+      // member markers on the globe.
       setAppState((s) => ({ visibilityPolicy: { ...s.visibilityPolicy, ...msg.policy } }))
+      applyUnitVisibility()
       break
     case 'unit.remove':
       setAppState((s) => {

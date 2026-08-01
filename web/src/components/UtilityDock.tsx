@@ -3,7 +3,7 @@ import { flyToUnit } from '../actions'
 import { getUnitLayer } from '../cesium/scene'
 import { useProfile } from '../profiles/manifest'
 import { memberDetailAllowed, usePolicy } from '../profiles/policy'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import { airMinutesLeft, bioStatusOf, crewOf, type BioStatus, type Unit } from '../types'
 import { droneStreamFor } from './DronePanel'
 import { SitrepContent } from './SitrepPanel'
@@ -22,7 +22,7 @@ const TABS = [
 ] as const
 
 export function UtilityDock() {
-  const { utilityTab } = useAppState()
+  const { utilityTab } = useAppSlice((s) => ({ utilityTab: s.utilityTab }))
   if (!utilityTab) return null
 
   return (
@@ -79,7 +79,7 @@ const MemberChip = memo(function MemberChip({ m }: { m: Unit }) {
 })
 
 function FloorsContent() {
-  const { units, timeline } = useAppState()
+  const { units, timeline } = useAppSlice((s) => ({ units: s.units, timeline: s.timeline }))
 
   const { fireFloor, buildingFloors } = useMemo(() => {
     for (let i = timeline.length - 1; i >= 0; i--) {
@@ -170,7 +170,7 @@ function FloorsContent() {
 // ------------------------------- VIDEO tab ----------------------------------
 
 function VideoContent() {
-  const { units, selectedUnitUid } = useAppState()
+  const { units, selectedUnitUid } = useAppSlice((s) => ({ units: s.units, selectedUnitUid: s.selectedUnitUid }))
   const drones = useMemo(
     () =>
       Object.values(units)
@@ -252,7 +252,7 @@ function Bar({ frac, tone }: { frac: number; tone: BioStatus }) {
 }
 
 function BioContent() {
-  const { units } = useAppState()
+  const { units } = useAppSlice((s) => ({ units: s.units }))
   const members = useMemo(() => {
     const list = Object.values(units).filter(
       (u): u is Unit & { bio: NonNullable<Unit['bio']> } =>

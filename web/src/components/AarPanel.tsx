@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
 
 const REPORT_KINDS = new Set([
@@ -61,7 +61,7 @@ function line(ev: TimelineEvent): string {
  * PRINT hands it to the browser's print dialog for PDF export.
  */
 export function AarPanel() {
-  const { aarOpen, timeline, incident, units, scenario } = useAppState()
+  const { aarOpen, timeline, incident, units, scenario } = useAppSlice((s) => ({ aarOpen: s.aarOpen, timeline: s.timeline, incident: s.incident, units: s.units, scenario: s.scenario }))
 
   const rows = useMemo(() => timeline.filter((ev) => REPORT_KINDS.has(ev.kind)), [timeline])
   const byAgency = useMemo(() => {

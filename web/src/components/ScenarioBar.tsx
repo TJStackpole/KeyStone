@@ -1,5 +1,6 @@
 import { jumpScenarioChapter, pauseScenario, playScenario, seekScenario, setScenarioSpeed, stopScenario } from '../actions'
-import { useAppState } from '../state/store'
+import { useCapability } from '../profiles/manifest'
+import { useAppSlice } from '../state/store'
 
 function fmtClock(s: number): string {
   const m = Math.floor(s / 60)
@@ -13,7 +14,8 @@ function fmtClock(s: number): string {
  * always-on "DRILL — SIMULATED INCIDENT" label required by exercise practice.
  */
 export function ScenarioBar() {
-  const { scenario } = useAppState()
+  const { scenario } = useAppSlice((s) => ({ scenario: s.scenario }))
+  const canEndExercise = useCapability('aar.hseep-exercise')
   if (!scenario) return null
   const current = [...scenario.chapters].reverse().find((c) => c.t <= scenario.clock)
   return (
@@ -63,9 +65,15 @@ export function ScenarioBar() {
           {c.title}
         </button>
       ))}
-      <button className="scn-btn stop" onClick={() => void stopScenario()} title="End the drill and clear it from the picture">
-        ✕
-      </button>
+      {(!scenario.exercise || canEndExercise) ? (
+        <button className="scn-btn stop" onClick={() => void stopScenario()} title="End the drill and clear it from the picture">
+          ✕
+        </button>
+      ) : (
+        <span className="scn-facilitator" title="A live exercise is recording — only the facilitator (NYCEM workspace) can end it">
+          FACILITATOR-CONTROLLED
+        </span>
+      )}
     </div>
   )
 }

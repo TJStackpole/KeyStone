@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 import type { Agency } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ function hhmm(iso?: string): string {
 }
 
 export function SitrepContent() {
-  const { incident, units, timeline, transcripts, shapes } = useAppState()
+  const { incident, units, timeline, transcripts, shapes } = useAppSlice((s) => ({ incident: s.incident, units: s.units, timeline: s.timeline, transcripts: s.transcripts, shapes: s.shapes }))
   const [, tick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 5000)

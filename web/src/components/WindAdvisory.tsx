@@ -1,4 +1,4 @@
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
 // Module 4 — wind-impacted fire advisory. Fires when live NWS wind exceeds
@@ -12,7 +12,7 @@ import { useAppState } from '../state/store'
 export const WIND_DRIVEN_KT = 17
 
 export function WindAdvisory() {
-  const { wind, incident, timeline } = useAppState()
+  const { wind, incident, timeline } = useAppSlice((s) => ({ wind: s.wind, incident: s.incident, timeline: s.timeline }))
   if (!wind || !incident || wind.speedKt < WIND_DRIVEN_KT) return null
   let fireFloor: number | null = null
   for (let i = timeline.length - 1; i >= 0; i--) {

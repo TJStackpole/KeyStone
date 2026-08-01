@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { goHome, goToIncident, reorientNorth } from '../actions'
 import { getScene } from '../cesium/scene'
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 
 /**
  * Live compass: the needle tracks camera heading; one click swings the map
  * back to north (rotating about the view center, not the camera).
  */
 export function Compass() {
-  const { sceneReady, incident } = useAppState()
+  const { sceneReady, incident } = useAppSlice((s) => ({ sceneReady: s.sceneReady, incident: s.incident }))
   const [headingDeg, setHeadingDeg] = useState(0)
 
   useEffect(() => {

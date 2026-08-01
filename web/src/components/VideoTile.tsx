@@ -1,4 +1,4 @@
-import Hls from 'hls.js'
+import type Hls from 'hls.js'
 import { useEffect, useRef, useState } from 'react'
 import { hlsUrl, playWhep, type WhepSession } from '../video/whep'
 
@@ -38,18 +38,23 @@ export function VideoTile({
     }
 
     // Fallback for environments where WebRTC media can't flow: MediaMTX HLS.
-    const connectHls = () => {
+    // hls.js is ~500 kB min — over half the app chunk — and most sessions
+    // never reach this path, so it loads lazily right here instead of
+    // riding the boot bundle.
+    const connectHls = async () => {
       const video = videoRef.current
       if (dead || !video) return false
-      if (Hls.isSupported()) {
-        hls = new Hls({ lowLatencyMode: true, liveDurationInfinity: true })
+      const { default: HlsCtor } = await import('hls.js')
+      if (dead) return false
+      if (HlsCtor.isSupported()) {
+        hls = new HlsCtor({ lowLatencyMode: true, liveDurationInfinity: true })
         hls.loadSource(hlsUrl(stream))
         hls.attachMedia(video)
-        hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        hls.on(HlsCtor.Events.FRAG_BUFFERED, () => {
           if (!dead) setState('live')
           void video.play().catch(() => undefined)
         })
-        hls.on(Hls.Events.ERROR, (_e, data) => {
+        hls.on(HlsCtor.Events.ERROR, (_e, data) => {
           if (data.fatal) {
             hls?.destroy()
             hls = null
@@ -83,7 +88,7 @@ export function VideoTile({
           if (!dead && video.readyState < 2) {
             session?.stop()
             session = null
-            if (!connectHls()) scheduleRetry()
+            void connectHls().then((ok) => ok || scheduleRetry())
           }
         }, 4000)
         video.onloadeddata = () => {
@@ -95,11 +100,11 @@ export function VideoTile({
           if ((s === 'failed' || s === 'disconnected' || s === 'closed') && !dead && session) {
             session.stop()
             session = null
-            if (!connectHls()) scheduleRetry()
+            void connectHls().then((ok) => ok || scheduleRetry())
           }
         }
       } catch {
-        if (!dead && !connectHls()) scheduleRetry()
+        if (!dead) void connectHls().then((ok) => ok || scheduleRetry())
       }
     }
     void connect()

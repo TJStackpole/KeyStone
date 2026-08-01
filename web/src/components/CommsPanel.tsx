@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { useProfile } from '../profiles/manifest'
 import { radioChannelsAllowed, usePolicy } from '../profiles/policy'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { CommsChannel, TranscriptLine } from '../types'
 
 const CHANNELS: { id: CommsChannel; label: string }[] = [
@@ -69,13 +69,16 @@ const CommsLine = memo(function CommsLine({ line }: { line: TranscriptLine }) {
 })
 
 export function CommsPanel() {
-  const { commsOpen, commsChannel, transcripts, commsConfig, scenario, commsAll, commsSource } = useAppState()
+  const { commsOpen, commsChannel, transcripts, commsConfig, scenario, commsAll, commsSource } = useAppSlice((s) => ({ commsOpen: s.commsOpen, commsChannel: s.commsChannel, transcripts: s.transcripts, commsConfig: s.commsConfig, scenario: s.scenario, commsAll: s.commsAll, commsSource: s.commsSource }))
   // Prompt 12 — the visibility policy can restrict a coordinating profile to
   // the merged command view (no per-channel tactical audio). Hot-reloads.
   const allChannels = radioChannelsAllowed(useProfile(), usePolicy())
   useEffect(() => {
     if (!allChannels && scenario?.loaded && !commsAll) setAppState({ commsAll: true })
-  }, [allChannels, scenario?.loaded, commsAll])
+    // Outside scenario mode the body renders transcripts[commsChannel] — a
+    // previously selected per-agency channel must clamp back to command.
+    if (!allChannels && !scenario?.loaded && commsChannel !== 'fdny') setAppState({ commsChannel: 'fdny' })
+  }, [allChannels, scenario?.loaded, commsAll, commsChannel])
   const scrollRef = useRef<HTMLDivElement>(null)
   const scenarioMode = !!scenario
 

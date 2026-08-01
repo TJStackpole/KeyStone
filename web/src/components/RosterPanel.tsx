@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
 import { useProfile } from '../profiles/manifest'
 import { memberDetailAllowed, usePolicy } from '../profiles/policy'
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 import { airMinutesLeft, crewOf, type Agency, type Unit, type UnitCategory } from '../types'
 
 const AGENCY_ORDER: Agency[] = ['FDNY', 'EMS', 'NYPD', 'PAPD', 'OEM', 'TAK']
@@ -54,7 +54,7 @@ function callsignSortKey(cs: string): [string, number] {
 }
 
 export function RosterPanel() {
-  const { units, incident, takConnected, dispatching, gpsTracking } = useAppState()
+  const { units, incident, takConnected, dispatching, gpsTracking } = useAppSlice((s) => ({ units: s.units, incident: s.incident, takConnected: s.takConnected, dispatching: s.dispatching, gpsTracking: s.gpsTracking }))
   const [collapsed, setCollapsed] = useState(false)
 
   const grouped = useMemo(() => {
@@ -158,7 +158,7 @@ function AirChip({ u }: { u: Unit }) {
   )
 }
 
-function MemberRow({ u }: { u: Unit }) {
+const MemberRow = memo(function MemberRow({ u }: { u: Unit }) {
   return (
     <button className="unit-row member" onClick={() => flyToUnit(u.uid)}>
       <span className="unit-callsign">{u.callsign}</span>
@@ -169,17 +169,19 @@ function MemberRow({ u }: { u: Unit }) {
       </span>
     </button>
   )
-}
+})
 
 function CrewBlock({ crew, members }: { crew: string; members: Unit[] }) {
-  const { memberCrewToggles } = useAppState()
+  const { memberCrewToggles } = useAppSlice((s) => ({ memberCrewToggles: s.memberCrewToggles }))
   const profile = useProfile()
   const policy = usePolicy()
   // Prompt 12 — per-field visibility enforcement: when the policy restricts
   // member-level PAR for a coordinating profile, this block renders unit
   // COUNTS only (per-crew accountability without member rows). Hot-reloads
   // with the policy — no page reload.
-  const memberDetail = memberDetailAllowed(profile, policy, 'par_member_names')
+  const memberDetail =
+    memberDetailAllowed(profile, policy, 'par_member_names') &&
+    memberDetailAllowed(profile, policy, 'riding_lists') // crew composition IS the riding list
   const visible = memberCrewToggles[crew] !== false
   const interior = members.filter((m) => (m.floor ?? 0) >= 1).length
   return (
@@ -208,7 +210,7 @@ function CrewBlock({ crew, members }: { crew: string; members: Unit[] }) {
 }
 
 function RosterGroup({ category, list }: { category: UnitCategory; list: Unit[] }) {
-  const { unitToggles } = useAppState()
+  const { unitToggles } = useAppSlice((s) => ({ unitToggles: s.unitToggles }))
   const visible = unitToggles[category]
   const crews = useMemo(() => {
     if (!CREW_GROUPED.has(category)) return null

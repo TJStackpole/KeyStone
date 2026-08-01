@@ -129,6 +129,8 @@ export interface AppState {
   triggerRules: TriggerRule[]
   /** Facilitator review screen for a finished exercise (M8). */
   exerciseReview: ExerciseSession | null
+  /** Unsaved facilitator edits exist in the review — guards lossy unmounts. */
+  exerciseReviewDirty: boolean
   /** IC view <-> NYCEM Watch Command coordination view. */
   /** After-action report overlay (auto-opens at scenario end). */
   aarOpen: boolean
@@ -288,6 +290,7 @@ const initial: AppState = {
   triggerSuggestions: [],
   triggerRules: [],
   exerciseReview: null,
+  exerciseReviewDirty: false,
   aarOpen: false,
   chats: [],
   chatOpen: false,
@@ -337,6 +340,9 @@ function subscribe(cb: () => void): () => void {
   listeners.add(cb)
   return () => listeners.delete(cb)
 }
+
+/** Non-React subscription (Cesium render-mode controller etc.). */
+export const subscribeStore = subscribe
 
 export function useAppState(): AppState {
   return useSyncExternalStore(subscribe, getAppState)

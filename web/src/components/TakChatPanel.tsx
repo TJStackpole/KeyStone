@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
 // TAK GeoChat — the interagency comm architecture. The console speaks as OEM
@@ -23,7 +23,7 @@ const ROOMS = [
  * COMMS panel. Green dot = link up (click for GeoChat); amber = link down.
  */
 export function TakLinkButton() {
-  const { takConnected } = useAppState()
+  const { takConnected } = useAppSlice((s) => ({ takConnected: s.takConnected }))
   if (takConnected === null) return null
   if (takConnected === false) {
     return (
@@ -44,7 +44,7 @@ export function TakLinkButton() {
 }
 
 export function TakChatPanel() {
-  const { chatOpen, chats, takConnected } = useAppState()
+  const { chatOpen, chats, takConnected } = useAppSlice((s) => ({ chatOpen: s.chatOpen, chats: s.chats, takConnected: s.takConnected }))
   const [room, setRoom] = useState('All Chat Rooms')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)

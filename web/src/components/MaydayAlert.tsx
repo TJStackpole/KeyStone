@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { flyToAlert } from '../actions'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 
 /**
  * Full-screen emergency alert (mayday / zone breach). The red frame stays up
@@ -8,7 +8,7 @@ import { setAppState, useAppState } from '../state/store'
  * running clock shows time since transmission — the number every IC watches.
  */
 export function MaydayAlert() {
-  const { alert } = useAppState()
+  const { alert } = useAppSlice((s) => ({ alert: s.alert }))
   const [acked, setAcked] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 

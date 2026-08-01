@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { autocompleteAddress } from '../api/geosearch'
 import { standUpIncident } from '../actions'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { GeoHit } from '../types'
 
 // Speech engines often return house numbers as WORDS ("one hundred gold
@@ -110,7 +110,7 @@ export function SearchBar() {
 
   // Tap-a-building fills the search with that address (one Enter away from a
   // new incident there).
-  const { searchPrefill } = useAppState()
+  const { searchPrefill } = useAppSlice((s) => ({ searchPrefill: s.searchPrefill }))
   useEffect(() => {
     if (!searchPrefill) return
     setAppState({ searchPrefill: null })

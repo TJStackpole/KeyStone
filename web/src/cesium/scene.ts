@@ -1,3 +1,4 @@
+import { attachRenderModeController } from './renderMode'
 import * as Cesium from 'cesium'
 import type { SceneHandle } from './providers'
 import { DrawController } from '../ics/draw'
@@ -39,7 +40,10 @@ let portfolioLayer: PortfolioLayer | null = null
 let roadLayer: RoadLayer | null = null
 let hazardLayer: HazardLayer | null = null
 
+let detachRenderMode: (() => void) | null = null
+
 export function registerScene(h: SceneHandle): void {
+  detachRenderMode = attachRenderModeController(h.viewer)
   handle = h
   footprintLayer = new FootprintLayer(h.viewer)
   intelLayer = new IntelMarkerLayer(h.viewer)
@@ -66,6 +70,8 @@ export function registerScene(h: SceneHandle): void {
 }
 
 export function unregisterScene(): void {
+  detachRenderMode?.()
+  detachRenderMode = null
   drawController?.destroy()
   handle = null
   footprintLayer = null

@@ -38,6 +38,8 @@ import {
   getUnitLayer,
 } from './cesium/scene'
 import { replayEngine } from './replay'
+import { hasCapability } from './profiles/manifest'
+import { memberDetailAllowed } from './profiles/policy'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
 import { crewOf } from './types'
 import type {
@@ -765,7 +767,15 @@ export function setProfile(next: 'fdny' | 'nycem'): void {
   const prev = getAppState().profile
   if (next === prev) return
   localStorage.setItem('ks-profile', next)
+  // Each window stays sovereign: with ?profile pinned in the URL, another
+  // window's localStorage write can't flip this one on its next reload.
+  if (new URLSearchParams(window.location.search).has('profile')) {
+    const url = new URL(window.location.href)
+    url.searchParams.set('profile', next)
+    window.history.replaceState(null, '', url)
+  }
   setAppState({ profile: next })
+  applyUnitVisibility() // member markers are policy+profile gated
   if (next === 'nycem') {
     // Coordination posture: open the Watch Command chrome WITHOUT the
     // citywide camera flight — switching must preserve map position (the
@@ -800,6 +810,10 @@ const WATCH_VIEW = { lon: -73.94, lat: 40.55, height: 62_000, pitchDeg: -55 }
 export function enterWatchCommand(): void {
   const scene = getScene()
   if (!scene) return
+  // Manifest guard: profiles without the Watch Command capability must never
+  // enter this state — its panels, Escape handler, and exit chip are all
+  // gated off, leaving an unrecoverable citywide half-state.
+  if (!hasCapability(getAppState().profile, 'watchcommand.portfolio')) return
   if (getAppState().groundViewActive) exitGround()
   // Isolate clips every building but the incident out of the scene — the
   // citywide portfolio over a clipped-away city is unreadable. Unwind it
@@ -824,9 +838,16 @@ export function enterWatchCommand(): void {
  * layer — one playback authority).
  */
 export async function launchDualScreenDemo(): Promise<void> {
+  if (getAppState().exerciseReviewDirty) {
+    console.warn('[profile] dual-screen launch blocked: unsaved AAR edits — save or discard first')
+    return
+  }
   setProfile('fdny')
-  window.open(`${location.origin}${location.pathname}?profile=nycem`, 'keystone-nycem', 'width=1680,height=1050')
-  await loadScenario('pabt-flood-exercise')
+  const win = window.open(`${location.origin}${location.pathname}?profile=nycem`, 'keystone-nycem', 'width=1680,height=1050')
+  if (!win) console.warn('[profile] NYCEM window blocked by the popup blocker — allow popups and relaunch')
+  // exercise:true so the NYCEM window gets the ENDEX/AAR chrome; this
+  // window's enterWatchCommand is a no-op under the FDNY profile.
+  await loadScenario('pabt-flood-exercise', { exercise: true })
 }
 
 export function exitWatchCommand(): void {
@@ -2030,6 +2051,10 @@ export function unitMapVisible(u: Unit): boolean {
     // Per-crew switch: the roster can hide one company's members while the
     // rest of the picture stays up. Missing key = shown.
     if (s.memberCrewToggles[crewOf(u.callsign)] === false) return false
+    // Visibility policy: under aggregate-only PAR a coordinating profile
+    // must not see member-level markers on the map either — the roster
+    // hides the rows while the globe would leak the same callsign+floor.
+    if (!memberDetailAllowed(s.profile, s.visibilityPolicy, 'par_member_names')) return false
     return u.category === 'ff' && (u.floor ?? 0) >= 1
   }
   return true

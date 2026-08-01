@@ -237,10 +237,11 @@ app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-200) }))
 // ---------------------- Module 1: Ask the Manuals ---------------------------
 // Extractive search over the locally-indexed FD Books corpus. Only short
 // query-relevant snippets with full citations ever leave this process.
-doctrine.load()
+// Doctrine loads lazily on first use (doctrine.ensureLoaded below) — the
+// index rebuild does not belong on the boot path of every dev restart.
 
 app.get('/api/doctrine/status', (_req, res) =>
-  res.json({ ready: doctrine.ready, report: doctrine.report }),
+  (doctrine.ensureLoaded(), res.json({ ready: doctrine.ready, report: doctrine.report })),
 )
 
 // Module 3: pre-generated tactics cards (derived from the corpus — local
@@ -265,6 +266,7 @@ app.get('/api/doctrine/ask', (req, res) => {
   const q = String(req.query.q ?? '').trim()
   const topic = req.query.topic ? String(req.query.topic) : undefined
   if (!q) return res.status(400).json({ error: 'q required' })
+  doctrine.ensureLoaded()
   if (!doctrine.ready) {
     return res.json({ ready: false, found: false, results: [] })
   }
@@ -1060,7 +1062,17 @@ simComms.start()
 // ---------------------------------------------------------------------------
 app.get('/healthz', (_req, res) => res.json({ ok: true, service: 'keystone-server' }))
 
-app.get('/api/incident', (_req, res) => res.json(getState()))
+app.get('/api/incident', (req, res) => {
+  const state = getState()
+  // Default response mirrors the ws snapshot trim: the unit.track flood can
+  // reach the 12k cap (~2.4 MB) on a long incident — dashboards reloading
+  // only need the incident + milestones. Replay passes ?full=1 for tracks.
+  if (req.query.full === '1') return res.json(state)
+  res.json({
+    ...state,
+    timeline: state.timeline.filter((e) => e.kind !== 'unit.track').slice(-400),
+  })
+})
 
 app.get('/api/units', (_req, res) => res.json({ units: registry.all(), takConnected: tak.connected }))
 

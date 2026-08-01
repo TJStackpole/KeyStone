@@ -48,11 +48,13 @@ export function MyAgencyRequestsPanel() {
   const active = mine.filter((r) => r.state !== 'complete' && r.state !== 'declined')
   if (!mine.length) return null
   const operator = localStorage.getItem('ks-operator') ?? 'unnamed operator'
+  const breaches = active.filter((r) => requestElapsed(r, requestThresholds).breach).length
 
   return (
     <section className="agency-req glass">
-      <button className="agency-req-head" onClick={() => setCollapsed((c) => !c)}>
+      <button className={`agency-req-head${breaches && collapsed ? ' breach' : ''}`} onClick={() => setCollapsed((c) => !c)}>
         <span className="card-title">MY AGENCY REQUESTS</span>
+        {breaches > 0 && <b className="agency-req-breachcount">{breaches} PAST SLA</b>}
         <b>{active.length} ACTIVE</b>
         <i>{collapsed ? '▸' : '▾'}</i>
       </button>

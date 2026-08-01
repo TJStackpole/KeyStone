@@ -218,6 +218,9 @@ export class ScenarioEngine extends EventEmitter {
   private lastStatusPush = 0
   private pendingAlert: Record<string, unknown> | null = null
   private lastKeepalive = 0
+  /** Constant of the loaded file (events sorted asc at load) — status() and
+   *  ticks used to recompute it with a Math.max spread over every event. */
+  private fileDuration = 0
   /** High-water event INDEX whose milestones were already emitted — events
    *  replayed below it (after a rewind) must not re-append to the timeline. */
   private maxEmittedCursor = 0
@@ -252,7 +255,7 @@ export class ScenarioEngine extends EventEmitter {
       playing: this.playing,
       speed: this.speed,
       clock: Math.round(this.clock),
-      duration: this.file ? Math.max(...this.file.events.map((e) => e.t)) : 0,
+      duration: this.fileDuration,
       chapters: this.file?.chapters ?? [],
       exercise: this.exercise,
     }
@@ -273,6 +276,9 @@ export class ScenarioEngine extends EventEmitter {
     // an out-of-order chapter (authored or appended) would win the highlight
     // for the rest of the run. Sort here so file order can't matter.
     file.chapters?.sort((a, b) => a.t - b.t)
+    // Duration is a constant of the file — status() pushes once per second
+    // and ticks re-checked it with a full Math.max spread over all events.
+    this.fileDuration = file.events.length ? file.events[file.events.length - 1].t : 0
     // Normalize every drill uid/id onto this stack's DRILL-<ns>- namespace.
     // The DRILL- family keys tombstones, the rx-log filter, SIM chat badging,
     // and arrival chatter — an unprefixed uid would silently lose every one
@@ -348,8 +354,7 @@ export class ScenarioEngine extends EventEmitter {
   /** Seek to an arbitrary scenario second (progress-bar scrubbing). */
   seekTo(t: number, label?: string): void {
     if (!this.file) return
-    const duration = Math.max(...this.file.events.map((e) => e.t))
-    const target = Math.max(0, Math.min(t, duration))
+    const target = Math.max(0, Math.min(t, this.fileDuration))
     const rewind = target < this.clock
     // Scrub direction must not change transport state — teardown(true)
     // forces playing=false, so remember and restore it.
@@ -446,8 +451,7 @@ export class ScenarioEngine extends EventEmitter {
     this.processDue(false)
     this.moveUnits()
     if (Date.now() - this.lastStatusPush > 1000) this.pushStatus()
-    const duration = Math.max(...this.file.events.map((e) => e.t))
-    if (this.clock > duration + 10) this.pause()
+    if (this.clock > this.fileDuration + 10) this.pause()
   }
 
   /**

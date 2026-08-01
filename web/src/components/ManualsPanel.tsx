@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
 // Module 1 — "Ask the Manuals": question in, cited passages out, straight
@@ -18,7 +18,7 @@ interface DoctrineHit {
 }
 
 export function ManualsPanel() {
-  const { manualsOpen } = useAppState()
+  const { manualsOpen } = useAppSlice((s) => ({ manualsOpen: s.manualsOpen }))
   const [question, setQuestion] = useState('')
   const [state, setState] = useState<'idle' | 'loading' | 'answered' | 'empty' | 'offline' | 'unindexed'>('idle')
   const [hits, setHits] = useState<DoctrineHit[]>([])

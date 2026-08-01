@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { replayEngine } from '../replay'
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 import type { Agency, AlarmLevel } from '../types'
 
 const ALARMS: { id: AlarmLevel; label: string }[] = [
@@ -68,7 +68,7 @@ function ReplayStrip({ playing, duration }: { playing: boolean; duration: number
 
 /** Phase 8 command header: elapsed clock, on-scene counts, alarm level, replay. */
 export function CommandStrip() {
-  const { incident, units, replay } = useAppState()
+  const { incident, units, replay } = useAppSlice((s) => ({ incident: s.incident, units: s.units, replay: s.replay }))
   const [collapsed, setCollapsed] = useState(false)
   const [, forceTick] = useState(0)
   useEffect(() => {

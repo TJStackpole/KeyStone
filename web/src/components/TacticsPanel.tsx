@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { classifyBuilding, FFP_TITLES, type FfpType } from '../lib/ffpClassify'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
 // Module 3 — Building-Type Tactics Engine. Shows the FFP classification
@@ -48,7 +48,7 @@ async function logTimeline(kind: string, payload: Record<string, unknown>): Prom
 }
 
 export function TacticsPanel() {
-  const { tacticsOpen, tacticsOverride, incident, intel, targetHeightM } = useAppState()
+  const { tacticsOpen, tacticsOverride, incident, intel, targetHeightM } = useAppSlice((s) => ({ tacticsOpen: s.tacticsOpen, tacticsOverride: s.tacticsOverride, incident: s.incident, intel: s.intel, targetHeightM: s.targetHeightM }))
   const [card, setCard] = useState<TacticsCard | null>(null)
   const [cardState, setCardState] = useState<'idle' | 'loading' | 'missing'>('idle')
   const [checked, setChecked] = useState<Set<string>>(new Set())

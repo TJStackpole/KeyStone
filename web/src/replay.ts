@@ -68,7 +68,7 @@ class ReplayEngine {
   }
 
   private async startInner(): Promise<void> {
-    const res = await fetch('/api/incident')
+    const res = await fetch('/api/incident?full=1')
     if (!res.ok) return
     const body = (await res.json()) as { timeline: RawEvent[] }
     const events = (body.timeline ?? [])
@@ -176,7 +176,7 @@ class ReplayEngine {
     getUnitLayer()?.clear()
     getShapeLayer()?.clear()
     try {
-      const [incidentRes, unitsRes] = await Promise.all([fetch('/api/incident'), fetch('/api/units')])
+      const [incidentRes, unitsRes] = await Promise.all([fetch('/api/incident?full=1'), fetch('/api/units')])
       const incidentBody = (await incidentRes.json()) as {
         incident?: Incident | null
         shapes?: IcsShape[]

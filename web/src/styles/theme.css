@@ -2210,11 +2210,13 @@ body:has(.wc-right) .takchat-panel { right: 450px; }
    cluster floats above the ticker (z 40 > 32), and HOME / fly-to-incident
    are dead-ends in this view; the Site Intel panel pokes out below the
    right column. Hidden while Watch Command is up. */
-body:has(.wc-left) .compass,
-body:has(.wc-left) .home-btn,
 body:has(.wc-left) .incident-btn,
 body:has(.wc-left) .intel-panel,
 body:has(.wc-left) .draw-toolbar { display: none; }
+/* Compass + HOME are shared-core navigation — shift them clear of the
+   citywide column instead of hiding them (NYCEM lives in this view). */
+body:has(.wc-left) .compass,
+body:has(.wc-left) .home-btn { left: 384px; }
 /* Interaction parity with the rest of the console (chips transition ~120ms). */
 .wc-inc-row, .wc-open-btn, .wc-filters button, .wc-req-actions button,
 .wc-banner-btns button, .wc-endex, .eoc-item { transition: all 120ms; }
@@ -2286,6 +2288,11 @@ body:has(.wc-left) .draw-toolbar { display: none; }
   cursor: pointer; padding: 0; color: var(--text);
 }
 .agency-req-head b { font: 700 9px var(--mono); color: var(--amber-bright); margin-left: auto; }
+.agency-req-head .agency-req-breachcount { color: #fca5a5; margin-left: auto; margin-right: 0; }
+.agency-req-head.breach { animation: pulse 1.2s ease-in-out infinite; }
+.profile-item.warn { border-color: rgba(245,158,11,0.65); }
+.profile-item.warn b { color: var(--amber-bright); }
+.scn-facilitator { font: 700 8px var(--mono); color: var(--text-faint); letter-spacing: 0.06em; padding: 0 6px; }
 .agency-req-head i { font-style: normal; color: var(--text-dim); }
 .agency-req-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .agency-req-row { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }

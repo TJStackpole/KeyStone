@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { clearInspected, flyToFeature, hideInspectedModel, showInspectedModel, toggleLayer } from '../actions'
 import { buildingLinks, type CofoRecord } from '../api/nyc'
 import { formatMeters } from '../lib/geo'
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 import type { LayerStatus, ToggleLayerId } from '../types'
 
 /**
@@ -56,7 +56,7 @@ const TOGGLES: { id: ToggleLayerId; label: string }[] = [
 
 /** Public record for any building the operator tapped (not the fire building). */
 function InspectedSection() {
-  const { inspected, incident, isolateMode, inspectedModelOn } = useAppState()
+  const { inspected, incident, isolateMode, inspectedModelOn } = useAppSlice((s) => ({ inspected: s.inspected, incident: s.incident, isolateMode: s.isolateMode, inspectedModelOn: s.inspectedModelOn }))
   if (!inspected) return null
   const { hit, loading, pluto, safety, cofo } = inspected
   return (
@@ -125,7 +125,7 @@ function InspectedSection() {
 }
 
 export function SiteIntelPanel() {
-  const { incident, intel, layers, layerToggles, inspected } = useAppState()
+  const { incident, intel, layers, layerToggles, inspected } = useAppSlice((s) => ({ incident: s.incident, intel: s.intel, layers: s.layers, layerToggles: s.layerToggles, inspected: s.inspected }))
   const [collapsed, setCollapsed] = useState(false)
 
   // No incident up: tapping a building still gets its full public record —

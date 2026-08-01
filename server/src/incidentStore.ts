@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { rename, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IcsShape, Incident, IncidentFile, TimelineEvent } from './types.js'
@@ -28,7 +29,7 @@ function load(): IncidentFile {
 // append would thrash the disk. Coalesce writes on a short trailing debounce.
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Synchronous write — shared by the debounce timer and the exit hooks. */
+/** Synchronous write — the EXIT/SIGNAL path only (must complete before death). */
 function flushNow(): void {
   if (flushTimer) {
     clearTimeout(flushTimer)
@@ -47,13 +48,37 @@ function flushNow(): void {
   }
 }
 
+// The periodic debounced flush keeps only the (cheap, ~3ms) stringify on the
+// event loop and hands the multi-MB disk write to the thread pool — the
+// steady ~5-9ms full-sync stall every 8s of a long incident goes away.
+let flushInFlight = false
+function flushAsync(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+  if (flushInFlight) {
+    flush() // re-debounce; the in-flight write carries older state
+    return
+  }
+  flushInFlight = true
+  const body = JSON.stringify(state)
+  mkdirSync(dirname(DATA_PATH), { recursive: true })
+  void writeFile(`${DATA_PATH}.tmp`, body)
+    .then(() => rename(`${DATA_PATH}.tmp`, DATA_PATH))
+    .catch((err) => console.error('[incidentStore] failed to write incident.json:', err))
+    .finally(() => {
+      flushInFlight = false
+    })
+}
+
 function flush(): void {
   if (flushTimer) return
   // 8 s matches the unit.track sampling cadence — the persisted data only
   // changes meaningfully at that rate, and the multi-MB synchronous
   // stringify+write stalls the event loop ~9 ms per flush at the timeline
   // cap. The exit/SIGINT/SIGTERM handlers still bound loss on shutdown.
-  flushTimer = setTimeout(flushNow, 8000)
+  flushTimer = setTimeout(flushAsync, 8000)
   flushTimer.unref?.()
 }
 

@@ -59,14 +59,29 @@ function tokenize(text: string): string[] {
 
 class Bm25Index {
   private chunks: DoctrineChunk[] = []
-  private docTokens: string[][] = []
+  /** Per-page term frequencies + lengths — NOT raw token arrays. Retaining
+   *  1.39M token strings cost ~70 MB heap and made every query rescan the
+   *  whole corpus per term; tf lookup is a Map.get. */
+  private docTf: Map<string, number>[] = []
+  private docLen: number[] = []
   private df = new Map<string, number>()
   private avgLen = 0
+  private loading = false
   ready = false
   report: Record<string, unknown> | null = null
 
+  /** Lazy entry point: the index loads on FIRST doctrine use, not at boot —
+   *  a tsx watch restart (every dev file save) pays nothing until someone
+   *  actually opens Ask the Manuals. Idempotent. */
+  ensureLoaded(): void {
+    if (!this.ready && !this.loading) this.load()
+  }
+
   load(): void {
+    if (this.loading || this.ready) return
+    this.loading = true
     if (!existsSync(INDEX_PATH)) {
+      this.loading = false
       console.warn('[doctrine] no index at server/data/doctrine — run: python3 server/scripts/build_doctrine_index.py')
       return
     }
@@ -89,27 +104,30 @@ class Bm25Index {
           this.chunks = JSON.parse(Buffer.concat(parts).toString('utf8')) as DoctrineChunk[]
         } catch (err) {
           console.error('[doctrine] index parse failed:', err)
+          this.loading = false
           return
         }
         let total = 0
         for (const c of this.chunks) {
           const tokens = tokenize(c.x)
-          this.docTokens.push(tokens)
+          const tf = new Map<string, number>()
+          for (const tok of tokens) tf.set(tok, (tf.get(tok) ?? 0) + 1)
+          this.docTf.push(tf)
+          this.docLen.push(tokens.length)
           total += tokens.length
-          const seen = new Set<string>()
-          for (const tok of tokens) {
-            if (seen.has(tok)) continue
-            seen.add(tok)
-            this.df.set(tok, (this.df.get(tok) ?? 0) + 1)
-          }
+          for (const tok of tf.keys()) this.df.set(tok, (this.df.get(tok) ?? 0) + 1)
         }
         this.avgLen = total / Math.max(1, this.chunks.length)
         this.ready = true
+        this.loading = false
         console.log(
           `[doctrine] ${this.chunks.length} pages from ${String(this.report?.pdfs ?? '?')} PDFs ready in ${Date.now() - started} ms`,
         )
       })
-      .on('error', (err) => console.error('[doctrine] index load failed:', err))
+      .on('error', (err) => {
+        this.loading = false
+        console.error('[doctrine] index load failed:', err)
+      })
   }
 
   /** BM25 top-k. `topic` narrows to one publication (doctrine.lookup). */
@@ -124,19 +142,19 @@ class Bm25Index {
     for (let i = 0; i < N; i++) {
       const c = this.chunks[i]
       if (topic && c.t !== topic) continue
-      const tokens = this.docTokens[i]
-      if (!tokens.length) continue
+      const len = this.docLen[i]
+      if (!len) continue
+      const tfMap = this.docTf[i]
       let score = 0
       let matched = 0
       for (const q of qTokens) {
         const df = this.df.get(q)
         if (!df) continue
-        let tf = 0
-        for (const tok of tokens) if (tok === q) tf++
+        const tf = tfMap.get(q) ?? 0
         if (!tf) continue
         matched++
         const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5))
-        score += (idf * tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * tokens.length) / this.avgLen))
+        score += (idf * tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * len) / this.avgLen))
       }
       if (score > 0) scored.push({ i, score, matched })
     }

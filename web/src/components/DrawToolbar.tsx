@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { deleteSelectedShape, rotateSelectedApparatus, setDrawTool } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
-import { setAppState, useAppState } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
 
 // One editable outline replaces the old HOT/WARM/COLD trio; legacy zone
@@ -11,7 +11,7 @@ const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
 
 /** STGE picker: choose the next-due company or a specific responding unit. */
 function StagingPicker() {
-  const { units, shapes, stagingPick } = useAppState()
+  const { units, shapes, stagingPick } = useAppSlice((s) => ({ units: s.units, shapes: s.shapes, stagingPick: s.stagingPick }))
   const reserved = new Set(
     Object.values(shapes)
       .filter((s) => s.kind === 'apparatus')
@@ -52,7 +52,7 @@ function StagingPicker() {
 }
 
 export function DrawToolbar() {
-  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes } = useAppState()
+  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes }))
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 

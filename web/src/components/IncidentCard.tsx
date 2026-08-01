@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { changeIncidentType, editIncidentAddress, endIncident } from '../actions'
 import { autocompleteAddress } from '../api/geosearch'
-import { useAppState } from '../state/store'
+import { useAppSlice } from '../state/store'
 import { INCIDENT_TYPES, type GeoHit, type Incident } from '../types'
 
 /** Two-click END control: first click arms CONFIRM, second tears the board down. */
@@ -137,7 +137,7 @@ function EditableAddress({ incident }: { incident: Incident }) {
 }
 
 export function IncidentCard() {
-  const { incident } = useAppState()
+  const { incident } = useAppSlice((s) => ({ incident: s.incident }))
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 

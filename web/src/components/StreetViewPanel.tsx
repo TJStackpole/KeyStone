@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadStreetViewLib } from '../lib/gmaps'
-import { getAppState, setAppState, useAppState } from '../state/store'
+import { getAppState, setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
 // Photographic street view of the incident address (Google Street View via
@@ -37,7 +37,7 @@ let panoEl: HTMLDivElement | null = null
 let pano: PanoInstance | null = null
 
 export function StreetViewPanel() {
-  const { streetViewOpen, incident } = useAppState()
+  const { streetViewOpen, incident } = useAppSlice((s) => ({ streetViewOpen: s.streetViewOpen, incident: s.incident }))
   const [state, setState] = useState<'loading' | 'ready' | 'nocover' | 'apifail'>('loading')
   const holder = useRef<HTMLDivElement>(null)
 
