@@ -75,6 +75,7 @@ export const CAPABILITIES: Record<string, Capability> = {
   'aar.drill-debrief': { profiles: ['fdny'] }, // tactical drill AAR (Phase 8)
   'requests.agency-panel': { profiles: ['fdny'], visibilityScope: 'own_agency' }, // slim "My Agency Requests"
   'mayday.interactive-flow': { profiles: ['fdny'] }, // FAST workflow / MID checklist (banner stays 'both')
+  'tactical.view-lock': { profiles: ['fdny'] }, // locked TOP/N/E/S/W battle views during an active incident
   // Reserved for Prompt 10 M5-9 when they land — profile-ready on arrival:
   'commandboard.view': { profiles: 'both' },
   'commandboard.write': {

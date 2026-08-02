@@ -1,4 +1,5 @@
 import { attachRenderModeController } from './renderMode'
+import { attachViewLockController } from './viewLock'
 import * as Cesium from 'cesium'
 import type { SceneHandle } from './providers'
 import { DrawController } from '../ics/draw'
@@ -41,9 +42,11 @@ let roadLayer: RoadLayer | null = null
 let hazardLayer: HazardLayer | null = null
 
 let detachRenderMode: (() => void) | null = null
+let detachViewLock: (() => void) | null = null
 
 export function registerScene(h: SceneHandle): void {
   detachRenderMode = attachRenderModeController(h.viewer)
+  detachViewLock = attachViewLockController()
   handle = h
   footprintLayer = new FootprintLayer(h.viewer)
   intelLayer = new IntelMarkerLayer(h.viewer)
@@ -72,6 +75,8 @@ export function registerScene(h: SceneHandle): void {
 export function unregisterScene(): void {
   detachRenderMode?.()
   detachRenderMode = null
+  detachViewLock?.()
+  detachViewLock = null
   drawController?.destroy()
   handle = null
   footprintLayer = null

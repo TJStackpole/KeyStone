@@ -268,6 +268,12 @@ export async function initScene(
 
 /** Oblique tactical fly-to: ~45° pitch from ~400 m, camera standing off south of the target. */
 export function flyToTactical(viewer: Cesium.Viewer, lat: number, lon: number, durationS = 3): void {
+  // Battle-view lock owns the camera during FDNY incidents — tactical
+  // flights land in the locked top-down frame instead of a free 3D view.
+  if (getAppState().viewLock !== 'off') {
+    void import('./viewLock').then((m) => m.applyViewLockCamera(Math.min(durationS, 1.2)))
+    return
+  }
   const altitude = 400
   // Stand off so a -45° look ray from `altitude` lands on the target.
   const standoffDeg = altitude / 111_320

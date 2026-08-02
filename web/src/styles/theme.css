@@ -2328,6 +2328,26 @@ body:has(.wc-left) .home-btn { left: 384px; }
 }
 .comms-policy-note { font: 700 8px var(--mono); color: var(--amber-bright); letter-spacing: 0.06em; align-self: center; padding: 0 6px; }
 
+/* FDNY battle-view lock rail — the only camera controls mid-incident. */
+.battle-view {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 46;
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+  border-radius: 10px; padding: 8px; width: 92px;
+}
+.bv-title { font: 700 8px var(--mono); color: var(--cyan-dim); letter-spacing: 0.14em; text-align: center; }
+.bv-btn {
+  background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font: 700 12px var(--mono); padding: 8px 0; cursor: pointer; transition: all 120ms;
+}
+.bv-btn:hover:not(:disabled) { border-color: var(--border-strong); color: var(--cyan-bright); }
+.bv-btn.on { border-color: rgba(34,211,238,0.65); color: var(--cyan-bright); box-shadow: var(--glow-cyan); }
+.bv-btn:disabled { opacity: 0.35; cursor: default; }
+.bv-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.bv-floor { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 6px; }
+.bv-floor-readout { text-align: center; display: flex; flex-direction: column; gap: 1px; padding: 2px 0; }
+.bv-floor-readout b { font: 700 13px var(--mono); color: var(--amber-bright); }
+.bv-floor-readout i { font-style: normal; font: 600 8px var(--mono); color: var(--text-dim); }
+
 /* Transient operator notice (visible failures — never console-only). */
 .ui-notice {
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 95;

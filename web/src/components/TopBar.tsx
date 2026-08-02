@@ -604,7 +604,7 @@ function WatchCmdChip({ watchCommand }: { watchCommand: boolean }) {
 }
 
 export function TopBar() {
-  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand }))
+  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand, viewLock } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand, viewLock: s.viewLock }))
   const canManuals = useCapability('doctrine.manuals')
   const canTactics = useCapability('tactics.engine')
   const canWatch = useCapability('watchcommand.portfolio')
@@ -670,7 +670,12 @@ export function TopBar() {
           <button
             className={`chip chip-btn${viewMode === 'topdown' ? ' active' : ''}`}
             onClick={() => void toggleTopDownView()}
-            title={`Camera: tactical 3D ↔ straight-down top view · imagery: ${MODE_LABEL[providerMode]}`}
+            disabled={viewLock !== 'off'}
+            title={
+              viewLock !== 'off'
+                ? 'Camera is locked to the incident battle views (TOP / N / E / S / W rail)'
+                : `Camera: tactical 3D ↔ straight-down top view · imagery: ${MODE_LABEL[providerMode]}`
+            }
           >
             <span className="dot" /> {viewMode === 'topdown' ? 'TOP-DOWN' : '3D VIEW'}
           </button>

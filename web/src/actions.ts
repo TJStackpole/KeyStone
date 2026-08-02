@@ -41,6 +41,7 @@ import { replayEngine } from './replay'
 import { hasCapability } from './profiles/manifest'
 import { crewCompositionAllowed } from './profiles/policy'
 import { notify } from './components/NoticeChip'
+import { applyOverlayLod, overlayLodAllows } from './cesium/overlayLod'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
 import { crewOf } from './types'
 import type {
@@ -219,7 +220,7 @@ export function relocateIncidentSite(incident: Incident): void {
   getTrafficLayer()?.clear()
   getHazardLayer()?.clear()
   getUnitLayer()?.setInteriorBounds(null)
-  setAppState({ targetHeightM: null, inspected: null, wind: null, floorRef: null })
+  setAppState({ targetHeightM: null, inspected: null, wind: null, floorRef: null, targetBounds: null })
   if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
   void loadFootprints(incident)
   void loadSiteIntel(incident)
@@ -268,6 +269,18 @@ async function loadFootprints(incident: Incident): Promise<void> {
     // rather than trusting raw CoT altitude. Recomputed with the real PLUTO
     // floor count when it lands (loadSiteIntel).
     if (target) {
+      // Footprint bbox: the battle views' centering + standoff reference.
+      const rings = target.polygons.map((pg) => pg[0]).filter((r) => r && r.length >= 3)
+      let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180
+      for (const ring of rings) {
+        for (const [lon, lat] of ring) {
+          if (lat < minLat) minLat = lat
+          if (lat > maxLat) maxLat = lat
+          if (lon < minLon) minLon = lon
+          if (lon > maxLon) maxLon = lon
+        }
+      }
+      setAppState({ targetBounds: rings.length ? { minLat, maxLat, minLon, maxLon } : null })
       void (async () => {
         const base = (await layer.targetBase()) ?? 0
         const now = getAppState()
@@ -277,7 +290,7 @@ async function loadFootprints(incident: Incident): Promise<void> {
         applyUnitVisibility()
       })()
     } else {
-      setAppState({ floorRef: null })
+      setAppState({ floorRef: null, targetBounds: null })
     }
     // Module 4: per-face collapse zones from the real footprint + roof height.
     if (target && getAppState().layerToggles.collapsezones) {
@@ -358,9 +371,9 @@ const POI_KINDS: PoiKind[] = ['poiFirehouses', 'poiFdny', 'poiPrecincts', 'poiHo
 function setOverlaysParked(parked: boolean): void {
   const t = getAppState().layerToggles
   const show = (on: boolean) => !parked && on
-  getLotLayer()?.setVisible(show(t.lots))
-  getRoadLayer()?.setRoadsVisible(show(t.roads))
-  getRoadLayer()?.setTunnelsVisible(show(t.tunnels))
+  getLotLayer()?.setVisible(show(t.lots) && overlayLodAllows('lots'))
+  getRoadLayer()?.setRoadsVisible(show(t.roads) && overlayLodAllows('roads'))
+  getRoadLayer()?.setTunnelsVisible(show(t.tunnels) && overlayLodAllows('tunnels'))
   getStreetLayer()?.setVisible(show(t.streets))
   getTrafficLayer()?.setVisible(show(t.traffic))
   getIntelLayer()?.setHydrantsVisible(show(t.hydrants))
@@ -1221,12 +1234,18 @@ export function toggleLayer(layer: ToggleLayerId): void {
     if (next && !parked) void refreshTraffic()
   }
   if (layer === 'lots') {
-    getLotLayer()?.setVisible(next && !parked)
-    if (next && !parked) void refreshLots(true)
+    getLotLayer()?.setVisible(next && !parked && overlayLodAllows('lots'))
+    if (next && !parked) {
+      void refreshLots(true)
+      if (!overlayLodAllows('lots')) notify('LOT LINES paint when you zoom closer')
+    }
   }
   if (layer === 'roads') {
-    getRoadLayer()?.setRoadsVisible(next && !parked)
-    if (next && !parked) void refreshRoads(true)
+    getRoadLayer()?.setRoadsVisible(next && !parked && overlayLodAllows('roads'))
+    if (next && !parked) {
+      void refreshRoads(true)
+      if (!overlayLodAllows('roads')) notify('ROAD NETWORK paints when you zoom closer')
+    }
   }
   if (layer === 'wind') {
     getHazardLayer()?.setWindVisible(next && !parked)
@@ -1240,8 +1259,11 @@ export function toggleLayer(layer: ToggleLayerId): void {
     }
   }
   if (layer === 'tunnels') {
-    getRoadLayer()?.setTunnelsVisible(next && !parked)
-    if (next && !parked) ensureTunnels()
+    getRoadLayer()?.setTunnelsVisible(next && !parked && overlayLodAllows('tunnels'))
+    if (next && !parked) {
+      ensureTunnels()
+      if (!overlayLodAllows('tunnels')) notify('TUNNELS paint when you zoom closer')
+    }
   }
   if (layer.startsWith('poi')) {
     // Citywide facility overlays (FacDB) — lazy-loaded on first enable. A
@@ -1722,7 +1744,7 @@ export function ensureTunnels(): void {
       if (layer !== getRoadLayer()) return // scene torn down/remounted mid-fetch
       tunnelsLoaded = true
       layer.renderTunnels(segments)
-      layer.setTunnelsVisible(getAppState().layerToggles.tunnels)
+      applyOverlayLod()
     })
     .catch((err) => {
       console.error('[tunnels] layer unavailable:', err)

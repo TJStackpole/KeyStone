@@ -38,7 +38,9 @@ import { MyAgencyRequestsPanel } from './components/MyAgencyRequestsPanel'
 import { PolicyEditorPanel } from './components/PolicyEditorPanel'
 import { ProfileWatermark } from './components/ProfileWatermark'
 import { NoticeChip } from './components/NoticeChip'
+import { BattleViewBar } from './components/BattleViewBar'
 import { hasCapability, useCapability } from './profiles/manifest'
+import { applyOverlayLod } from './cesium/overlayLod'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -137,6 +139,7 @@ export default function App() {
         // street labels refresh whenever a pan/zoom settles low enough
         // (each gates on its own toggle + height + movement).
         handle.viewer.camera.moveEnd.addEventListener(() => {
+          applyOverlayLod() // glows reveal/hide with camera distance
           void refreshLots()
           void refreshRoads()
           void refreshStreetLabels()
@@ -195,6 +198,7 @@ export default function App() {
       <PolicyEditorPanel />
       <ProfileWatermark />
       <NoticeChip />
+      <BattleViewBar />
       <WindAdvisory />
       <Compass />
       <BootVeil msg={bootMsg} />

@@ -115,6 +115,13 @@ export interface AppState {
   visibilityPolicy: import('../profiles/policy').VisibilityPolicy
   /** Prompt 12 — admin visibility-policy editor. */
   policyEditorOpen: boolean
+  /** Incident building footprint bbox — battle views center on THIS, not
+   *  the address point (which can sit off-center on big footprints). */
+  targetBounds: { minLat: number; maxLat: number; minLon: number; maxLon: number } | null
+  /** FDNY battle-view lock: top-down or a building side, floors steppable. */
+  viewLock: 'off' | 'top' | 'north' | 'east' | 'south' | 'west'
+  /** Current floor for the side (facade) battle views. */
+  viewLockFloor: number
   /** Transient operator notice (top-center chip, auto-clears). */
   uiNotice: { text: string; tone: 'amber' | 'red' } | null
   /** Drag offsets per movable panel id (transform-only; {} = default layout). */
@@ -282,6 +289,9 @@ const initial: AppState = {
   })(),
   visibilityPolicy: { par_member_names: 'full', riding_lists: 'full', radio_channels: 'all' },
   policyEditorOpen: false,
+  targetBounds: null,
+  viewLock: 'off',
+  viewLockFloor: 1,
   uiNotice: null,
   // Inline read (not the lib helper) — movable.tsx imports THIS module.
   panelOffsets: (() => {
