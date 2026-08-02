@@ -724,7 +724,7 @@ async function applyTacticalModel(on: boolean): Promise<void> {
   // Publish the schematic's floor geometry so interior members position by
   // FLOOR (mid-storey) — they stretch with the model instead of staying at
   // their true heights inside a taller shell.
-  setAppState({ isolateFloors: { z0: base + now.isolateLiftM, storeyM: (heightM * scale) / floors } })
+  setAppState({ isolateFloors: { z0: base + now.isolateLiftM, storeyM: (heightM * scale) / floors, floors } })
   applyUnitVisibility()
 }
 

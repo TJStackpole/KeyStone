@@ -177,7 +177,7 @@ export interface AppState {
    * height) — interior members position by floor against this, so they stay
    * on their floor even when the model is vertically scaled.
    */
-  isolateFloors: { z0: number; storeyM: number } | null
+  isolateFloors: { z0: number; storeyM: number; floors: number } | null
   /**
    * True-scale floor geometry of the incident building (street base + real
    * storey height), published once footprints resolve. Interior members

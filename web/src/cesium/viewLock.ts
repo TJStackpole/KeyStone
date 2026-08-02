@@ -64,7 +64,12 @@ function buildingRef() {
   const storeyM = ref?.storeyM ?? 3.2
   const scaleK = s.isolateMode && s.isolateView === 'model' ? s.isolateScale : 1
   const heightM = (s.targetHeightM ?? 30) * scaleK
-  const floors = s.intel.pluto?.numFloors ?? Math.max(1, Math.round(heightM / storeyM))
+  // Floor COUNT must come from the same source as storeyM: the isolate
+  // schematic prefers the dispatch's announced count (which can beat PLUTO
+  // to the scene) — a PLUTO-first count here would let the stepper walk the
+  // highlight past the schematic's roof.
+  const floors =
+    s.isolateFloors?.floors ?? s.intel.pluto?.numFloors ?? Math.max(1, Math.round(heightM / storeyM))
   const b = s.targetBounds
   return {
     z0,
@@ -314,8 +319,28 @@ export function attachViewLockController(): () => void {
     if (should !== lastShould) {
       lastShould = should
       lastFloorsRef = s.isolateFloors
-      if (should && s.viewLock === 'off') engage()
-      else if (!should && s.viewLock !== 'off') disengage()
+      if (should && s.viewLock === 'off') {
+        // Teardowns write per-field (replay stops BEFORE isolate unwinds,
+        // incident still set for one more write) — a raw engage here would
+        // lock the camera mid-teardown. Defer one microtask and re-verify
+        // the whole gate, mirroring disengage()'s deferral.
+        queueMicrotask(() => {
+          const n = getAppState()
+          const stillShould =
+            n.sceneReady &&
+            !!n.incident &&
+            hasCapability(n.profile, 'tactical.view-lock') &&
+            n.isolateMode &&
+            !n.groundViewActive &&
+            !n.watchCommand &&
+            !n.replay.active
+          if (!stillShould) {
+            lastShould = false
+            return
+          }
+          if (n.viewLock === 'off') engage()
+        })
+      } else if (!should && s.viewLock !== 'off') disengage()
       return
     }
     // The isolate ON path lands its ground lift / schematic floors ASYNC

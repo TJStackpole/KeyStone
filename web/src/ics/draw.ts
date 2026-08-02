@@ -99,8 +99,12 @@ export class DrawController {
     if (tool === 'ground') {
       // Drop to the selected height at the clicked spot, facing the incident.
       const { incident, groundViewFt } = getAppState()
-      enterGroundView(this.viewer, pos, incident ? { lat: incident.lat, lon: incident.lon } : undefined, groundViewFt)
+      // Order matters: the groundViewActive write releases the battle-view
+      // lock (restoring the free camera's zoom limits) BEFORE enterGroundView
+      // snapshots them — reversed, the snapshot would capture the lock's own
+      // limits and restore those on ground exit.
       setAppState({ drawTool: null, groundViewActive: true })
+      enterGroundView(this.viewer, pos, incident ? { lat: incident.lat, lon: incident.lon } : undefined, groundViewFt)
       return
     }
     if (tool && ZONES.includes(tool as ZoneKind)) {
