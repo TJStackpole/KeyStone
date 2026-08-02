@@ -1,46 +1,39 @@
 import * as Cesium from 'cesium'
+import { notify } from '../components/NoticeChip'
 import { hasCapability } from '../profiles/manifest'
 import { getAppState, setAppState, subscribeStore } from '../state/store'
-import { getScene } from './scene'
+import { flyToTactical } from './providers'
+import { getScene, getTacticalLayer } from './scene'
 
 // ---------------------------------------------------------------------------
 // FDNY battle-view lock. The fireground is chaos — a free-tumbling 3D camera
-// mid-incident is a liability, not a feature. While an incident is active in
-// the FDNY workspace the camera is LOCKED to a small set of disciplined
-// views:
+// mid-incident is a liability, not a feature. The lock arms when the
+// operator commits to the structure: ACTIVE INCIDENT is up AND ISOLATE is
+// checked on. From that moment the camera is LOCKED to disciplined views of
+// the isolated building:
 //
-//   TOP           north-up, straight down over the incident — zoom only
-//   N / E / S / W facade elevation from that side of the building, with
-//                 floor ▲▼ stepping so the operator battle-tracks interior
-//                 members floor by floor
+//   N / E / S / W true head-on elevation of the building FACE nearest that
+//                 cardinal — aligned to the structure's own axes, not the
+//                 world's (Manhattan's grid runs ~29° off true north; a due-
+//                 north camera would stare at the corner). The whole facade
+//                 fits in frame; ▲▼ scrolls a highlighted floor band for
+//                 member tracking without ever yanking the operator's zoom.
+//   TOP           north-up, straight down over the structure — zoom only
 //
 // Rotation/tilt/pan are disabled while locked; zoom stays live in every
-// mode. ISOLATE and ground view are deliberate other camera modes — they
-// suspend the lock and it re-engages when they exit. Ending the incident
-// (or switching to a non-FDNY workspace) restores the free camera exactly
-// as it was configured before the lock.
+// mode. Geometry follows the ISOLATE session's own floor reference
+// (isolateFloors) so the views track the lifted / MODEL-scaled structure,
+// not the pre-clip street. Ground view suspends the lock; unchecking
+// ISOLATE releases it and flies back to the standard tactical frame with
+// the free camera restored exactly as it was configured before the lock.
 // ---------------------------------------------------------------------------
 
 export type ViewLockMode = 'off' | 'top' | 'north' | 'east' | 'south' | 'west'
+type SideMode = Exclude<ViewLockMode, 'off' | 'top'>
 
-export const SIDE_HEADING_DEG: Record<'north' | 'east' | 'south' | 'west', number> = {
-  // Camera sits on the named side of the building, looking back at it.
-  north: 180, // positioned north, facing south
-  east: 270,
-  south: 0,
-  west: 90,
-}
-
-/** Where the camera STANDS relative to building center, per side. */
-const SIDE_BEARING_DEG: Record<'north' | 'east' | 'south' | 'west', number> = {
-  north: 0,
-  east: 90,
-  south: 180,
-  west: 270,
-}
+const CARDINAL_DEG: Record<SideMode, number> = { north: 0, east: 90, south: 180, west: 270 }
 
 const TOP_DEFAULT_ABOVE_M = 320 // above the roof — reads the whole block
-const SIDE_PITCH_DEG = -8 // just enough down-angle to keep street context
 
 interface SavedController {
   enableRotate: boolean
@@ -60,41 +53,81 @@ function offsetDeg(lat: number, lon: number, bearingDeg: number, distM: number):
   }
 }
 
-/** Building vitals with graceful fallbacks while open-data layers stream in. */
+/** Building vitals with graceful fallbacks while open-data layers stream in.
+ *  Inside ISOLATE the session's own floor reference wins — it carries the
+ *  google-mode ground lift and the MODEL view's vertical stretch, so facade
+ *  eyes and the roof ceiling hug the structure the operator actually sees. */
 function buildingRef() {
   const s = getAppState()
-  const z0 = s.floorRef?.z0 ?? 0
-  const storeyM = s.floorRef?.storeyM ?? 3.2
-  const heightM = s.targetHeightM ?? 30
+  const ref = s.isolateFloors ?? s.floorRef
+  const z0 = ref?.z0 ?? 0
+  const storeyM = ref?.storeyM ?? 3.2
+  const scaleK = s.isolateMode && s.isolateView === 'model' ? s.isolateScale : 1
+  const heightM = (s.targetHeightM ?? 30) * scaleK
   const floors = s.intel.pluto?.numFloors ?? Math.max(1, Math.round(heightM / storeyM))
-  // Center on the FOOTPRINT, not the address point: the side views must sit
-  // on the perpendicular axis through the middle of that face, and the
-  // standoff must clear half the building's own depth.
   const b = s.targetBounds
-  const centerLat = b ? (b.minLat + b.maxLat) / 2 : (s.incident?.lat ?? 0)
-  const centerLon = b ? (b.minLon + b.maxLon) / 2 : (s.incident?.lon ?? 0)
-  const halfNS = b ? ((b.maxLat - b.minLat) / 2) * 111_320 : 20
-  const halfEW = b
-    ? ((b.maxLon - b.minLon) / 2) * 111_320 * Math.cos((centerLat * Math.PI) / 180)
-    : 20
-  return { z0, storeyM, heightM, floors, centerLat, centerLon, halfNS, halfEW }
+  return {
+    z0,
+    storeyM,
+    heightM,
+    floors,
+    centerLat: b?.centerLat ?? s.incident?.lat ?? 0,
+    centerLon: b?.centerLon ?? s.incident?.lon ?? 0,
+    bearingA: b?.bearingA ?? 0,
+    halfA: b?.halfA ?? 20,
+    halfB: b?.halfB ?? 20,
+  }
+}
+
+/** Absolute angular distance between two bearings, degrees in [0, 180]. */
+function angDistDeg(a: number, b: number): number {
+  return Math.abs((((a - b) % 360) + 540) % 360 - 180)
+}
+
+/**
+ * The building face each cardinal button means: of the structure's four
+ * outward facade normals (its own axes, from the footprint's dominant edge
+ * bearing), the one pointing most nearly at that compass direction. `depth`
+ * is the half-extent the camera must clear along the normal; `width` is the
+ * facade's half-width across it.
+ */
+function facadeFor(side: SideMode): { normal: number; depth: number; width: number } {
+  const { bearingA, halfA, halfB } = buildingRef()
+  const cardinal = CARDINAL_DEG[side]
+  let best = { normal: 0, depth: halfA, width: halfB }
+  let bestD = Infinity
+  for (let i = 0; i < 4; i++) {
+    const normal = (((bearingA + i * 90) % 360) + 360) % 360
+    const alongA = i % 2 === 0 // normals on the A axis front the end walls
+    const d = angDistDeg(normal, cardinal)
+    if (d < bestD) {
+      bestD = d
+      best = { normal, depth: alongA ? halfA : halfB, width: alongA ? halfB : halfA }
+    }
+  }
+  return best
 }
 
 export function viewLockFloors(): number {
   return buildingRef().floors
 }
 
-/** The scripted fire floor when the sim announced one — the natural landing
- *  floor for battle tracking. */
-export function defaultBattleFloor(): number {
-  const { timeline } = getAppState()
+/** The scripted fire floor when the sim announced one for THIS incident. */
+export function battleFireFloor(): number | null {
+  const { timeline, incident } = getAppState()
   for (let i = timeline.length - 1; i >= 0; i--) {
     if (timeline[i].kind === 'sim.dispatched') {
-      const p = (timeline[i].payload ?? {}) as { fireFloor?: number }
+      const p = (timeline[i].payload ?? {}) as { fireFloor?: number; incidentId?: string }
+      if (p.incidentId && incident && p.incidentId !== incident.id) return null
       if (p.fireFloor) return Math.min(p.fireFloor, buildingRef().floors)
     }
   }
-  return 1
+  return null
+}
+
+/** The natural landing floor for battle tracking: the fire floor, else 1. */
+export function defaultBattleFloor(): number {
+  return battleFireFloor() ?? 1
 }
 
 function lockController(mode: Exclude<ViewLockMode, 'off'>): void {
@@ -122,7 +155,7 @@ function lockController(mode: Exclude<ViewLockMode, 'off'>): void {
     ctl.maximumZoomDistance = 4000
   } else {
     ctl.minimumZoomDistance = 18
-    ctl.maximumZoomDistance = 500
+    ctl.maximumZoomDistance = 1500 // room to pull back from a block-long facade
   }
 }
 
@@ -140,14 +173,21 @@ function unlockController(): void {
   saved = null
 }
 
-/** Fly the camera to the current lock mode/floor. Fast + interruptible —
- *  rapid floor stepping replaces the in-flight tween seamlessly. */
+/** Keep the isolate schematic's highlighted floor band on the tracked floor
+ *  (facade modes only — TOP and the free camera clear it). */
+function syncFocusFloor(): void {
+  const s = getAppState()
+  const focusable = s.isolateMode && s.viewLock !== 'off' && s.viewLock !== 'top'
+  getTacticalLayer()?.setFocusFloor(focusable ? s.viewLockFloor : null)
+}
+
+/** Fly the camera to the current lock mode. Fast + interruptible. */
 export function applyViewLockCamera(durationS = 0.6): void {
   const s = getAppState()
   const scene = getScene()
   const inc = s.incident
   if (!scene || !inc || s.viewLock === 'off') return
-  const { z0, storeyM, heightM, centerLat, centerLon, halfNS, halfEW } = buildingRef()
+  const { z0, heightM, centerLat, centerLon } = buildingRef()
   lockController(s.viewLock)
   if (s.viewLock === 'top') {
     scene.viewer.camera.flyTo({
@@ -155,26 +195,36 @@ export function applyViewLockCamera(durationS = 0.6): void {
       orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
       duration: durationS,
     })
+    syncFocusFloor()
     return
   }
-  const side = s.viewLock
-  const floor = Math.max(1, s.viewLockFloor)
-  // Perpendicular, centered facade view: the camera sits on the compass axis
-  // through the footprint CENTER of that face, standing off half the
-  // building's own depth plus room for the facade and a floor of context.
-  const halfDepth = side === 'north' || side === 'south' ? halfNS : halfEW
-  const standoffM = halfDepth + Math.min(280, Math.max(45, heightM * 1.3))
-  const pos = offsetDeg(centerLat, centerLon, SIDE_BEARING_DEG[side], standoffM)
-  const eyeZ = z0 + (floor - 0.5) * storeyM + 2
+  // TRUE ELEVATION of the chosen face: camera on the facade's own normal
+  // axis through the footprint center, level pitch, standing off far enough
+  // that the ENTIRE side — full height and full width — fits in frame.
+  const { normal, depth, width } = facadeFor(s.viewLock)
+  const frustum = scene.viewer.camera.frustum
+  const fovy =
+    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
+  const aspect =
+    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.aspectRatio : undefined) || 1.6
+  const fovx = 2 * Math.atan(Math.tan(fovy / 2) * aspect)
+  const fit = Math.max(
+    30,
+    (heightM / 2 + 8) / Math.tan(fovy / 2),
+    (width + 10) / Math.tan(fovx / 2),
+  )
+  const standoffM = depth + fit
+  const pos = offsetDeg(centerLat, centerLon, normal, standoffM)
   scene.viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, eyeZ + standoffM * Math.tan((-SIDE_PITCH_DEG * Math.PI) / 180)),
+    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, z0 + heightM / 2),
     orientation: {
-      heading: Cesium.Math.toRadians(SIDE_HEADING_DEG[side]),
-      pitch: Cesium.Math.toRadians(SIDE_PITCH_DEG),
+      heading: Cesium.Math.toRadians((normal + 180) % 360),
+      pitch: 0,
       roll: 0,
     },
     duration: durationS,
   })
+  syncFocusFloor()
 }
 
 export function setViewLockMode(mode: Exclude<ViewLockMode, 'off'>): void {
@@ -186,46 +236,95 @@ export function setViewLockMode(mode: Exclude<ViewLockMode, 'off'>): void {
 }
 
 export function stepViewLockFloor(delta: number): void {
-  const s = getAppState()
-  if (s.viewLock === 'off' || s.viewLock === 'top') return
-  const next = Math.max(1, Math.min(viewLockFloors(), s.viewLockFloor + delta))
-  if (next === s.viewLockFloor) return
-  setAppState({ viewLockFloor: next })
-  applyViewLockCamera(0.25) // fast — holding the arrow steps floors fluidly
+  jumpViewLockFloor(getAppState().viewLockFloor + delta)
 }
 
+/** Direct floor set (fire-floor quick jump, stepper, arrows). The frame
+ *  holds the whole facade — scrolling floors moves the HIGHLIGHT band and
+ *  readout, never the camera, so the operator's zoom is never yanked. */
+export function jumpViewLockFloor(floor: number): void {
+  const s = getAppState()
+  if (s.viewLock === 'off' || s.viewLock === 'top') return
+  const next = Math.max(1, Math.min(viewLockFloors(), Math.round(floor)))
+  if (next === s.viewLockFloor) return
+  setAppState({ viewLockFloor: next })
+  syncFocusFloor()
+}
+
+let hintShown = false
+
 function engage(): void {
-  setAppState({ viewLock: 'top', viewLockFloor: defaultBattleFloor() })
-  applyViewLockCamera(1.2)
+  // Straight into a facade: the operator just committed to the structure —
+  // land head-on to the north-most face, fire floor highlighted.
+  setAppState({ viewLock: 'north', viewLockFloor: defaultBattleFloor() })
+  applyViewLockCamera(1.0)
+  if (!hintShown) {
+    hintShown = true
+    notify('VIEW LOCKED TO STRUCTURE — N/E/S/W faces, ↑↓ floor highlight, T top, zoom free')
+  }
 }
 
 function disengage(): void {
   unlockController()
   setAppState({ viewLock: 'off' })
+  syncFocusFloor()
+  // Unchecking ISOLATE mid-incident: hand the operator back the standard
+  // tactical frame instead of leaving them nose-to-facade with a freed
+  // camera. Other exits (incident end, Watch Command, ground view, replay)
+  // own their own camera — and their teardowns unwind isolate FIRST while
+  // the incident is still in the store, so the decision must wait one
+  // microtask for the rest of their synchronous teardown to land.
+  queueMicrotask(() => {
+    const s = getAppState()
+    const scene = getScene()
+    if (
+      scene &&
+      s.incident &&
+      s.viewLock === 'off' &&
+      !s.isolateMode &&
+      !s.watchCommand &&
+      !s.groundViewActive &&
+      !s.replay.active
+    ) {
+      flyToTactical(scene.viewer, s.incident.lat, s.incident.lon, 1.6)
+    }
+  })
 }
 
 /**
  * Store-driven state machine (attached with the scene, like the render-mode
- * controller): engages whenever the FDNY workspace has an active incident,
- * suspends for the deliberate special camera modes, re-engages when they
- * exit, and fully releases when the incident ends.
+ * controller): arms when the FDNY workspace has an active incident AND the
+ * operator checks ISOLATE on, suspends for ground view / Watch Command /
+ * replay, and releases (restoring the free camera) when ISOLATE is
+ * unchecked or the incident ends.
  */
 export function attachViewLockController(): () => void {
   let lastShould = false
+  let lastFloorsRef: unknown = null
   const apply = () => {
     const s = getAppState()
     const should =
       s.sceneReady &&
       !!s.incident &&
       hasCapability(s.profile, 'tactical.view-lock') &&
-      !s.isolateMode &&
+      s.isolateMode &&
       !s.groundViewActive &&
       !s.watchCommand &&
       !s.replay.active
-    if (should === lastShould) return
-    lastShould = should
-    if (should && s.viewLock === 'off') engage()
-    else if (!should && s.viewLock !== 'off') disengage()
+    if (should !== lastShould) {
+      lastShould = should
+      lastFloorsRef = s.isolateFloors
+      if (should && s.viewLock === 'off') engage()
+      else if (!should && s.viewLock !== 'off') disengage()
+      return
+    }
+    // The isolate ON path lands its ground lift / schematic floors ASYNC
+    // (street-level sample) — and MODEL scale chips rebuild them. Re-fly so
+    // the locked views track the structure the operator actually sees.
+    if (lastShould && s.isolateFloors !== lastFloorsRef) {
+      lastFloorsRef = s.isolateFloors
+      if (s.viewLock !== 'off') applyViewLockCamera(0.6)
+    }
   }
   const unsubscribe = subscribeStore(apply)
   apply()

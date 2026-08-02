@@ -157,7 +157,7 @@ export class UnitLayer {
   /** Baked street height per unit (see GROUND_RESAMPLE_M). viaGlobe marks a
    *  height sampled off the ellipsoid globe — a lie once the google upgrade
    *  hides that globe, so those entries resample instead of being trusted. */
-  private groundHeights = new Map<string, { lat: number; lon: number; h: number; viaGlobe: boolean }>()
+  private groundHeights = new Map<string, { lat: number; lon: number; h: number; viaGlobe: boolean; isolate: boolean }>()
 
   /** Target footprint outer rings ([lon,lat][] each), or null to clear. */
   setInteriorBounds(rings: number[][][] | null): void {
@@ -178,25 +178,39 @@ export class UnitLayer {
   private groundHeightFor(uid: string, lat: number, lon: number): number | undefined {
     const scene = this.handle.viewer.scene
     const tileset = this.handle.buildingTileset
+    // ISOLATE flattens the world: the city mesh is clipped away and the
+    // globe IS the visible ground under exterior crews. Heights baked off
+    // the hidden photorealistic streets (~-30 m) would sink/float markers in
+    // every locked facade view — so isolate gets its own samples, and the
+    // cache invalidates whenever the mode flips (applyUnitVisibility
+    // re-upserts every unit on isolate on/off).
+    const isolate = getAppState().isolateMode
     const cached = this.groundHeights.get(uid)
     if (
       cached &&
-      !(cached.viaGlobe && tileset && !scene.globe.show) &&
+      cached.isolate === isolate &&
+      !(cached.viaGlobe && !isolate && tileset && !scene.globe.show) &&
       haversineMeters(cached.lat, cached.lon, lat, lon) < GROUND_RESAMPLE_M
     ) {
       return cached.h
     }
     const carto = Cesium.Cartographic.fromDegrees(lon, lat)
-    let h = tileset?.getHeight(carto, scene)
+    let h: number | undefined
     let viaGlobe = false
-    if (h === undefined && scene.globe.show) {
-      h = scene.globe.getHeight(carto)
+    if (isolate) {
+      h = (scene.globe.show ? scene.globe.getHeight(carto) : undefined) ?? 0
       viaGlobe = true
+    } else {
+      h = tileset?.getHeight(carto, scene)
+      if (h === undefined && scene.globe.show) {
+        h = scene.globe.getHeight(carto)
+        viaGlobe = true
+      }
     }
     // No mesh streamed at this spot yet: reuse the last-known height (streets
     // are near-flat block to block) and retry on the next update.
     if (h === undefined) return cached?.h
-    this.groundHeights.set(uid, { lat, lon, h, viaGlobe })
+    this.groundHeights.set(uid, { lat, lon, h, viaGlobe, isolate })
     return h
   }
 

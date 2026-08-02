@@ -341,7 +341,18 @@ function EocChip() {
  * three top-bar slots.
  */
 function IsolateMenu() {
-  const { isolateMode, isolateView, isolateScale } = useAppSlice((s) => ({ isolateMode: s.isolateMode, isolateView: s.isolateView, isolateScale: s.isolateScale }))
+  const { isolateMode, isolateView, isolateScale, hasIncident, profile, replayActive } = useAppSlice((s) => ({
+    isolateMode: s.isolateMode,
+    isolateView: s.isolateView,
+    isolateScale: s.isolateScale,
+    hasIncident: !!s.incident,
+    profile: s.profile,
+    replayActive: s.replay.active,
+  }))
+  // The FDNY flow the operators are trained on: ACTIVE INCIDENT → check
+  // ISOLATE on → structure views lock. Pulse the next step so nobody has to
+  // remember it mid-chaos.
+  const nextStep = hasIncident && !isolateMode && !replayActive && hasCapability(profile, 'tactical.view-lock')
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -355,9 +366,13 @@ function IsolateMenu() {
   return (
     <div className="isolate-wrap" ref={wrapRef}>
       <button
-        className={`chip chip-btn amber${isolateMode ? ' active' : ''}`}
+        className={`chip chip-btn amber${isolateMode ? ' active' : ''}${nextStep ? ' pulse-hint' : ''}`}
         onClick={() => setOpen((o) => !o)}
-        title="Isolate the incident building — clip everything else away; pick MODEL or LIVE view and the model's vertical scale"
+        title={
+          nextStep
+            ? 'NEXT STEP: check ISOLATE on to lock the view to the structure — N/S/E/W sides + floor tracking'
+            : 'Isolate the incident building — clip everything else away; pick MODEL or LIVE view and the model\'s vertical scale'
+        }
       >
         <span className="dot" /> ISOLATE {open ? '▴' : '▾'}
       </button>
@@ -368,7 +383,7 @@ function IsolateMenu() {
             onClick={toggleIsolateMode}
             title="Strip every building, tree, and obstruction except the incident building"
           >
-            {isolateMode ? '◉ ISOLATE ON — click to exit' : '◌ ISOLATE OFF — click to isolate the building'}
+            {isolateMode ? '◉ ISOLATE ON — click to exit' : '◌ ISOLATE OFF — click to isolate + lock structure views'}
           </button>
           {isolateMode && (
             <>

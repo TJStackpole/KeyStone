@@ -115,9 +115,11 @@ export interface AppState {
   visibilityPolicy: import('../profiles/policy').VisibilityPolicy
   /** Prompt 12 — admin visibility-policy editor. */
   policyEditorOpen: boolean
-  /** Incident building footprint bbox — battle views center on THIS, not
-   *  the address point (which can sit off-center on big footprints). */
-  targetBounds: { minLat: number; maxLat: number; minLon: number; maxLon: number } | null
+  /** Incident building STRUCTURE FRAME: footprint center, dominant facade
+   *  bearing (deg from north, the building's own axis — NYC's grid is
+   *  rotated off true north) and oriented half-extents along/across it.
+   *  Battle views aim head-on at faces using THIS, not world axes. */
+  targetBounds: { centerLat: number; centerLon: number; bearingA: number; halfA: number; halfB: number } | null
   /** FDNY battle-view lock: top-down or a building side, floors steppable. */
   viewLock: 'off' | 'top' | 'north' | 'east' | 'south' | 'west'
   /** Current floor for the side (facade) battle views. */

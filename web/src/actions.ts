@@ -269,18 +269,56 @@ async function loadFootprints(incident: Incident): Promise<void> {
     // rather than trusting raw CoT altitude. Recomputed with the real PLUTO
     // floor count when it lands (loadSiteIntel).
     if (target) {
-      // Footprint bbox: the battle views' centering + standoff reference.
+      // Structure frame for the battle views: the footprint's dominant edge
+      // bearing (length-weighted, folded to the rectangle-symmetric
+      // orientation via the 4θ trick) plus oriented half-extents. Facade
+      // views aim along THESE axes — Manhattan's grid runs well off true
+      // north, so world-axis views would stare at the building's corner.
       const rings = target.polygons.map((pg) => pg[0]).filter((r) => r && r.length >= 3)
-      let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180
-      for (const ring of rings) {
-        for (const [lon, lat] of ring) {
-          if (lat < minLat) minLat = lat
-          if (lat > maxLat) maxLat = lat
-          if (lon < minLon) minLon = lon
-          if (lon > maxLon) maxLon = lon
+      let frame: { centerLat: number; centerLon: number; bearingA: number; halfA: number; halfB: number } | null = null
+      const pts = rings.flat()
+      if (pts.length >= 3) {
+        const cos0 = Math.cos((pts[0][1] * Math.PI) / 180)
+        const toXY = ([lon, lat]: number[]) => [lon * 111_320 * cos0, lat * 111_320]
+        let sx = 0
+        let sy = 0
+        for (const ring of rings) {
+          for (let i = 0; i < ring.length; i++) {
+            const [x1, y1] = toXY(ring[i])
+            const [x2, y2] = toXY(ring[(i + 1) % ring.length])
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const len = Math.hypot(dx, dy)
+            if (len < 0.5) continue
+            const a4 = 4 * Math.atan2(dy, dx)
+            sx += len * Math.cos(a4)
+            sy += len * Math.sin(a4)
+          }
+        }
+        const alpha = Math.atan2(sy, sx) / 4 // dominant edge direction (ENU)
+        const ux = Math.cos(alpha)
+        const uy = Math.sin(alpha)
+        let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
+        for (const pt of pts) {
+          const [x, y] = toXY(pt)
+          const u = x * ux + y * uy
+          const v = -x * uy + y * ux
+          if (u < minU) minU = u
+          if (u > maxU) maxU = u
+          if (v < minV) minV = v
+          if (v > maxV) maxV = v
+        }
+        const cu = (minU + maxU) / 2
+        const cv = (minV + maxV) / 2
+        frame = {
+          centerLat: (cu * uy + cv * ux) / 111_320,
+          centerLon: (cu * ux - cv * uy) / (111_320 * cos0),
+          bearingA: (((90 - (alpha * 180) / Math.PI) % 180) + 180) % 180,
+          halfA: (maxU - minU) / 2,
+          halfB: (maxV - minV) / 2,
         }
       }
-      setAppState({ targetBounds: rings.length ? { minLat, maxLat, minLon, maxLon } : null })
+      setAppState({ targetBounds: frame })
       void (async () => {
         const base = (await layer.targetBase()) ?? 0
         const now = getAppState()
@@ -331,6 +369,7 @@ export function toggleIsolateMode(): void {
     console.warn(
       `[isolate] refused: footprint cache ${lastFootprints ? `is for ${lastFootprints.incidentId} (current ${current?.id})` : 'is empty'}`,
     )
+    notify('BUILDING FOOTPRINT STILL LOADING — try ISOLATE again in a moment')
     return
   }
   // ISOLATE owns the tactical layer — a tapped-building schematic in it
@@ -578,7 +617,10 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     isolateApplied = true
     lastIsolateBase = base // scale/view changes reframe against this
     applyIsolateAppearance()
-    if (opts.frame) frameIsolatedBuilding(base)
+    // The battle-view lock owns the camera when it is engaged — its own
+    // facade flight (re-aimed when isolateFloors lands) replaces the generic
+    // size-up framing.
+    if (opts.frame && getAppState().viewLock === 'off') frameIsolatedBuilding(base)
   })()
 }
 
@@ -622,7 +664,8 @@ export function setIsolateScale(scale: number): void {
   setAppState({ isolateScale: scale })
   if (getAppState().isolateMode && isolateApplied) {
     applyIsolateAppearance()
-    frameIsolatedBuilding(lastIsolateBase)
+    // Locked views re-aim themselves off the rebuilt isolateFloors.
+    if (getAppState().viewLock === 'off') frameIsolatedBuilding(lastIsolateBase)
   }
 }
 

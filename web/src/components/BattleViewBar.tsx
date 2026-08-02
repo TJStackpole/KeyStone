@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { setViewLockMode, stepViewLockFloor, viewLockFloors } from '../cesium/viewLock'
+import { battleFireFloor, jumpViewLockFloor, setViewLockMode, stepViewLockFloor, viewLockFloors } from '../cesium/viewLock'
 import { useMovable } from '../lib/movable'
 import { useAppSlice } from '../state/store'
 
@@ -22,10 +22,19 @@ const SIDES = [
 
 export function BattleViewBar() {
   const mvBattle = useMovable('battle-view')
+  // floors/fireFloor are computed via viewLockFloors()/battleFireFloor(),
+  // which read store fields directly — every input is mirrored here so the
+  // readout re-renders the moment one changes (not on the next units tick).
   const { viewLock, viewLockFloor, units } = useAppSlice((s) => ({
     viewLock: s.viewLock,
     viewLockFloor: s.viewLockFloor,
     units: s.units,
+    plutoFloors: s.intel.pluto?.numFloors ?? null,
+    isolateFloors: s.isolateFloors,
+    isolateScale: s.isolateScale,
+    isolateView: s.isolateView,
+    targetHeightM: s.targetHeightM,
+    timelineLen: s.timeline.length,
   }))
 
   // One-keystroke view control — chaos-proof. Never steals typing.
@@ -56,6 +65,7 @@ export function BattleViewBar() {
   if (viewLock === 'off') return null
   const sideMode = viewLock !== 'top'
   const floors = viewLockFloors()
+  const fireFloor = battleFireFloor()
   const onFloor = sideMode
     ? Object.values(units).filter(
         (u) => (u.category === 'ff' || u.category === 'officer') && (u.floor ?? 0) === viewLockFloor,
@@ -80,7 +90,7 @@ export function BattleViewBar() {
             key={s.id}
             className={`bv-btn side${viewLock === s.id ? ' on' : ''}`}
             onClick={() => setViewLockMode(s.id)}
-            title={`${s.id.toUpperCase()} side of the building — floor-by-floor battle tracking (${s.key.toUpperCase()})`}
+            title={`Head-on view of the structure's ${s.id.toUpperCase()}-facing side — ↑↓ highlights floors (${s.key.toUpperCase()})`}
           >
             {s.label}
           </button>
@@ -92,7 +102,7 @@ export function BattleViewBar() {
             className="bv-btn"
             disabled={viewLockFloor >= floors}
             onClick={() => stepViewLockFloor(1)}
-            title="Floor up (↑)"
+            title="Track floor up — highlights it on the structure (↑)"
           >
             ▲
           </button>
@@ -106,12 +116,24 @@ export function BattleViewBar() {
             className="bv-btn"
             disabled={viewLockFloor <= 1}
             onClick={() => stepViewLockFloor(-1)}
-            title="Floor down (↓)"
+            title="Track floor down — highlights it on the structure (↓)"
           >
             ▼
           </button>
+          {fireFloor !== null && fireFloor !== viewLockFloor && (
+            <button
+              className="bv-btn bv-fire"
+              onClick={() => jumpViewLockFloor(fireFloor)}
+              title={`Jump back to the fire floor (FL ${fireFloor})`}
+            >
+              ◎ FIRE FL {fireFloor}
+            </button>
+          )}
         </div>
       )}
+      <div className="bv-hints" title="Keyboard: T top · N/E/S/W sides · ↑↓ floors · scroll zooms">
+        T·N·E·S·W&ensp;↑↓ FL
+      </div>
     </aside>
   )
 }

@@ -20,6 +20,7 @@ const FIRE = Cesium.Color.fromCssColorString('#ef4444')
 const ENTRANCE = Cesium.Color.fromCssColorString('#22c55e')
 const EGRESS = Cesium.Color.fromCssColorString('#f59e0b')
 const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.78)
+const FOCUS = Cesium.Color.fromCssColorString('#22d3ee')
 const VOLUME_FILL = GRID.withAlpha(0.1)
 const SLAB_FILL = Cesium.Color.fromCssColorString('#7dd3fc').withAlpha(0.28)
 const FIRE_SLAB_FILL = FIRE.withAlpha(0.45)
@@ -77,6 +78,8 @@ function closestOnRing(
 
 export class TacticalModelLayer {
   private source = new Cesium.CustomDataSource('tactical-model')
+  /** Geometry of the last show() — the focus band re-anchors to it. */
+  private lastGeom: { ring: number[][]; z0: number; storey: number; floors: number } | null = null
 
   constructor(viewer: Cesium.Viewer) {
     void viewer.dataSources.add(this.source)
@@ -113,6 +116,7 @@ export class TacticalModelLayer {
     const step = Math.max(1, Math.ceil(floors / MAX_RINGS))
 
     const entrance = closestOnRing(ring, opts.address)
+    this.lastGeom = { ring, z0, storey, floors }
 
     // MODEL view: clean schematic replaces the (patchy when clipped) real
     // imagery — glass volume per wing, floor slabs, estimated stair core.
@@ -363,7 +367,31 @@ export class TacticalModelLayer {
     })
   }
 
+  /**
+   * Battle-view floor tracking: wrap a bright band around ONE storey — the
+   * floor the operator is scrolling through in a locked facade view — so
+   * the tracked floor pops out of the schematic at a glance. null clears.
+   */
+  setFocusFloor(floor: number | null): void {
+    this.source.entities.removeById('tact:focus')
+    const g = this.lastGeom
+    if (floor === null || !g) return
+    const f = Math.max(1, Math.min(g.floors, Math.round(floor)))
+    this.source.entities.add({
+      id: 'tact:focus',
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(g.ring.flat())),
+        height: g.z0 + (f - 1) * g.storey,
+        extrudedHeight: g.z0 + f * g.storey,
+        material: FOCUS.withAlpha(0.22),
+        outline: true,
+        outlineColor: FOCUS.withAlpha(0.9),
+      },
+    })
+  }
+
   clear(): void {
     this.source.entities.removeAll()
+    this.lastGeom = null
   }
 }
