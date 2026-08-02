@@ -115,6 +115,8 @@ export interface AppState {
   visibilityPolicy: import('../profiles/policy').VisibilityPolicy
   /** Prompt 12 — admin visibility-policy editor. */
   policyEditorOpen: boolean
+  /** Drag offsets per movable panel id (transform-only; {} = default layout). */
+  panelOffsets: import('../lib/movable').PanelOffsets
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -278,6 +280,19 @@ const initial: AppState = {
   })(),
   visibilityPolicy: { par_member_names: 'full', riding_lists: 'full', radio_channels: 'all' },
   policyEditorOpen: false,
+  // Inline read (not the lib helper) — movable.tsx imports THIS module.
+  panelOffsets: (() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('ks-panel-offsets') ?? '{}') as Record<string, { x: number; y: number }>
+      const out: Record<string, { x: number; y: number }> = {}
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) out[k] = { x: v.x, y: v.y }
+      }
+      return out
+    } catch {
+      return {}
+    }
+  })(),
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],

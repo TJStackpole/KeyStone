@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useMovable } from '../lib/movable'
 import { setAppState, useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
 
@@ -61,6 +62,7 @@ function line(ev: TimelineEvent): string {
  * PRINT hands it to the browser's print dialog for PDF export.
  */
 export function AarPanel() {
+  const mvAar = useMovable('aar')
   const { aarOpen, timeline, incident, units, scenario } = useAppSlice((s) => ({ aarOpen: s.aarOpen, timeline: s.timeline, incident: s.incident, units: s.units, scenario: s.scenario }))
 
   const rows = useMemo(() => timeline.filter((ev) => REPORT_KINDS.has(ev.kind)), [timeline])
@@ -74,7 +76,7 @@ export function AarPanel() {
 
   return (
     <div className="aar-backdrop">
-      <div className="aar-panel glass" id="aar-report">
+      <div {...mvAar} className="aar-panel glass" id="aar-report">
         <div className="panel-head">
           <span className="card-title">AFTER-ACTION SUMMARY {scenario?.drill ? '· DRILL — SIMULATED INCIDENT' : ''}</span>
           <button className="chip chip-btn" onClick={() => window.print()}>

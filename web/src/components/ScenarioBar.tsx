@@ -1,4 +1,5 @@
 import { jumpScenarioChapter, pauseScenario, playScenario, seekScenario, setScenarioSpeed, stopScenario } from '../actions'
+import { useMovable } from '../lib/movable'
 import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'
 
@@ -14,12 +15,13 @@ function fmtClock(s: number): string {
  * always-on "DRILL — SIMULATED INCIDENT" label required by exercise practice.
  */
 export function ScenarioBar() {
+  const mvScenariobar = useMovable('scenario-bar')
   const { scenario } = useAppSlice((s) => ({ scenario: s.scenario }))
   const canEndExercise = useCapability('aar.hseep-exercise')
   if (!scenario) return null
   const current = [...scenario.chapters].reverse().find((c) => c.t <= scenario.clock)
   return (
-    <div className="scenario-bar glass">
+    <div {...mvScenariobar} className="scenario-bar glass">
       <span className="drill-badge">DRILL — SIMULATED INCIDENT</span>
       <button
         className="scn-btn"

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ export function TakLinkButton() {
 }
 
 export function TakChatPanel() {
+  const mvTakchat = useMovable('takchat')
   const { chatOpen, chats, takConnected } = useAppSlice((s) => ({ chatOpen: s.chatOpen, chats: s.chats, takConnected: s.takConnected }))
   const [room, setRoom] = useState('All Chat Rooms')
   const [draft, setDraft] = useState('')
@@ -84,7 +86,7 @@ export function TakChatPanel() {
   const activeLabel = ROOMS.find((r) => r.id === room)?.label ?? 'ALL'
 
   return (
-    <section className="takchat-panel glass">
+    <section {...mvTakchat} className="takchat-panel glass">
       <div className="panel-head">
         <span className="card-title">TAK Chat · OEM Watch Command</span>
         <span className={`chip${takConnected ? '' : ' warn'}`}>

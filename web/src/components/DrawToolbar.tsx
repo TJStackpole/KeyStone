@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { deleteSelectedShape, rotateSelectedApparatus, setDrawTool } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { setAppState, useAppSlice } from '../state/store'
@@ -52,6 +53,7 @@ function StagingPicker() {
 }
 
 export function DrawToolbar() {
+  const mvDrawtoolbar = useMovable('draw-toolbar')
   const { drawTool, selectedShapeId, incident, streetViewOpen, shapes } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes }))
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
@@ -70,7 +72,7 @@ export function DrawToolbar() {
 
   return (
     <>
-      <div className="draw-toolbar glass">
+      <div {...mvDrawtoolbar} className="draw-toolbar glass">
         <button className="tool-collapse" onClick={() => setCollapsed(true)} title="Minimize ICS tools">
           ◂
         </button>

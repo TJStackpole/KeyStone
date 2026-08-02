@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { useCapability } from '../profiles/manifest'
 import { POLICY_FIELDS, usePolicy } from '../profiles/policy'
 import { setAppState, useAppSlice } from '../state/store'
@@ -16,6 +17,7 @@ import { setAppState, useAppSlice } from '../state/store'
 // ---------------------------------------------------------------------------
 
 export function PolicyEditorPanel() {
+  const mvPolicyeditor = useMovable('policy-editor')
   const enabled = useCapability('admin.policy-editor')
   const { policyEditorOpen } = useAppSlice((s) => ({ policyEditorOpen: s.policyEditorOpen }))
   const policy = usePolicy()
@@ -40,7 +42,7 @@ export function PolicyEditorPanel() {
   }
 
   return (
-    <aside className="policy-editor glass">
+    <aside {...mvPolicyeditor} className="policy-editor glass">
       <div className="policy-head">
         <span className="card-title">VISIBILITY POLICY · ADMIN</span>
         <button className="panel-close" onClick={() => setAppState({ policyEditorOpen: false })}>

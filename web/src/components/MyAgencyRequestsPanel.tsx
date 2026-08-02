@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { requestTransition } from '../actions'
 import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'
@@ -25,6 +26,7 @@ const NEXT: Record<RequestState, RequestState[]> = {
 }
 
 export function MyAgencyRequestsPanel() {
+  const mvAgencyreq = useMovable('agency-req')
   const enabled = useCapability('requests.agency-panel')
   const { interagencyRequests, requestThresholds } = useAppSlice((s) => ({
     interagencyRequests: s.interagencyRequests,
@@ -51,7 +53,7 @@ export function MyAgencyRequestsPanel() {
   const breaches = active.filter((r) => requestElapsed(r, requestThresholds).breach).length
 
   return (
-    <section className="agency-req glass">
+    <section {...mvAgencyreq} className="agency-req glass">
       <button className={`agency-req-head${breaches && collapsed ? ' breach' : ''}`} onClick={() => setCollapsed((c) => !c)}>
         <span className="card-title">MY AGENCY REQUESTS</span>
         {breaches > 0 && <b className="agency-req-breachcount">{breaches} PAST SLA</b>}

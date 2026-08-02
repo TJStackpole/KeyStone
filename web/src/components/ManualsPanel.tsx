@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ interface DoctrineHit {
 }
 
 export function ManualsPanel() {
+  const mvManuals = useMovable('manuals')
   const { manualsOpen } = useAppSlice((s) => ({ manualsOpen: s.manualsOpen }))
   const [question, setQuestion] = useState('')
   const [state, setState] = useState<'idle' | 'loading' | 'answered' | 'empty' | 'offline' | 'unindexed'>('idle')
@@ -50,7 +52,7 @@ export function ManualsPanel() {
   }
 
   return (
-    <section className="manuals-panel glass">
+    <section {...mvManuals} className="manuals-panel glass">
       <div className="panel-head">
         <span className="card-title">Ask the Manuals · FD Books</span>
         <span className="chip">

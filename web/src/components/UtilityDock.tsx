@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { useMovable } from '../lib/movable'
 import { flyToUnit } from '../actions'
 import { getUnitLayer } from '../cesium/scene'
 import { useProfile } from '../profiles/manifest'
@@ -22,11 +23,12 @@ const TABS = [
 ] as const
 
 export function UtilityDock() {
+  const mvUtilitydock = useMovable('utility-dock')
   const { utilityTab } = useAppSlice((s) => ({ utilityTab: s.utilityTab }))
   if (!utilityTab) return null
 
   return (
-    <aside className="utility-dock glass">
+    <aside {...mvUtilitydock} className="utility-dock glass">
       <div className="panel-head">
         <div className="video-tabs">
           {TABS.map((t) => (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { classifyBuilding, FFP_TITLES, type FfpType } from '../lib/ffpClassify'
 import { setAppState, useAppSlice } from '../state/store'
 
@@ -48,6 +49,7 @@ async function logTimeline(kind: string, payload: Record<string, unknown>): Prom
 }
 
 export function TacticsPanel() {
+  const mvTactics = useMovable('tactics')
   const { tacticsOpen, tacticsOverride, incident, intel, targetHeightM } = useAppSlice((s) => ({ tacticsOpen: s.tacticsOpen, tacticsOverride: s.tacticsOverride, incident: s.incident, intel: s.intel, targetHeightM: s.targetHeightM }))
   const [card, setCard] = useState<TacticsCard | null>(null)
   const [cardState, setCardState] = useState<'idle' | 'loading' | 'missing'>('idle')
@@ -117,7 +119,7 @@ export function TacticsPanel() {
   }
 
   return (
-    <section className="tactics-panel glass">
+    <section {...mvTactics} className="tactics-panel glass">
       <div className="panel-head">
         <span className="card-title">Building-Type Tactics</span>
         <span className="chip warn">

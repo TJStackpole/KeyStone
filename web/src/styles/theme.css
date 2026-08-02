@@ -2326,6 +2326,12 @@ body:has(.wc-left) .home-btn { left: 384px; }
 }
 .comms-policy-note { font: 700 8px var(--mono); color: var(--amber-bright); letter-spacing: 0.06em; align-self: center; padding: 0 6px; }
 
+/* Movable panels: grab any box by its background; drop anywhere. */
+[data-movable] { touch-action: none; }
+[data-movable]:active { cursor: grabbing; }
+body.panel-dragging { user-select: none; cursor: grabbing; }
+body.panel-dragging * { cursor: grabbing !important; }
+
 /* Dirty-close confirm on the exercise review (base .panel-close is 22px sq). */
 .exr-btns .panel-close.confirm {
   width: auto; padding: 0 8px; color: var(--amber-bright);

@@ -18,6 +18,7 @@ import {
 } from '../actions'
 import { setAppState, useAppSlice } from '../state/store'
 import type { FeedIncident, ToggleLayerId } from '../types'
+import { resetPanelLayout } from '../lib/movable'
 import { hasCapability, PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
 import { SearchBar } from './SearchBar'
 import { requestElapsed } from './WatchCommandPanel'
@@ -459,6 +460,16 @@ function PanelsMenu({
       </button>
       {open && (
         <div className="panels-menu glass">
+          <button
+            className="panel-item"
+            onClick={() => {
+              setOpen(false)
+              resetPanelLayout()
+            }}
+            title="Every info box you dragged returns to its default position"
+          >
+            RESET LAYOUT
+          </button>
           <button
             className="panel-item"
             onClick={() => {

@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
 import { useProfile } from '../profiles/manifest'
 import { memberDetailAllowed, usePolicy } from '../profiles/policy'
@@ -54,6 +55,7 @@ function callsignSortKey(cs: string): [string, number] {
 }
 
 export function RosterPanel() {
+  const mvRoster = useMovable('roster')
   const { units, incident, takConnected, dispatching, gpsTracking } = useAppSlice((s) => ({ units: s.units, incident: s.incident, takConnected: s.takConnected, dispatching: s.dispatching, gpsTracking: s.gpsTracking }))
   const [collapsed, setCollapsed] = useState(false)
 
@@ -80,7 +82,7 @@ export function RosterPanel() {
   const total = Object.keys(units).length
 
   return (
-    <section className="roster-panel glass">
+    <section {...mvRoster} className="roster-panel glass">
       <div className="roster-head">
         <button className="head-toggle" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expand' : 'Minimize'}>
           <span className="card-title">Units</span>

@@ -10,6 +10,7 @@ import {
   requestTransition,
   saveRules,
 } from '../actions'
+import { useMovable } from '../lib/movable'
 import { setAppState, useAppSlice } from '../state/store'
 import type { InteragencyRequest, RequestPriority, RequestState, TriggerRule } from '../types'
 
@@ -607,11 +608,12 @@ function TimelineStrip() {
   const now = Date.now()
   const SPAN = 2 * 3600_000
   const x = (iso: string) => Math.max(0, Math.min(100, 100 - ((now - Date.parse(iso)) / SPAN) * 100))
+  const mvStrip = useMovable('wc-strip')
   const anyInWindow =
     eoc.history.some((c) => now - Date.parse(c.changedAt) < SPAN) ||
     planActivations.some((p) => now - Date.parse(p.activatedAt) < SPAN || !p.deactivatedAt)
   return (
-    <div className="wc-strip glass">
+    <div {...mvStrip} className="wc-strip glass">
       <div className="wc-strip-title">
         EOC / PLANS · LAST 2H
         {!anyInWindow && <i className="wc-strip-empty">L{eoc.level} STEADY STATE — NO ACTIVATIONS IN WINDOW</i>}
@@ -649,6 +651,8 @@ function TimelineStrip() {
 }
 
 export function WatchCommandPanel() {
+  const mvLeft = useMovable('wc-left')
+  const mvRight = useMovable('wc-right')
   const { watchCommand, portfolio, weatherAlerts, weatherObs, scenario, portfolioHoverId } = useAppSlice((s) => ({
     watchCommand: s.watchCommand,
     portfolio: s.portfolio,
@@ -695,7 +699,7 @@ export function WatchCommandPanel() {
     <>
       <HoverCard />
       <SuggestionBanners operator={operator} />
-      <aside className="wc-left glass">
+      <aside {...mvLeft} className="wc-left glass">
         <div className="wc-head">
           <span className="card-title">Watch Command</span>
           <span className="wc-count">{portfolio.length} ACTIVE</span>
@@ -722,7 +726,7 @@ export function WatchCommandPanel() {
           </button>
         )}
       </aside>
-      <aside className="wc-right glass">
+      <aside {...mvRight} className="wc-right glass">
         <StatusBoard />
         <RequestBoard operator={operator} />
         <RulesEditor />

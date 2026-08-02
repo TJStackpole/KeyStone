@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
+import { useMovable } from '../lib/movable'
 import { useProfile } from '../profiles/manifest'
 import { radioChannelsAllowed, usePolicy } from '../profiles/policy'
 import { setAppState, useAppSlice } from '../state/store'
@@ -69,6 +70,7 @@ const CommsLine = memo(function CommsLine({ line }: { line: TranscriptLine }) {
 })
 
 export function CommsPanel() {
+  const mvComms = useMovable('comms')
   const { commsOpen, commsChannel, transcripts, commsConfig, scenario, commsAll, commsSource } = useAppSlice((s) => ({ commsOpen: s.commsOpen, commsChannel: s.commsChannel, transcripts: s.transcripts, commsConfig: s.commsConfig, scenario: s.scenario, commsAll: s.commsAll, commsSource: s.commsSource }))
   // Prompt 12 — the visibility policy can restrict a coordinating profile to
   // the merged command view (no per-channel tactical audio). Hot-reloads.
@@ -142,7 +144,7 @@ export function CommsPanel() {
   const audioSrc = liveSelected ? commsConfig!.audioUrl : '/api/audio/fdny-dispatch-demo.mp3'
 
   return (
-    <section className="comms-panel glass">
+    <section {...mvComms} className="comms-panel glass">
       <div className="comms-tabs">
         {!allChannels && (
           <span className="comms-policy-note" title="Per-channel radio is restricted for this profile (visibility policy)">

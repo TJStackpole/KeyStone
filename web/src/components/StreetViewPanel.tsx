@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { loadStreetViewLib } from '../lib/gmaps'
 import { getAppState, setAppState, useAppSlice } from '../state/store'
 
@@ -37,6 +38,7 @@ let panoEl: HTMLDivElement | null = null
 let pano: PanoInstance | null = null
 
 export function StreetViewPanel() {
+  const mvStreetview = useMovable('streetview')
   const { streetViewOpen, incident } = useAppSlice((s) => ({ streetViewOpen: s.streetViewOpen, incident: s.incident }))
   const [state, setState] = useState<'loading' | 'ready' | 'nocover' | 'apifail'>('loading')
   const holder = useRef<HTMLDivElement>(null)
@@ -105,7 +107,7 @@ export function StreetViewPanel() {
   if (!streetViewOpen || !incident) return null
 
   return (
-    <section className="streetview-panel glass">
+    <section {...mvStreetview} className="streetview-panel glass">
       <div className="panel-head">
         <span className="card-title">Street View</span>
         <span className="sv-addr">{incident.address}</span>

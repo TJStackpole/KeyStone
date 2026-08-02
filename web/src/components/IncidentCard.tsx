@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMovable } from '../lib/movable'
 import { changeIncidentType, editIncidentAddress, endIncident } from '../actions'
 import { autocompleteAddress } from '../api/geosearch'
 import { useAppSlice } from '../state/store'
@@ -137,6 +138,7 @@ function EditableAddress({ incident }: { incident: Incident }) {
 }
 
 export function IncidentCard() {
+  const mvIncidentcard = useMovable('incident-card')
   const { incident } = useAppSlice((s) => ({ incident: s.incident }))
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
@@ -146,7 +148,7 @@ export function IncidentCard() {
 
   if (collapsed) {
     return (
-      <section className="incident-card glass collapsed">
+      <section {...mvIncidentcard} className="incident-card glass collapsed">
         <button className="card-head as-btn" onClick={() => setCollapsed(false)}>
           <span className="card-title">Incident</span>
           <span className="incident-id">{incident.id}</span>
@@ -158,7 +160,7 @@ export function IncidentCard() {
   }
 
   return (
-    <section className="incident-card glass">
+    <section {...mvIncidentcard} className="incident-card glass">
       <button className="card-head as-btn" onClick={() => setCollapsed(true)}>
         <span className="card-title">Incident</span>
         <span className="incident-id">{incident.id}</span>
