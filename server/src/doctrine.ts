@@ -66,7 +66,7 @@ class Bm25Index {
   private docLen: number[] = []
   private df = new Map<string, number>()
   private avgLen = 0
-  private loading = false
+  loading = false
   ready = false
   report: Record<string, unknown> | null = null
 

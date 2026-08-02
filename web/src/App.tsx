@@ -37,6 +37,7 @@ import { ExerciseReviewPanel } from './components/ExerciseReviewPanel'
 import { MyAgencyRequestsPanel } from './components/MyAgencyRequestsPanel'
 import { PolicyEditorPanel } from './components/PolicyEditorPanel'
 import { ProfileWatermark } from './components/ProfileWatermark'
+import { NoticeChip } from './components/NoticeChip'
 import { hasCapability, useCapability } from './profiles/manifest'
 
 /**
@@ -193,6 +194,7 @@ export default function App() {
       <MyAgencyRequestsPanel />
       <PolicyEditorPanel />
       <ProfileWatermark />
+      <NoticeChip />
       <WindAdvisory />
       <Compass />
       <BootVeil msg={bootMsg} />

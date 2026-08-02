@@ -426,6 +426,7 @@ export class ScenarioEngine extends EventEmitter {
     if (!keepIncident) {
       this.file = null
       this.maxEmittedCursor = 0 // rewinds keep it — that's its whole purpose
+      this.speed = 4 // a 10x rehearsal must not leak into the next run
       // The refId→REQ-id map is the rewind dedupe: it must OUTLIVE rewinds
       // (clearing it here made every scrub-back re-open all scripted
       // requests as persisted duplicates) and reset only when the scenario

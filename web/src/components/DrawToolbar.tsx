@@ -64,9 +64,11 @@ export function DrawToolbar() {
 
   if (collapsed) {
     return (
-      <button className="draw-toolbar glass tools-collapsed" onClick={() => setCollapsed(false)} title="Expand ICS tools">
+      <div {...mvDrawtoolbar} className="tools-collapsed-wrap">
+        <button className="draw-toolbar glass tools-collapsed" onClick={() => setCollapsed(false)} title="Expand ICS tools">
         TOOLS ▸
       </button>
+      </div>
     )
   }
 

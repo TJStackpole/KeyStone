@@ -115,6 +115,8 @@ export interface AppState {
   visibilityPolicy: import('../profiles/policy').VisibilityPolicy
   /** Prompt 12 — admin visibility-policy editor. */
   policyEditorOpen: boolean
+  /** Transient operator notice (top-center chip, auto-clears). */
+  uiNotice: { text: string; tone: 'amber' | 'red' } | null
   /** Drag offsets per movable panel id (transform-only; {} = default layout). */
   panelOffsets: import('../lib/movable').PanelOffsets
   portfolio: PortfolioIncident[]
@@ -280,6 +282,7 @@ const initial: AppState = {
   })(),
   visibilityPolicy: { par_member_names: 'full', riding_lists: 'full', radio_channels: 'all' },
   policyEditorOpen: false,
+  uiNotice: null,
   // Inline read (not the lib helper) — movable.tsx imports THIS module.
   panelOffsets: (() => {
     try {

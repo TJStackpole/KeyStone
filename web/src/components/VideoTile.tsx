@@ -44,7 +44,12 @@ export function VideoTile({
     const connectHls = async () => {
       const video = videoRef.current
       if (dead || !video) return false
-      const { default: HlsCtor } = await import('hls.js')
+      let HlsCtor: typeof Hls
+      try {
+        HlsCtor = (await import('hls.js')).default
+      } catch {
+        return false // chunk fetch failed (redeploy/network) — caller schedules the retry
+      }
       if (dead) return false
       if (HlsCtor.isSupported()) {
         hls = new HlsCtor({ lowLatencyMode: true, liveDurationInfinity: true })

@@ -369,6 +369,9 @@ function handle(msg: ServerMsg): void {
       getExposureLayer()?.set(msg.labels ?? [])
       break
     case 'scenario.aar':
+      // The facilitator's HSEEP review owns the screen — the drill's generic
+      // AAR popping over it (script end fires during review) reads as a bug.
+      if (getAppState().exerciseReview) break
       setAppState({ aarOpen: true })
       break
     case 'chat':

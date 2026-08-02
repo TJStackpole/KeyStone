@@ -35,9 +35,19 @@ export function ManualsPanel() {
     setState('loading')
     try {
       const res = await fetch(`/api/doctrine/ask?q=${encodeURIComponent(q)}`)
-      const body = (await res.json()) as { ready: boolean; found: boolean; results: DoctrineHit[] }
+      const body = (await res.json()) as { ready: boolean; loading?: boolean; found: boolean; results: DoctrineHit[] }
       if (seq !== seqRef.current) return
       if (!body.ready) {
+        if (body.loading) {
+          // Lazy index warmup (first use after a restart) — retry the same
+          // question automatically instead of telling the operator the
+          // corpus is missing.
+          setState('loading')
+          setTimeout(() => {
+            if (seq === seqRef.current) void ask()
+          }, 1200)
+          return
+        }
         setState('unindexed')
         setHits([])
         return
@@ -75,7 +85,7 @@ export function ManualsPanel() {
           {state === 'loading' ? '…' : 'ASK'}
         </button>
       </div>
-      <div className="manuals-scroll">
+      <div className="manuals-scroll no-drag">
         {state === 'idle' && (
           <div className="intel-note">
             ANSWERS COME ONLY FROM THE FDNY PUBLICATIONS CORPUS ON THIS MACHINE — EVERY PASSAGE IS CITED

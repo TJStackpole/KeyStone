@@ -130,7 +130,7 @@ export function StreetViewPanel() {
       )}
       {key && (
         <>
-          <div ref={holder} className="sv-frame" style={{ display: state === 'ready' ? 'block' : 'none' }} />
+          <div ref={holder} className="sv-frame no-drag" style={{ display: state === 'ready' ? 'block' : 'none' }} />
           {state === 'ready' && (
             <div className="sv-hint">
               DRAG TO LOOK AROUND · CLICK ARROWS TO MOVE ALONG THE STREET · GOOGLE STREET VIEW

@@ -71,6 +71,16 @@ export function memberDetailAllowed(
   return policy[field] !== 'aggregate_only'
 }
 
+/** Crew composition (who rides which rig) is gated by BOTH member-detail
+ *  fields — the roster, globe markers, and dock tabs must agree, or the
+ *  restricted field leaks on whichever surface forgot (hunt-9 finding). */
+export function crewCompositionAllowed(profile: ProfileId, policy: VisibilityPolicy): boolean {
+  return (
+    memberDetailAllowed(profile, policy, 'par_member_names') &&
+    memberDetailAllowed(profile, policy, 'riding_lists')
+  )
+}
+
 /** Per-channel radio access: coordinating profiles can be restricted to the
  *  merged command view only. Own-agency tactical audio is never restricted. */
 export function radioChannelsAllowed(profile: ProfileId, policy: VisibilityPolicy): boolean {

@@ -39,7 +39,8 @@ import {
 } from './cesium/scene'
 import { replayEngine } from './replay'
 import { hasCapability } from './profiles/manifest'
-import { memberDetailAllowed } from './profiles/policy'
+import { crewCompositionAllowed } from './profiles/policy'
+import { notify } from './components/NoticeChip'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
 import { crewOf } from './types'
 import type {
@@ -839,12 +840,17 @@ export function enterWatchCommand(): void {
  */
 export async function launchDualScreenDemo(): Promise<void> {
   if (getAppState().exerciseReviewDirty) {
-    console.warn('[profile] dual-screen launch blocked: unsaved AAR edits — save or discard first')
+    notify('UNSAVED AAR EDITS — save or discard the review before launching')
+    return
+  }
+  const win = window.open(`${location.origin}${location.pathname}?profile=nycem`, 'keystone-nycem', 'width=1680,height=1050')
+  if (!win) {
+    // Do NOT start a one-screen "dual-screen demo": with no NYCEM window the
+    // exercise would have no facilitator surface at all.
+    notify('SECOND WINDOW BLOCKED — allow pop-ups for this site, then relaunch', 'red')
     return
   }
   setProfile('fdny')
-  const win = window.open(`${location.origin}${location.pathname}?profile=nycem`, 'keystone-nycem', 'width=1680,height=1050')
-  if (!win) console.warn('[profile] NYCEM window blocked by the popup blocker — allow popups and relaunch')
   // exercise:true so the NYCEM window gets the ENDEX/AAR chrome; this
   // window's enterWatchCommand is a no-op under the FDNY profile.
   await loadScenario('pabt-flood-exercise', { exercise: true })
@@ -1359,6 +1365,14 @@ export async function stopScenario(): Promise<void> {
  * escape hatch that always returns the platform to a clean searching state.
  */
 export async function endIncident(): Promise<void> {
+  // Mid-exercise, ending the incident tears down the exercise session
+  // SERVER-WIDE (DELETE /api/incident runs scenario.stop()) — same rule as
+  // the drill-bar ✕: only the facilitator workspace may end it.
+  const s = getAppState()
+  if (s.scenario?.exercise && !hasCapability(s.profile, 'aar.hseep-exercise')) {
+    notify('LIVE EXERCISE — only the facilitator (NYCEM workspace) can end it')
+    return
+  }
   try {
     const res = await fetch('/api/incident', { method: 'DELETE' })
     if (!res.ok) {
@@ -2054,7 +2068,7 @@ export function unitMapVisible(u: Unit): boolean {
     // Visibility policy: under aggregate-only PAR a coordinating profile
     // must not see member-level markers on the map either — the roster
     // hides the rows while the globe would leak the same callsign+floor.
-    if (!memberDetailAllowed(s.profile, s.visibilityPolicy, 'par_member_names')) return false
+    if (!crewCompositionAllowed(s.profile, s.visibilityPolicy)) return false
     return u.category === 'ff' && (u.floor ?? 0) >= 1
   }
   return true
@@ -2153,6 +2167,8 @@ export function deleteSelectedShape(): void {
  * Comms channels are always rolling.
  */
 let demoDispatchTimer: ReturnType<typeof setTimeout> | null = null
+/** Next dispatchAssignment() call runs in compressed DEMO timing. */
+let demoDispatchPending = false
 
 export async function runDemoScenario(): Promise<void> {
   try {
@@ -2167,6 +2183,7 @@ export async function runDemoScenario(): Promise<void> {
     if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
     demoDispatchTimer = setTimeout(() => {
       demoDispatchTimer = null
+      demoDispatchPending = true
       if (armedFor && getAppState().incident?.id === armedFor) void dispatchAssignment()
     }, 4000)
   } catch (err) {
@@ -2182,10 +2199,12 @@ export async function dispatchAssignment(): Promise<void> {
     await lastPersist.catch(() => {})
     // Give the simulator the building profile so interior crews work real floors.
     const floors = getAppState().intel.pluto?.numFloors
+    const demo = demoDispatchPending
+    demoDispatchPending = false
     const res = await fetch('/api/dispatch', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ floors }),
+      body: JSON.stringify({ floors, demo }),
     })
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null

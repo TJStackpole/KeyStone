@@ -463,6 +463,13 @@
    "text": "Command to all units: Exposure 1 is the 8 Avenue frontage, exposure 2 West 40, exposure 3 is 9 Avenue, exposure 4 West 42."
   },
   {
+   "t": 181,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "acknowledged",
+   "by": "ConEd ERC (drill)"
+  },
+  {
    "t": 185,
    "kind": "unit_spawn",
    "unit": {
@@ -695,6 +702,13 @@
    }
   },
   {
+   "t": 305,
+   "kind": "radio_tx",
+   "channel": "interagency",
+   "from": "OEM Watch Command",
+   "text": "Update on the Queens incident: multiple basement entrapments confirmed on Queens Boulevard, FDNY assignment augmented, severity raised."
+  },
+  {
    "t": 306,
    "kind": "unit_move",
    "callsign": "PD-1-8",
@@ -902,6 +916,20 @@
    }
   },
   {
+   "t": 431,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "assigned",
+   "by": "ConEd ERC (drill)"
+  },
+  {
+   "t": 433,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "in_progress",
+   "by": "ConEd Crew 22 (drill)"
+  },
+  {
    "t": 438,
    "kind": "annotation",
    "shape": {
@@ -950,6 +978,32 @@
    "channel": "fdny-tac",
    "from": "Engine 5-6",
    "text": "Engine 5-6, water on the fire, main body of the bus knocked down, checking extension overhead."
+  },
+  {
+   "t": 480,
+   "kind": "status_change",
+   "callsign": "L-2-1/2",
+   "status": "Operating",
+   "floor": 1,
+   "bio": {
+    "hr": 148,
+    "airPsi": 3100,
+    "tempC": 37.6,
+    "toaMin": 7
+   }
+  },
+  {
+   "t": 484,
+   "kind": "status_change",
+   "callsign": "L-2-1/3",
+   "status": "Operating",
+   "floor": 1,
+   "bio": {
+    "hr": 144,
+    "airPsi": 3000,
+    "tempC": 37.5,
+    "toaMin": 7
+   }
   },
   {
    "t": 500,
@@ -1162,6 +1216,107 @@
    "by": "L-21 (drill)"
   },
   {
+   "t": 640,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-2-4",
+    "lat": 40.7691,
+    "lon": -73.9994,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 642,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-3-5",
+    "lat": 40.7442,
+    "lon": -73.9871,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 645,
+   "kind": "unit_move",
+   "callsign": "E-2-4",
+   "durationS": 160,
+   "endStatus": "Staged",
+   "path": [
+    [
+     -73.9994,
+     40.7691
+    ],
+    [
+     -73.995,
+     40.764
+    ],
+    [
+     -73.9929,
+     40.7582
+    ]
+   ]
+  },
+  {
+   "t": 648,
+   "kind": "unit_move",
+   "callsign": "L-3-5",
+   "durationS": 175,
+   "endStatus": "Staged",
+   "path": [
+    [
+     -73.9871,
+     40.7442
+    ],
+    [
+     -73.9905,
+     40.751
+    ],
+    [
+     -73.9929,
+     40.7582
+    ]
+   ]
+  },
+  {
+   "t": 655,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "Command",
+   "text": "Safety officer is expanding the hot zone to cover the second level extension, all members check your position."
+  },
+  {
+   "t": 660,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-HOT",
+    "kind": "zone",
+    "zone": "hot",
+    "positions": [
+     {
+      "lat": 40.75565,
+      "lon": -73.991515
+     },
+     {
+      "lat": 40.757,
+      "lon": -73.99056999999999
+     },
+     {
+      "lat": 40.75781,
+      "lon": -73.99124499999999
+     },
+     {
+      "lat": 40.756865000000005,
+      "lon": -73.993
+     },
+     {
+      "lat": 40.755785,
+      "lon": -73.992865
+     }
+    ],
+    "createdAt": ""
+   }
+  },
+  {
    "t": 700,
    "kind": "radio_tx",
    "channel": "ems-cw",
@@ -1187,6 +1342,13 @@
    }
   },
   {
+   "t": 730,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "Command",
+   "text": "Manhattan, have the UAS unit launch, give me an overhead of the terminal roof and the 8 Avenue exposures."
+  },
+  {
    "t": 760,
    "kind": "request_transition",
    "refId": "REQ-DEP",
@@ -1194,11 +1356,111 @@
    "by": "DEP Field 3 (drill)"
   },
   {
+   "t": 760,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "UAS-1",
+    "lat": 40.756,
+    "lon": -73.993,
+    "hae": 90,
+    "status": "Operating"
+   }
+  },
+  {
+   "t": 765,
+   "kind": "unit_move",
+   "callsign": "UAS-1",
+   "durationS": 200,
+   "path": [
+    [
+     -73.9905,
+     40.7576
+    ],
+    [
+     -73.9898,
+     40.7566
+    ],
+    [
+     -73.9915,
+     40.7559
+    ],
+    [
+     -73.9925,
+     40.7572
+    ]
+   ]
+  },
+  {
+   "t": 780,
+   "kind": "status_change",
+   "callsign": "L-2-1/2",
+   "status": "Operating",
+   "floor": 2,
+   "bio": {
+    "hr": 158,
+    "airPsi": 2400,
+    "tempC": 37.9,
+    "toaMin": 12
+   }
+  },
+  {
+   "t": 784,
+   "kind": "status_change",
+   "callsign": "L-2-1/3",
+   "status": "Operating",
+   "floor": 2,
+   "bio": {
+    "hr": 155,
+    "airPsi": 2350,
+    "tempC": 37.8,
+    "toaMin": 12
+   }
+  },
+  {
    "t": 800,
    "kind": "request_transition",
    "refId": "REQ-MTA",
    "state": "complete",
    "by": "MTA RCC (drill)"
+  },
+  {
+   "t": 800,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "UAS-1",
+   "text": "Command, UAS-1 on station at 300 feet, downlink is live. No visible fire through the roof, smoke pushing from the south wing vents."
+  },
+  {
+   "t": 850,
+   "kind": "radio_tx",
+   "channel": "ems-cw",
+   "from": "Transport",
+   "text": "Third red tag departing to Weill Cornell burn unit. 5 transported total."
+  },
+  {
+   "t": 854,
+   "kind": "timeline",
+   "event": "casualty.count",
+   "payload": {
+    "red": 3,
+    "yellow": 6,
+    "green": 9,
+    "transported": 5
+   }
+  },
+  {
+   "t": 880,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "complete",
+   "by": "ConEd Crew 22 (drill)"
+  },
+  {
+   "t": 885,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "Command",
+   "text": "ConEd confirms gas and electric secured for the 8 Avenue quadrant."
   },
   {
    "t": 900,
@@ -1234,6 +1496,13 @@
     "lon": -73.9898,
     "createdAt": ""
    }
+  },
+  {
+   "t": 910,
+   "kind": "radio_tx",
+   "channel": "interagency",
+   "from": "OEM Watch Command",
+   "text": "Queens update: two rescues complete, water receding on Queens Boulevard, severity reduced."
   },
   {
    "t": 915,
@@ -1303,6 +1572,30 @@
    "text": "All agencies, NYCEM Watch Command is monitoring the Port Authority incident, interagency channel is open. Send resource requests on this channel."
   },
   {
+   "t": 975,
+   "kind": "unit_move",
+   "callsign": "UAS-1",
+   "durationS": 200,
+   "path": [
+    [
+     -73.9925,
+     40.7572
+    ],
+    [
+     -73.9905,
+     40.7576
+    ],
+    [
+     -73.9898,
+     40.7566
+    ],
+    [
+     -73.9915,
+     40.7559
+    ]
+   ]
+  },
+  {
    "t": 980,
    "kind": "radio_tx",
    "channel": "interagency",
@@ -1348,6 +1641,19 @@
    }
   },
   {
+   "t": 1080,
+   "kind": "status_change",
+   "callsign": "L-2-1/2",
+   "status": "Operating",
+   "floor": 2,
+   "bio": {
+    "hr": 167,
+    "airPsi": 1600,
+    "tempC": 38.1,
+    "toaMin": 17
+   }
+  },
+  {
    "t": 1100,
    "kind": "radio_tx",
    "channel": "interagency",
@@ -1386,6 +1692,77 @@
     "yellow": 6,
     "green": 9,
     "transported": 8
+   }
+  },
+  {
+   "t": 1180,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "Ladder 2-1",
+   "text": "Command, Ladder 2-1 can man is low on air, rotating him out to rehab, replacing with the outside vent."
+  },
+  {
+   "t": 1184,
+   "kind": "status_change",
+   "callsign": "L-2-1/2",
+   "status": "Rehab",
+   "floor": 0,
+   "bio": {
+    "hr": 162,
+    "airPsi": 1400,
+    "tempC": 38.2,
+    "toaMin": 18
+   }
+  },
+  {
+   "t": 1190,
+   "kind": "unit_move",
+   "callsign": "UAS-1",
+   "durationS": 200,
+   "path": [
+    [
+     -73.9915,
+     40.7559
+    ],
+    [
+     -73.9925,
+     40.7572
+    ],
+    [
+     -73.9905,
+     40.7576
+    ],
+    [
+     -73.9898,
+     40.7566
+    ]
+   ]
+  },
+  {
+   "t": 1200,
+   "kind": "status_change",
+   "callsign": "L-2-1/3",
+   "status": "Operating",
+   "floor": 2,
+   "bio": {
+    "hr": 168,
+    "airPsi": 1700,
+    "tempC": 38.2,
+    "toaMin": 19
+   }
+  },
+  {
+   "t": 1250,
+   "kind": "incident_update",
+   "incidentId": "FLOOD-QNS-1",
+   "update": {
+    "severity": 2,
+    "unitsByAgency": {
+     "FDNY": 3,
+     "EMS": 1,
+     "DEP": 1
+    },
+    "note": "Searches complete, DEP assessing sewers"
    }
   },
   {
@@ -1578,11 +1955,82 @@
    }
   },
   {
+   "t": 1414,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "Staging",
+   "text": "Command, staging PAR: Engine 2-4 and Ladder 3-5 accounted for in staging."
+  },
+  {
    "t": 1420,
    "kind": "radio_tx",
    "channel": "fdny-cmd",
    "from": "Command",
    "text": "PAR complete for Box 0742, all members accounted for."
+  },
+  {
+   "t": 1460,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "Ladder 4-3",
+   "text": "Command, Ladder 4-3 opening up the ceiling over gate 12, still getting hot spots at the steel."
+  },
+  {
+   "t": 1500,
+   "kind": "radio_tx",
+   "channel": "ems-cw",
+   "from": "Transport",
+   "text": "12 transported. Remaining green tags being evaluated for RMA in the north wing."
+  },
+  {
+   "t": 1504,
+   "kind": "timeline",
+   "event": "casualty.count",
+   "payload": {
+    "red": 3,
+    "yellow": 6,
+    "green": 9,
+    "transported": 12
+   }
+  },
+  {
+   "t": 1540,
+   "kind": "radio_tx",
+   "channel": "nypd-sod",
+   "from": "PD 1-4",
+   "text": "Central, reopening 8 Avenue north of 42 and south of 40, keeping 40 to 42 frozen for FDNY."
+  },
+  {
+   "t": 1560,
+   "kind": "status_change",
+   "callsign": "L-2-1/3",
+   "status": "Rehab",
+   "floor": 0,
+   "bio": {
+    "hr": 118,
+    "airPsi": 2200,
+    "tempC": 37.4,
+    "toaMin": 24
+   }
+  },
+  {
+   "t": 1600,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "Division 0-3",
+   "text": "Secondary search second level in progress, exposures 1 through 4 checked and negative."
+  },
+  {
+   "t": 1640,
+   "kind": "incident_close",
+   "incidentId": "FLOOD-QNS-1"
+  },
+  {
+   "t": 1644,
+   "kind": "radio_tx",
+   "channel": "interagency",
+   "from": "OEM Watch Command",
+   "text": "All agencies, the Queens Boulevard flood incident is closed, DEP retains a crew for the sewer assessment. Watch Command back to single-incident posture."
   },
   {
    "t": 1682,
@@ -1638,7 +2086,7 @@
    "kind": "radio_tx",
    "channel": "fdny-cmd",
    "from": "Command",
-   "text": "Release the third-alarm companies from staging. Engine 7-8, Engine 9-1, take up."
+   "text": "Release the second and third alarm companies from staging. Engine 7-8, Engine 9-1, Engine 2-4, Ladder 3-5, take up."
   },
   {
    "t": 1764,
@@ -1651,6 +2099,30 @@
    "kind": "status_change",
    "callsign": "E-9-1",
    "status": "Released"
+  },
+  {
+   "t": 1768,
+   "kind": "status_change",
+   "callsign": "E-2-4",
+   "status": "Released"
+  },
+  {
+   "t": 1770,
+   "kind": "status_change",
+   "callsign": "L-3-5",
+   "status": "Released"
+  },
+  {
+   "t": 1790,
+   "kind": "annotation_remove",
+   "id": "DRILL-HOT"
+  },
+  {
+   "t": 1792,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "Command",
+   "text": "Hot zone is released, warm zone remains in effect for overhaul."
   },
   {
    "t": 1800,

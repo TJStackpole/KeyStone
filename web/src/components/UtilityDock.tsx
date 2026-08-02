@@ -3,7 +3,7 @@ import { useMovable } from '../lib/movable'
 import { flyToUnit } from '../actions'
 import { getUnitLayer } from '../cesium/scene'
 import { useProfile } from '../profiles/manifest'
-import { memberDetailAllowed, usePolicy } from '../profiles/policy'
+import { crewCompositionAllowed, usePolicy } from '../profiles/policy'
 import { setAppState, useAppSlice } from '../state/store'
 import { airMinutesLeft, bioStatusOf, crewOf, type BioStatus, type Unit } from '../types'
 import { droneStreamFor } from './DronePanel'
@@ -102,7 +102,7 @@ function FloorsContent() {
   const exterior = members.filter((m) => !m.floor || m.floor === 0)
   // Prompt 12 — member-level detail is policy-gated per profile; floor
   // counts (the accountability number) stay in every profile.
-  const memberDetail = memberDetailAllowed(useProfile(), usePolicy(), 'par_member_names')
+  const memberDetail = crewCompositionAllowed(useProfile(), usePolicy())
 
   const byFloor = useMemo(() => {
     const map = new Map<number, Unit[]>()
@@ -287,7 +287,7 @@ function BioContent() {
   const lowAir = members.filter((m) => !inRehab(m) && m.bio.airPsi >= 0 && m.bio.airPsi <= 1100)
   // Prompt 12 — status counts and per-company SCBA are aggregate (stay in
   // every profile); member-name rows/advisories are policy-gated.
-  const memberDetail = memberDetailAllowed(useProfile(), usePolicy(), 'par_member_names')
+  const memberDetail = crewCompositionAllowed(useProfile(), usePolicy())
 
   return (
     <div className="dock-scroll">

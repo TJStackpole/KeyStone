@@ -241,7 +241,7 @@ app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-200) }))
 // index rebuild does not belong on the boot path of every dev restart.
 
 app.get('/api/doctrine/status', (_req, res) =>
-  (doctrine.ensureLoaded(), res.json({ ready: doctrine.ready, report: doctrine.report })),
+  (doctrine.ensureLoaded(), res.json({ ready: doctrine.ready, loading: doctrine.loading, report: doctrine.report })),
 )
 
 // Module 3: pre-generated tactics cards (derived from the corpus — local
@@ -268,7 +268,10 @@ app.get('/api/doctrine/ask', (req, res) => {
   if (!q) return res.status(400).json({ error: 'q required' })
   doctrine.ensureLoaded()
   if (!doctrine.ready) {
-    return res.json({ ready: false, found: false, results: [] })
+    // loading=true → the index exists and is warming (lazy first use);
+    // loading=false → genuinely missing on disk. The client must not tell
+    // stakeholders to rebuild a corpus that is 300 ms from ready.
+    return res.json({ ready: false, loading: doctrine.loading, found: false, results: [] })
   }
   const results = doctrine.search(q, 6, topic)
   // Honesty floor: the corpus only "answers" when the best page is BOTH
@@ -435,9 +438,10 @@ app.post('/api/dispatch', async (req, res) => {
   if (!tak.connected) return res.status(503).json({ error: 'TAK link down — cannot publish CoT' })
   simChatter.reset() // a fresh assignment announces its arrivals anew
   try {
-    const body = (req.body ?? {}) as { floors?: number }
+    const body = (req.body ?? {}) as { floors?: number; demo?: boolean }
     const result = await simulator.dispatch(state.incident.lat, state.incident.lon, {
       floors: typeof body.floors === 'number' ? body.floors : undefined,
+      demo: body.demo === true,
     })
     res.status(201).json(result)
   } catch (err) {

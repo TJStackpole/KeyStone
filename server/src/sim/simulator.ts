@@ -103,6 +103,7 @@ export class FirstAlarmSimulator {
   private personnel: SimPerson[] = []
   private timer: ReturnType<typeof setInterval> | null = null
   private dispatchGen = 0
+  private demo = false
   private incident: { lat: number; lon: number } | null = null
   /** Incident building profile (from PLUTO/footprints via dispatch). */
   private building: { floors: number; fireFloor: number } = { floors: 6, fireFloor: 3 }
@@ -123,8 +124,11 @@ export class FirstAlarmSimulator {
   async dispatch(
     lat: number,
     lon: number,
-    building?: { floors?: number },
+    building?: { floors?: number; demo?: boolean },
   ): Promise<{ callsigns: string[] }> {
+    // Demo mode: the one-click DEMO compresses time-to-payoff — realistic
+    // turnout/route timings stay untouched for every manual dispatch.
+    this.demo = !!building?.demo
     this.stop()
     // Generation token: a concurrent dispatch (or a stop) during the awaits
     // below invalidates this run — without it the older call overwrites
@@ -198,13 +202,16 @@ export class FirstAlarmSimulator {
         : await this.routeFor(spec.origin, holdPoint)
 
     const [tMin, tMax] = TURNOUT_S[spec.category] ?? [15, 45]
+    // Demo: quarter turnout so the picture builds inside the first minute;
+    // the first-due engine rolls the moment the fly-in lands.
+    const turnoutS = (tMin + Math.random() * (tMax - tMin)) * (this.demo ? 0.25 : 1)
     const unit: SimUnit = {
       spec,
       uid: `${SIM_UID_PREFIX}${spec.callsign}`,
       path,
       traveledM: 0,
       phase: 'enroute',
-      departAt: Date.now() + (tMin + Math.random() * (tMax - tMin)) * 1000,
+      departAt: Date.now() + (this.demo && spec.callsign === 'E-6' ? 0 : turnoutS * 1000),
       holdPoint,
     }
     if (spec.category === 'drone') {

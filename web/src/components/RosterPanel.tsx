@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from 'react'
 import { useMovable } from '../lib/movable'
-import { dispatchAssignment, flyToUnit, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
+import { dispatchAssignment, flyToUnit, runDemoScenario, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
 import { useProfile } from '../profiles/manifest'
-import { memberDetailAllowed, usePolicy } from '../profiles/policy'
+import { crewCompositionAllowed, usePolicy } from '../profiles/policy'
 import { useAppSlice } from '../state/store'
 import { airMinutesLeft, crewOf, type Agency, type Unit, type UnitCategory } from '../types'
 
@@ -111,7 +111,17 @@ export function RosterPanel() {
       {!collapsed && total === 0 && (
         <div className="roster-empty">
           NO UNITS ON THE PICTURE
-          {incident ? ' — DISPATCH THE ASSIGNMENT' : ' — STAND UP AN INCIDENT FIRST'}
+          {incident ? (
+            ' — DISPATCH THE ASSIGNMENT'
+          ) : (
+            <>
+              <br />
+              SEARCH AN ADDRESS · CLICK A BUILDING · OR
+              <button className="roster-demo-btn" onClick={() => void runDemoScenario()}>
+                ▶ RUN THE DEMO — 100 GOLD ST
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -181,9 +191,7 @@ function CrewBlock({ crew, members }: { crew: string; members: Unit[] }) {
   // member-level PAR for a coordinating profile, this block renders unit
   // COUNTS only (per-crew accountability without member rows). Hot-reloads
   // with the policy — no page reload.
-  const memberDetail =
-    memberDetailAllowed(profile, policy, 'par_member_names') &&
-    memberDetailAllowed(profile, policy, 'riding_lists') // crew composition IS the riding list
+  const memberDetail = crewCompositionAllowed(profile, policy) // one rule for every surface
   const visible = memberCrewToggles[crew] !== false
   const interior = members.filter((m) => (m.floor ?? 0) >= 1).length
   return (

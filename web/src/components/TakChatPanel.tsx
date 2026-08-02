@@ -108,7 +108,7 @@ export function TakChatPanel() {
           </button>
         ))}
       </div>
-      <div className="takchat-scroll" ref={scrollRef}>
+      <div className="takchat-scroll no-drag" ref={scrollRef}>
         {visible.length === 0 && (
           <div className="intel-note">
             {room === 'All Chat Rooms'

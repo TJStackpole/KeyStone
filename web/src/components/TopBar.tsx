@@ -199,7 +199,22 @@ function Clock() {
 /** DEMO + DRILL combined — one launcher, two scripted scenarios. */
 function ScenariosMenu() {
   const canExercise = useCapability('aar.hseep-exercise')
+  const { scenario, incident } = useAppSlice((s) => ({ scenario: s.scenario, incident: s.incident }))
   const [open, setOpen] = useState(false)
+  // One stray click must never erase a 30-minute live run: when a scenario
+  // (or incident, for DEMO) is up, every launch item arms a two-step confirm.
+  const [armedId, setArmedId] = useState<string | null>(null)
+  const launch = (id: string, run: () => void) => {
+    const destructive = id === 'demo' ? !!incident || !!scenario?.loaded : !!scenario?.loaded
+    if (destructive && armedId !== id) {
+      setArmedId(id)
+      setTimeout(() => setArmedId((a) => (a === id ? null : a)), 3000)
+      return
+    }
+    setArmedId(null)
+    setOpen(false)
+    run()
+  }
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -216,47 +231,28 @@ function ScenariosMenu() {
       </button>
       {open && (
         <div className="scenarios-menu glass">
-          <button
-            className="scenario-item"
-            onClick={() => {
-              setOpen(false)
-              void runDemoScenario()
-            }}
-          >
-            <b>DEMO</b>
+          <button className="scenario-item" onClick={() => launch('demo', () => void runDemoScenario())}>
+            <b>{armedId === 'demo' ? 'REPLACES THE CURRENT BOARD — CLICK AGAIN' : 'DEMO'}</b>
             <i>Structural fire, 100 Gold St — full flow, plays unattended</i>
           </button>
-          <button
-            className="scenario-item drill"
-            onClick={() => {
-              setOpen(false)
-              void loadScenario('pabt-drill')
-            }}
-          >
-            <b>DRILL</b>
+          <button className="scenario-item drill" onClick={() => launch('drill', () => void loadScenario('pabt-drill'))}>
+            <b>{armedId === 'drill' ? 'RESTARTS THE RUNNING DRILL — CLICK AGAIN' : (
+              <>DRILL{scenario?.loaded && <em className="scn-running-chip">RUNNING</em>}</>
+            )}</b>
             <i>Multi-agency bus fire w/ MCI at the Port Authority Bus Terminal</i>
           </button>
           {canExercise && (
             <button
               className="scenario-item drill"
-              onClick={() => {
-                setOpen(false)
-                void loadScenario('pabt-flood-exercise', { exercise: true })
-              }}
+              onClick={() => launch('exercise', () => void loadScenario('pabt-flood-exercise', { exercise: true }))}
             >
-              <b>EXERCISE</b>
+              <b>{armedId === 'exercise' ? 'RESTARTS THE RUNNING RUN — CLICK AGAIN' : 'EXERCISE'}</b>
               <i>PABT drill + Queens flash flood, two incidents — live participants, HSEEP AAR at the end</i>
             </button>
           )}
-          <button
-            className="scenario-item"
-            onClick={() => {
-              setOpen(false)
-              void launchDualScreenDemo()
-            }}
-          >
-            <b>DUAL-SCREEN DEMO</b>
-            <i>This window → KeyStone FDNY tactical; opens KeyStone NYCEM Watch Command in a second window, same live clock</i>
+          <button className="scenario-item" onClick={() => launch('dual', () => void launchDualScreenDemo())}>
+            <b>{armedId === 'dual' ? 'RESTARTS THE RUNNING RUN — CLICK AGAIN' : 'DUAL-SCREEN DEMO'}</b>
+            <i>FDNY tactical here + NYCEM Watch Command in a second window, one live clock · first run: allow pop-ups, drag the new window to screen 2</i>
           </button>
         </div>
       )}
@@ -438,6 +434,8 @@ function PanelsMenu({
   utilityTab: string | null
   toggleTab: (tab: PanelTabId) => void
 }) {
+  const { panelOffsets } = useAppSlice((s) => ({ panelOffsets: s.panelOffsets }))
+  const layoutMoved = Object.keys(panelOffsets).length > 0
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -457,6 +455,7 @@ function PanelsMenu({
         title="Utility panels — SITREP, video feeds, biometrics, floor accountability"
       >
         <span className="dot" /> {active ? `PANELS · ${active.label}` : 'PANELS'} {open ? '▴' : '▾'}
+        {layoutMoved && <span className="wc-chip-badge" title="Boxes have been moved — RESET LAYOUT inside">·</span>}
       </button>
       {open && (
         <div className="panels-menu glass">
@@ -671,9 +670,9 @@ export function TopBar() {
           <button
             className={`chip chip-btn${viewMode === 'topdown' ? ' active' : ''}`}
             onClick={() => void toggleTopDownView()}
-            title="Toggle the camera between the tactical 3D view and a straight-down satellite view"
+            title={`Camera: tactical 3D ↔ straight-down top view · imagery: ${MODE_LABEL[providerMode]}`}
           >
-            <span className="dot" /> {viewMode === 'topdown' ? 'TOP-DOWN' : MODE_LABEL[providerMode]}
+            <span className="dot" /> {viewMode === 'topdown' ? 'TOP-DOWN' : '3D VIEW'}
           </button>
         )}
         <Clock />

@@ -86,7 +86,7 @@ export function AarPanel() {
             ✕
           </button>
         </div>
-        <div className="aar-body">
+        <div className="aar-body no-drag">
           <h2>{incident?.address ?? 'Incident'}</h2>
           <div className="aar-meta">
             <span>INCIDENT {incident?.id}</span>

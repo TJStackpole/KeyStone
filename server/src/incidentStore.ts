@@ -28,6 +28,11 @@ function load(): IncidentFile {
 // Personnel tracks arrive several times a second; rewriting the file on every
 // append would thrash the disk. Coalesce writes on a short trailing debounce.
 let flushTimer: ReturnType<typeof setTimeout> | null = null
+// True from every mutation until a write completes: the exit/signal flush
+// keys off THIS, not the timer — a signal landing while an async write is
+// mid-flight (timer null) used to skip the exit flush entirely and discard
+// up to 8s of acknowledged state.
+let dirty = false
 
 /** Synchronous write — the EXIT/SIGNAL path only (must complete before death). */
 function flushNow(): void {
@@ -40,8 +45,11 @@ function flushNow(): void {
     // Compact JSON: pretty-printing a multi-MB timeline roughly doubles the
     // stringify+write cost of every flush. Atomic (tmp+rename) so a hard
     // kill mid-write can't leave a truncated file that load() discards.
-    writeFileSync(`${DATA_PATH}.tmp`, JSON.stringify(state))
-    renameSync(`${DATA_PATH}.tmp`, DATA_PATH)
+    // OWN tmp path: the async flush may have a write in flight on its tmp —
+    // two writers must never share a target.
+    writeFileSync(`${DATA_PATH}.tmp-sync`, JSON.stringify(state))
+    renameSync(`${DATA_PATH}.tmp-sync`, DATA_PATH)
+    dirty = false
   } catch (err) {
     // Persistence failure must never take the incident down — state stays in memory.
     console.error('[incidentStore] failed to write incident.json:', err)
@@ -66,6 +74,9 @@ function flushAsync(): void {
   mkdirSync(dirname(DATA_PATH), { recursive: true })
   void writeFile(`${DATA_PATH}.tmp`, body)
     .then(() => rename(`${DATA_PATH}.tmp`, DATA_PATH))
+    .then(() => {
+      dirty = false
+    })
     .catch((err) => console.error('[incidentStore] failed to write incident.json:', err))
     .finally(() => {
       flushInFlight = false
@@ -73,6 +84,7 @@ function flushAsync(): void {
 }
 
 function flush(): void {
+  dirty = true
   if (flushTimer) return
   // 8 s matches the unit.track sampling cadence — the persisted data only
   // changes meaningfully at that rate, and the multi-MB synchronous
@@ -86,11 +98,11 @@ function flush(): void {
 // otherwise loses writes the client already saw acknowledged. Signals skip
 // 'exit' handlers, so SIGINT/SIGTERM flush explicitly and re-raise.
 process.on('exit', () => {
-  if (flushTimer) flushNow()
+  if (dirty || flushInFlight) flushNow()
 })
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.once(sig, () => {
-    if (flushTimer) flushNow()
+    if (dirty || flushInFlight) flushNow()
     process.kill(process.pid, sig)
   })
 }

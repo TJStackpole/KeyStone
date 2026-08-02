@@ -188,7 +188,7 @@ function Ticker() {
           <option value={4}>Sev ≥ 4</option>
         </select>
       </div>
-      <div className="wc-ticker-scroll">
+      <div className="wc-ticker-scroll no-drag">
         {rows.length === 0 && <div className="wc-empty">NO EVENTS MATCH THE FILTER</div>}
         {rows.map((e) => (
           <div key={e.id} className={`wc-tick sev${Math.min(5, e.severity ?? 1)}`}>

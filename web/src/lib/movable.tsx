@@ -69,6 +69,7 @@ export function useMovable(id: string): {
   style: CSSProperties
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void
   'data-movable': string
+  'data-moved': string | undefined
 } {
   const { off } = useAppSlice((s) => ({ off: s.panelOffsets[id] }))
 
@@ -77,7 +78,7 @@ export function useMovable(id: string): {
     const target = e.target as HTMLElement
     // Interactive content keeps its normal behavior — dragging starts only
     // from panel background/labels.
-    if (target.closest('button, input, select, textarea, a, [contenteditable], .no-drag')) return
+    if (target.closest('button, input, select, textarea, a, iframe, [contenteditable], .no-drag')) return
     const el = e.currentTarget as HTMLElement
     const startX = e.clientX
     const startY = e.clientY
@@ -109,7 +110,9 @@ export function useMovable(id: string): {
       }
       ev.preventDefault()
       last = clamp(base.x + dx, base.y + dy)
-      el.style.transform = `translate(${last.x}px, ${last.y}px)` // no re-render per move
+      // CSS `translate` (not `transform`): it composes with stylesheet
+      // transforms, so translateX(-50%)-centered panels keep their centering.
+      el.style.translate = `${last.x}px ${last.y}px` // no re-render per move
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -121,9 +124,13 @@ export function useMovable(id: string): {
     window.addEventListener('pointerup', up)
   }
 
+  const moved = !!off && (off.x !== 0 || off.y !== 0)
   return {
-    style: off && (off.x || off.y) ? { transform: `translate(${off.x}px, ${off.y}px)` } : {},
+    style: moved ? { translate: `${off.x}px ${off.y}px` } : {},
     onPointerDown,
     'data-movable': id,
+    // CSS hooks (e.g. the Watch Command GeoChat shift) exempt user-placed
+    // panels — a base-position jump under a stored offset strands the box.
+    'data-moved': moved ? 'true' : undefined,
   }
 }

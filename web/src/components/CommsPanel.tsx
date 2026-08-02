@@ -232,7 +232,7 @@ export function CommsPanel() {
           ▾
         </button>
       </div>
-      <div className={`comms-scroll${isSim ? ' sim' : ''}`} ref={scrollRef}>
+      <div className={`comms-scroll no-drag${isSim ? ' sim' : ''}`} ref={scrollRef}>
         {isSim && <span className="comms-watermark">SIMULATED</span>}
         {lines.length === 0 && (
           <div className="roster-empty">

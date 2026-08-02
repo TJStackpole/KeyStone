@@ -50,26 +50,26 @@ test('scripted requests open exactly once across rewind and re-cross; replayed t
   engine.seekTo(400)
   assert.equal(opened.length, 8, 'all scripted requests open on first pass')
   assert.equal(new Set(opened).size, 8, 'refIds are unique')
-  assert.equal(transitions.length, 9, 'transitions ≤400 applied once')
+  assert.equal(transitions.length, 10, 'transitions ≤400 applied once')
   assert.deepEqual(alarms, [{ level: '2nd', replay: false }], 'first alarm announces live')
 
   // Rewind to t=200: requests persist (they are the accountability record) —
   // the replay must not re-open or re-transition anything.
   engine.seekTo(200)
   assert.equal(opened.length, 8, 'rewind must not re-open scripted requests')
-  assert.equal(transitions.length, 9, 'rewind must not re-apply transitions')
+  assert.equal(transitions.length, 10, 'rewind must not re-apply transitions')
 
   // Forward re-cross of already-emitted span: still nothing new, and the
   // alarm restore is flagged replay=true (board updates, ticker suppressed).
   engine.seekTo(400)
   assert.equal(opened.length, 8, 're-cross must not re-open')
-  assert.equal(transitions.length, 9, 're-cross must not re-apply transitions')
+  assert.equal(transitions.length, 10, 're-cross must not re-apply transitions')
   assert.deepEqual(alarms.at(-1), { level: '2nd', replay: true }, 're-crossed alarm is a flagged replay')
 
   // Genuinely new span (400,800]: 11 more transitions, second alarm live.
   engine.seekTo(800)
   assert.equal(opened.length, 8, 'no request events exist past t=240')
-  assert.equal(transitions.length, 20, 'new-span transitions apply exactly once')
+  assert.equal(transitions.length, 23, 'new-span transitions apply exactly once')
   assert.deepEqual(alarms.at(-1), { level: '3rd', replay: false }, 'genuinely new alarm announces live')
   for (const t of transitions) {
     assert.ok(t.id.startsWith('REAL-REQ-'), `transition routed through the dedupe map: ${t.id}`)
