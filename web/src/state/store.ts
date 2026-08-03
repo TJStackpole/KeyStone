@@ -120,6 +120,9 @@ export interface AppState {
    *  rotated off true north) and oriented half-extents along/across it.
    *  Battle views aim head-on at faces using THIS, not world axes. */
   targetBounds: { centerLat: number; centerLon: number; bearingA: number; halfA: number; halfB: number } | null
+  /** Operator pressed UNLOCK on the rail: camera roams free while the rail
+   *  (and floor tracking) stay up; any view button re-locks. */
+  viewLockSuspended: boolean
   /** FDNY battle-view lock: top-down or a building side, floors steppable. */
   viewLock: 'off' | 'top' | 'north' | 'east' | 'south' | 'west'
   /** Current floor for the side (facade) battle views. */
@@ -320,6 +323,7 @@ const initial: AppState = {
   policyEditorOpen: false,
   targetBounds: null,
   viewLock: 'off',
+  viewLockSuspended: false,
   viewLockFloor: 1,
   uiNotice: null,
   // Inline read (not the lib helper) — movable.tsx imports THIS module.

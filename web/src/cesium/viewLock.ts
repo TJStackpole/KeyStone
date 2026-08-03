@@ -191,12 +191,29 @@ function syncFocusFloor(): void {
   getTwinLayer()?.setPlanFloor(s.isolateMode && s.viewLock === 'top' ? s.viewLockFloor : null)
 }
 
+/**
+ * Operator LOCK toggle: suspending frees the camera completely (rotate,
+ * tilt, pan) while the rail, floor highlight, and plan cutaway stay up;
+ * resuming re-pins and flies back to the current view.
+ */
+export function setViewLockSuspended(suspended: boolean): void {
+  const s = getAppState()
+  if (s.viewLock === 'off' || s.viewLockSuspended === suspended) return
+  setAppState({ viewLockSuspended: suspended })
+  if (suspended) {
+    unlockController()
+    notify('CAMERA FREE — press LOCK to snap back to the disciplined view')
+  } else {
+    applyViewLockCamera(0.7)
+  }
+}
+
 /** Fly the camera to the current lock mode. Fast + interruptible. */
 export function applyViewLockCamera(durationS = 0.6): void {
   const s = getAppState()
   const scene = getScene()
   const inc = s.incident
-  if (!scene || !inc || s.viewLock === 'off') return
+  if (!scene || !inc || s.viewLock === 'off' || s.viewLockSuspended) return
   const { z0, heightM, centerLat, centerLon } = buildingRef()
   lockController(s.viewLock)
   if (s.viewLock === 'top') {
@@ -238,7 +255,7 @@ export function applyViewLockCamera(durationS = 0.6): void {
 }
 
 export function setViewLockMode(mode: Exclude<ViewLockMode, 'off'>): void {
-  const patch: Record<string, unknown> = { viewLock: mode }
+  const patch: Record<string, unknown> = { viewLock: mode, viewLockSuspended: false }
   // Entering a side view lands on the fire floor when the sim announced one.
   if (mode !== 'top' && getAppState().viewLock === 'top') patch.viewLockFloor = defaultBattleFloor()
   setAppState(patch)
@@ -268,7 +285,7 @@ let hintShown = false
 function engage(): void {
   // Straight into a facade: the operator just committed to the structure —
   // land head-on to the north-most face, fire floor highlighted.
-  setAppState({ viewLock: 'north', viewLockFloor: defaultBattleFloor() })
+  setAppState({ viewLock: 'north', viewLockFloor: defaultBattleFloor(), viewLockSuspended: false })
   applyViewLockCamera(1.0)
   if (!hintShown) {
     hintShown = true
@@ -278,7 +295,7 @@ function engage(): void {
 
 function disengage(): void {
   unlockController()
-  setAppState({ viewLock: 'off' })
+  setAppState({ viewLock: 'off', viewLockSuspended: false })
   syncFocusFloor()
   // Unchecking ISOLATE mid-incident: hand the operator back the standard
   // tactical frame instead of leaving them nose-to-facade with a freed

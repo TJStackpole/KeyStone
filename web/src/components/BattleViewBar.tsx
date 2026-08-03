@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { battleFireFloor, jumpViewLockFloor, setViewLockMode, stepViewLockFloor, viewLockFloors } from '../cesium/viewLock'
+import { battleFireFloor, jumpViewLockFloor, setViewLockMode, setViewLockSuspended, stepViewLockFloor, viewLockFloors } from '../cesium/viewLock'
 import { useMovable } from '../lib/movable'
 import { useAppSlice } from '../state/store'
 
@@ -25,7 +25,8 @@ export function BattleViewBar() {
   // floors/fireFloor are computed via viewLockFloors()/battleFireFloor(),
   // which read store fields directly — every input is mirrored here so the
   // readout re-renders the moment one changes (not on the next units tick).
-  const { viewLock, viewLockFloor, units } = useAppSlice((s) => ({
+  const { viewLock, viewLockFloor, units, suspended } = useAppSlice((s) => ({
+    suspended: s.viewLockSuspended,
     viewLock: s.viewLock,
     viewLockFloor: s.viewLockFloor,
     units: s.units,
@@ -75,9 +76,17 @@ export function BattleViewBar() {
 
   return (
     <aside {...mvBattle} className="battle-view glass">
-      <div className="bv-title" title="Camera is locked to disciplined incident views — zoom stays live everywhere">
-        VIEW LOCK
-      </div>
+      <button
+        className={`bv-lock${suspended ? ' free' : ''}`}
+        onClick={() => setViewLockSuspended(!suspended)}
+        title={
+          suspended
+            ? 'Camera is FREE — click to lock back into the disciplined view'
+            : 'Camera is LOCKED to disciplined views — click to move around freely (the rail stays)'
+        }
+      >
+        {suspended ? '🔓 FREE' : '🔒 LOCKED'}
+      </button>
       <button
         className={`bv-btn${viewLock === 'top' ? ' on' : ''}`}
         onClick={() => setViewLockMode('top')}
