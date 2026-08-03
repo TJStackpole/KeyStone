@@ -1038,6 +1038,8 @@ html, body {
   z-index: 80;
   border: 1px solid var(--border);
   border-radius: 10px;
+  white-space: normal; /* undo the top bar's nowrap — see dropdown containment note */
+  overflow-x: hidden;
 }
 .scenario-item {
   display: flex;
@@ -1139,7 +1141,8 @@ html, body {
 }
 .incidents-head {
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: 9.5px;
+  line-height: 1.5;
   letter-spacing: 0.12em;
   color: var(--amber-bright);
   border-bottom: 1px solid rgba(245, 158, 11, 0.25);
@@ -1155,6 +1158,11 @@ html, body {
   letter-spacing: 0.14em;
   color: var(--cyan);
   padding: 4px 0 3px;
+  /* Stays pinned while the battalions under it scroll by. */
+  position: sticky;
+  top: -10px; /* cancels the menu's top padding */
+  background: rgba(10, 14, 20, 0.98);
+  z-index: 1;
 }
 .feed-battalion { margin-left: 8px; border-left: 1px solid rgba(148, 163, 184, 0.14); padding-left: 8px; margin-bottom: 4px; }
 .feed-battalion-head {
@@ -1169,11 +1177,12 @@ html, body {
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-height: 40px; /* glove target — this button flies the whole board */
   text-align: left;
   background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 5px 7px;
+  padding: 6px 7px;
   cursor: pointer;
   color: var(--text);
 }
@@ -2847,8 +2856,14 @@ body.panel-dragging * { cursor: grabbing !important; }
 .profile-menu {
   max-height: calc(100vh - 116px);
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   max-width: min(420px, calc(100vw - 24px));
+  /* The top bar lays out on one line (nowrap) and every dropdown INHERITS
+     that — long lines then widen the scroll canvas past the menu box:
+     clipped headers, a horizontal scrollbar, and row columns laid out past
+     the visible edge. Menus wrap like normal documents. */
+  white-space: normal;
 }
 /* Left-anchored menus near the screen center can spill right on narrow
    viewports — clamp them to the viewport edge instead. */
