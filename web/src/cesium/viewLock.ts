@@ -3,7 +3,7 @@ import { notify } from '../components/NoticeChip'
 import { hasCapability } from '../profiles/manifest'
 import { getAppState, setAppState, subscribeStore } from '../state/store'
 import { flyToTactical } from './providers'
-import { getScene, getTacticalLayer } from './scene'
+import { getScene, getTacticalLayer, getTwinLayer } from './scene'
 
 // ---------------------------------------------------------------------------
 // FDNY battle-view lock. The fireground is chaos — a free-tumbling 3D camera
@@ -186,6 +186,9 @@ function syncFocusFloor(): void {
   const s = getAppState()
   const focusable = s.isolateMode && s.viewLock !== 'off' && s.viewLock !== 'top'
   getTacticalLayer()?.setFocusFloor(focusable ? s.viewLockFloor : null)
+  // Blueprint twin: TOP + isolate = the tracked floor as a room-by-room
+  // plan cutaway; any other mode restores the full 3D twin.
+  getTwinLayer()?.setPlanFloor(s.isolateMode && s.viewLock === 'top' ? s.viewLockFloor : null)
 }
 
 /** Fly the camera to the current lock mode. Fast + interruptible. */

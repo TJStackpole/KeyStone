@@ -677,6 +677,8 @@ function applyIsolateAppearance(): void {
     if (!def || !now.isolateMode || now.isolateView !== 'model' || now.incident?.id !== inc!.id) return
     await twin.load(def, now.isolateFloors?.z0 ?? 0)
     twin.setVisible(true)
+    const st = getAppState()
+    twin.setPlanFloor(st.viewLock === 'top' ? st.viewLockFloor : null)
     notify(`BLUEPRINT TWIN — ${def.name} (${def.source.split(',')[0]})`)
   })()
 }

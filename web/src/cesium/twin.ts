@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium'
-import { crispTextImage } from './streets'
 
 // ---------------------------------------------------------------------------
 // TWIN layer: a hand-authored architectural digital twin of a landmark
@@ -144,8 +143,11 @@ const CYAN = Cesium.Color.fromCssColorString('#22d3ee')
 const AMBER = Cesium.Color.fromCssColorString('#f59e0b')
 const WALL_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.42)
 const WALL_EDGE = CYAN.withAlpha(0.55)
-const GLASS_FILL = Cesium.Color.fromCssColorString('#0b1420').withAlpha(0.85)
-const GLASS_EDGE = CYAN.withAlpha(0.85)
+// Alternating per-level wall band tints — adjacent floors separate at a glance.
+const WALL_BAND_A = Cesium.Color.fromCssColorString('#334155').withAlpha(0.1)
+const WALL_BAND_B = Cesium.Color.fromCssColorString('#64748b').withAlpha(0.16)
+const GLASS_FILL = Cesium.Color.fromCssColorString('#0e7490').withAlpha(0.6)
+const GLASS_EDGE = CYAN.withAlpha(0.95)
 const DOOR_FILL = Cesium.Color.fromCssColorString('#0b1420').withAlpha(0.7)
 const DOOR_EDGE = AMBER.withAlpha(0.95)
 const LEVEL_FILL = Cesium.Color.fromCssColorString('#7dd3fc').withAlpha(0.08)
@@ -160,9 +162,13 @@ const ESCAPE_LINE = AMBER.withAlpha(0.9)
 const ESCAPE_PLATFORM = AMBER.withAlpha(0.3)
 const DOME_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.35)
 const DOME_EDGE = CYAN.withAlpha(0.5)
+const RING_GLOW = CYAN.withAlpha(0.9)
 
-const LABEL_CYAN = '#a5f3fc'
-const LABEL_AMBER = '#fcd34d'
+// Floor-plan cutaway (setPlanFloor): walls capped low, openings marked flat.
+const PLAN_CAP_M = 1.6
+const PLAN_WALL_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.5)
+const PLAN_DOOR = AMBER.withAlpha(0.85)
+const PLAN_WINDOW = CYAN.withAlpha(0.95)
 
 // ----- local building frame → world ----------------------------------------
 
@@ -324,6 +330,10 @@ export class TwinLayer {
   private readonly source = new Cesium.CustomDataSource('twin-layer')
   private primitives: Cesium.Primitive[] = []
   private visible = true
+  // Construction params kept so setPlanFloor can rebuild without a reload.
+  private def: TwinDefinition | null = null
+  private groundZ = 0
+  private planFloor: number | null = null
 
   constructor(viewer: Cesium.Viewer) {
     this.viewer = viewer
@@ -332,22 +342,46 @@ export class TwinLayer {
 
   /** Build the full twin at groundZ (absolute meters above the ellipsoid). */
   async load(def: TwinDefinition, groundZ: number): Promise<void> {
-    this.clear()
-    const frame = new LocalFrame(def.origin, def.bearingDeg, groundZ)
+    this.def = def
+    this.groundZ = groundZ
+    this.rebuild()
+  }
+
+  /**
+   * Top-down floor-plan cutaway. null → full 3D twin. n (1-based over
+   * above-ground levels, z0M >= -0.5) → only that level, walls capped low so
+   * a straight-down camera reads rooms. Out-of-range n falls back to full 3D.
+   */
+  setPlanFloor(floorNumber: number | null): void {
+    this.planFloor = floorNumber
+    if (this.def) this.rebuild()
+  }
+
+  private rebuild(): void {
+    this.clearRendered()
+    const def = this.def
+    if (!def) return
+    const frame = new LocalFrame(def.origin, def.bearingDeg, this.groundZ)
     const wallFrames = buildWallFrames(def)
     const fills: Cesium.GeometryInstance[] = []
     const outlines: Cesium.GeometryInstance[] = []
 
-    this.buildLevels(def, frame, fills, outlines)
-    this.buildWalls(frame, wallFrames, fills, outlines)
-    this.buildWindows(def, frame, wallFrames, fills, outlines)
-    this.buildDoors(def, frame, wallFrames, fills, outlines)
-    this.buildColumns(def, frame, fills, outlines)
-    this.buildStairs(def, frame, fills, outlines)
-    this.buildFireEscapes(def, frame, wallFrames, fills)
-    this.buildShafts(def, frame, fills, outlines)
-    if (def.dome) this.buildDome(def.dome, frame, fills, outlines)
-    if (def.roof) this.buildRoof(def, def.roof, frame, fills, outlines)
+    const planLevel = this.resolvePlanLevel(def)
+    if (planLevel) {
+      this.buildPlan(def, frame, wallFrames, planLevel, fills, outlines)
+    } else {
+      this.buildLevels(def, frame, fills, outlines)
+      this.buildLevelRings(def, frame)
+      this.buildWalls(def, frame, wallFrames, fills, outlines)
+      this.buildWindows(def, frame, wallFrames, fills)
+      this.buildDoors(def, frame, wallFrames, fills, outlines)
+      this.buildColumns(def, frame, fills, outlines)
+      this.buildStairs(def, frame, fills, outlines)
+      this.buildFireEscapes(def, frame, wallFrames, fills)
+      this.buildShafts(def, frame, fills, outlines)
+      if (def.dome) this.buildDome(def.dome, frame, fills, outlines)
+      if (def.roof) this.buildRoof(def, def.roof, frame, fills, outlines)
+    }
 
     if (fills.length) {
       const p = new Cesium.Primitive({
@@ -376,6 +410,12 @@ export class TwinLayer {
   }
 
   clear(): void {
+    this.def = null
+    this.planFloor = null
+    this.clearRendered()
+  }
+
+  private clearRendered(): void {
     for (const p of this.primitives) this.viewer.scene.primitives.remove(p)
     this.primitives = []
     this.source.entities.removeAll()
@@ -384,6 +424,15 @@ export class TwinLayer {
   private applyVisibility(): void {
     for (const p of this.primitives) p.show = this.visible
     this.source.show = this.visible
+  }
+
+  /** Above-ground levels (z0M >= -0.5) in ascending z; planFloor is 1-based. */
+  private resolvePlanLevel(def: TwinDefinition): TwinLevel | null {
+    if (this.planFloor == null) return null
+    const above = (def.levels ?? [])
+      .filter((l) => l.z0M >= -0.5)
+      .sort((a, b) => a.z0M - b.z0M)
+    return above[this.planFloor - 1] ?? null
   }
 
   // ----- element builders ---------------------------------------------------
@@ -403,18 +452,57 @@ export class TwinLayer {
     }
   }
 
-  /** Extruded thickness boxes: translucent slate fill + cyan edges. */
+  /** Glowing cyan perimeter ring at every level boundary and at the top. */
+  private buildLevelRings(def: TwinDefinition, frame: LocalFrame): void {
+    const levels = def.levels ?? []
+    if (!levels.length) return
+    const { widthM, depthM } = def.footprint
+    const zs = levels.map((l) => l.z0M)
+    zs.push(Math.max(...levels.map((l) => l.z0M + l.heightM)))
+    for (const z of zs) {
+      this.source.entities.add({
+        polyline: {
+          positions: [
+            frame.toCart(0, 0, z),
+            frame.toCart(widthM, 0, z),
+            frame.toCart(widthM, depthM, z),
+            frame.toCart(0, depthM, z),
+            frame.toCart(0, 0, z),
+          ],
+          width: 3,
+          material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.25, color: RING_GLOW }),
+        },
+      })
+    }
+  }
+
+  /** Extruded thickness boxes, banded at level boundaries with alternating
+   *  slate tints; one full-height cyan edge box per wall. */
   private buildWalls(
+    def: TwinDefinition,
     frame: LocalFrame,
     wallFrames: WallFrame[],
     fills: Cesium.GeometryInstance[],
     outlines: Cesium.GeometryInstance[],
   ): void {
+    const levels = def.levels ?? []
     for (const wf of wallFrames) {
       const w = wf.wall
+      const zTop = w.z0M + w.heightM
       const corners = slabCorners(wf.p0, { x: w.x1, y: w.y1 }, Math.max(0.03, w.thickM / 2))
-      fills.push(boxFill(frame, corners, w.z0M, w.z0M + w.heightM, WALL_FILL))
-      outlines.push(boxOutline(frame, corners, w.z0M, w.z0M + w.heightM, WALL_EDGE))
+      const cuts = [w.z0M, zTop]
+      for (const l of levels)
+        for (const z of [l.z0M, l.z0M + l.heightM])
+          if (z > w.z0M + 0.01 && z < zTop - 0.01) cuts.push(z)
+      cuts.sort((a, b) => a - b)
+      for (let i = 0; i + 1 < cuts.length; i++) {
+        if (cuts[i + 1] - cuts[i] < 0.02) continue
+        const zm = (cuts[i] + cuts[i + 1]) / 2
+        const li = levels.findIndex((l) => zm >= l.z0M && zm < l.z0M + l.heightM)
+        const tint = li >= 0 && li % 2 === 1 ? WALL_BAND_B : WALL_BAND_A
+        fills.push(boxFill(frame, corners, cuts[i], cuts[i + 1], tint))
+      }
+      outlines.push(boxOutline(frame, corners, w.z0M, zTop, WALL_EDGE))
     }
   }
 
@@ -428,7 +516,6 @@ export class TwinLayer {
     frame: LocalFrame,
     wallFrames: WallFrame[],
     fills: Cesium.GeometryInstance[],
-    outlines: Cesium.GeometryInstance[],
   ): void {
     for (const run of def.windows ?? []) {
       const wf = run.wall >= 0 && run.wall < wallFrames.length ? wallFrames[run.wall] : undefined
@@ -446,15 +533,28 @@ export class TwinLayer {
           if (s0 + run.wM > wf.len + 0.01) break // never spill past the wall
           const a = alongWall(wf, s0, proud)
           const b = alongWall(wf, s0 + run.wM, proud)
-          const corners = slabCorners(a, b, 0.03)
-          fills.push(boxFill(frame, corners, zBase, zBase + run.hM, GLASS_FILL))
-          outlines.push(boxOutline(frame, corners, zBase, zBase + run.hM, GLASS_EDGE))
+          fills.push(boxFill(frame, slabCorners(a, b, 0.03), zBase, zBase + run.hM, GLASS_FILL))
+          // Frame as a polyline loop — shader width beats the 1 px GL outline.
+          const zT = zBase + run.hM
+          this.source.entities.add({
+            polyline: {
+              positions: [
+                frame.toCart(a.x, a.y, zBase),
+                frame.toCart(b.x, b.y, zBase),
+                frame.toCart(b.x, b.y, zT),
+                frame.toCart(a.x, a.y, zT),
+                frame.toCart(a.x, a.y, zBase),
+              ],
+              width: 2.5,
+              material: GLASS_EDGE,
+            },
+          })
         }
       }
     }
   }
 
-  /** Taller quads with amber frames + floating door labels. */
+  /** Taller quads with amber frames. */
   private buildDoors(
     def: TwinDefinition,
     frame: LocalFrame,
@@ -473,16 +573,6 @@ export class TwinLayer {
       const z0 = wf.wall.z0M
       fills.push(boxFill(frame, corners, z0, z0 + door.hM, DOOR_FILL))
       outlines.push(boxOutline(frame, corners, z0, z0 + door.hM, DOOR_EDGE))
-      const mid = alongWall(wf, door.offsetM + door.wM / 2, proud + 0.3)
-      this.source.entities.add({
-        position: frame.toCart(mid.x, mid.y, z0 + door.hM + 0.8),
-        billboard: {
-          image: crispTextImage(door.label, LABEL_AMBER, 18),
-          scale: 0.5,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      })
     }
   }
 
@@ -593,15 +683,6 @@ export class TwinLayer {
           ),
         )
       }
-      this.source.entities.add({
-        position: frame.toCart(st.x, st.y, st.topM + 0.6),
-        billboard: {
-          image: crispTextImage(st.label, LABEL_CYAN, 18),
-          scale: 0.5,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      })
     }
   }
 
@@ -652,7 +733,7 @@ export class TwinLayer {
     }
   }
 
-  /** Vertical translucent boxes + label billboard at the shaft head. */
+  /** Vertical translucent boxes. */
   private buildShafts(
     def: TwinDefinition,
     frame: LocalFrame,
@@ -663,15 +744,128 @@ export class TwinLayer {
       const corners = rectCorners(sh.x, sh.y, sh.wM / 2, sh.dM / 2)
       fills.push(boxFill(frame, corners, sh.z0M, sh.topM, SHAFT_FILL))
       outlines.push(boxOutline(frame, corners, sh.z0M, sh.topM, SHAFT_EDGE))
-      this.source.entities.add({
-        position: frame.toCart(sh.x, sh.y, sh.topM + 0.6),
-        billboard: {
-          image: crispTextImage(sh.label, LABEL_CYAN, 18),
-          scale: 0.5,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      })
+    }
+  }
+
+  /**
+   * One-level cutaway read top-down like a blueprint: only elements
+   * intersecting [z0M, z0M + heightM), wall heights capped at PLAN_CAP_M above
+   * the floor, door openings as amber bars and windows as cyan ticks riding
+   * just over the wall cap. Dome / roof / columns / fire escapes and every
+   * other level are omitted.
+   */
+  private buildPlan(
+    def: TwinDefinition,
+    frame: LocalFrame,
+    wallFrames: WallFrame[],
+    lvl: TwinLevel,
+    fills: Cesium.GeometryInstance[],
+    outlines: Cesium.GeometryInstance[],
+  ): void {
+    const zLo = lvl.z0M
+    const zHi = lvl.z0M + lvl.heightM
+    const capZ = zLo + PLAN_CAP_M
+
+    // This level's slab anchors the plan.
+    const { widthM, depthM } = def.footprint
+    const slab = rectCorners(widthM / 2, depthM / 2, widthM / 2, depthM / 2)
+    fills.push(boxFill(frame, slab, zLo, zLo + 0.1, LEVEL_FILL))
+    outlines.push(boxOutline(frame, slab, zLo, zLo + 0.1, LEVEL_EDGE))
+
+    // Walls clipped to the cut band.
+    for (const wf of wallFrames) {
+      const w = wf.wall
+      if (w.z0M >= zHi || w.z0M + w.heightM <= zLo) continue
+      const z0 = Math.max(w.z0M, zLo)
+      const z1 = Math.min(w.z0M + w.heightM, capZ)
+      if (z1 <= z0) continue
+      const corners = slabCorners(wf.p0, { x: w.x1, y: w.y1 }, Math.max(0.03, w.thickM / 2))
+      fills.push(boxFill(frame, corners, z0, z1, PLAN_WALL_FILL))
+      outlines.push(boxOutline(frame, corners, z0, z1, WALL_EDGE))
+    }
+
+    // Door openings: short amber bars capping the wall line.
+    for (const door of def.doors ?? []) {
+      const wf = door.wall >= 0 && door.wall < wallFrames.length ? wallFrames[door.wall] : undefined
+      if (!wf || door.offsetM + door.wM > wf.len + 0.01) continue
+      const d0 = wf.wall.z0M
+      if (d0 >= zHi || d0 + door.hM <= zLo) continue
+      const a = alongWall(wf, door.offsetM, 0)
+      const b = alongWall(wf, door.offsetM + door.wM, 0)
+      const corners = slabCorners(a, b, wf.wall.thickM / 2 + 0.06)
+      fills.push(boxFill(frame, corners, zLo + 0.02, capZ + 0.1, PLAN_DOOR))
+    }
+
+    // Windows: bright cyan ticks along the walls, just above the cap.
+    for (const run of def.windows ?? []) {
+      const wf = run.wall >= 0 && run.wall < wallFrames.length ? wallFrames[run.wall] : undefined
+      if (!wf) continue
+      const pitch = run.pitchM > 0 ? run.pitchM : run.wM + 0.6
+      const n = Math.max(1, Math.round(run.count))
+      const levelIdxs = run.levels && run.levels.length ? run.levels : [-1]
+      for (const li of levelIdxs) {
+        const runLvl = li >= 0 && li < (def.levels?.length ?? 0) ? def.levels[li] : undefined
+        if (li >= 0 && !runLvl) continue
+        const zBase = (runLvl ? runLvl.z0M : wf.wall.z0M) + run.sillM
+        if (zBase >= zHi || zBase + run.hM <= zLo) continue
+        for (let k = 0; k < n; k++) {
+          const s0 = run.offsetM + k * pitch
+          if (s0 + run.wM > wf.len + 0.01) break
+          const a = alongWall(wf, s0, 0)
+          const b = alongWall(wf, s0 + run.wM, 0)
+          const corners = slabCorners(a, b, wf.wall.thickM / 2 + 0.05)
+          fills.push(boxFill(frame, corners, capZ - 0.02, capZ + 0.14, PLAN_WINDOW))
+        }
+      }
+    }
+
+    // Stairs clipped to the cut band.
+    for (const st of def.stairs ?? []) {
+      if (st.topM <= zLo || st.z0M >= zHi || st.topM - st.z0M <= 0) continue
+      if (st.kind === 'spiral') {
+        const r = st.rM ?? 1.2
+        const zC = Math.min(Math.max(st.z0M, zLo) + 0.05, Math.min(st.topM, capZ))
+        const pts: Cesium.Cartesian3[] = []
+        for (let i = 0; i <= 32; i++) {
+          const t = (i / 32) * 2 * Math.PI
+          pts.push(frame.toCart(st.x + r * Math.cos(t), st.y + r * Math.sin(t), zC))
+        }
+        this.source.entities.add({ polyline: { positions: pts, width: 2, material: STAIR_LINE } })
+      } else {
+        const w = st.wM ?? 1.1
+        const rise = st.topM - st.z0M
+        const tread = 0.28
+        const n = Math.min(MAX_STAIR_STEPS, Math.max(1, Math.ceil(rise / 0.18)))
+        for (let i = 0; i < n; i++) {
+          const zTop = st.z0M + (rise * (i + 1)) / n
+          if (zTop < zLo || zTop > capZ) continue
+          const corners = rectCorners(st.x, st.y + i * tread + tread / 2, w / 2, tread / 2)
+          fills.push(boxFill(frame, corners, zTop - 0.06, zTop, STAIR_FILL))
+        }
+        const z0s = Math.max(st.z0M, zLo)
+        const z1s = Math.min(st.topM, capZ)
+        if (z1s > z0s)
+          outlines.push(
+            boxOutline(
+              frame,
+              rectCorners(st.x, st.y + (n * tread) / 2, w / 2, (n * tread) / 2),
+              z0s,
+              z1s,
+              LEVEL_EDGE,
+            ),
+          )
+      }
+    }
+
+    // Shafts clipped to the cut band.
+    for (const sh of def.shafts ?? []) {
+      if (sh.topM <= zLo || sh.z0M >= zHi) continue
+      const z0 = Math.max(sh.z0M, zLo)
+      const z1 = Math.min(sh.topM, capZ)
+      if (z1 <= z0) continue
+      const corners = rectCorners(sh.x, sh.y, sh.wM / 2, sh.dM / 2)
+      fills.push(boxFill(frame, corners, z0, z1, SHAFT_FILL))
+      outlines.push(boxOutline(frame, corners, z0, z1, SHAFT_EDGE))
     }
   }
 
