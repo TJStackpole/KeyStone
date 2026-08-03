@@ -539,6 +539,11 @@ app.post('/api/alarm', async (req, res) => {
   if (!state.incident) return res.status(400).json({ error: 'no active incident' })
   const updated = updateIncident({ alarmLevel: level as Incident['alarmLevel'] })
   broadcast({ type: 'incident', incident: updated.incident })
+  // Escalation and its log entry are ONE path: every alarm caller (command
+  // strip, decision log) both dispatches and records — never one without
+  // the other.
+  const benchEv = appendTimeline('ic.benchmark', { code: level.toUpperCase() })
+  broadcast({ type: 'timeline', event: benchEv })
   ticker('alarm', `Alarm level ${level.toUpperCase()} — ${updated.incident?.address ?? ''}`, {
     incidentId: updated.incident?.id,
     severity: ALARM_SEVERITY[level] ?? 2,

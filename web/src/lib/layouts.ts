@@ -57,16 +57,18 @@ export function applyLayoutPreset(key: string): void {
   notify(`LAYOUT · ${preset.label} — ${preset.hint}`)
 }
 
-const DASHBOARD_NAMES = ['TACTICAL MAP', 'COMMAND BOARD', 'RIDING LISTS'] as const
+const DASHBOARD_NAMES = ['TACTICAL MAP', 'COMMAND BOARD', 'RIDING LISTS', 'DECISION LOG', 'RESOURCES'] as const
 
-export function setDashboardPage(page: 0 | 1 | 2): void {
+export type DashboardPage = 0 | 1 | 2 | 3 | 4
+
+export function setDashboardPage(page: DashboardPage): void {
   if (getAppState().dashboardPage === page) return
   setAppState({ dashboardPage: page })
   notify(`DASHBOARD · ${DASHBOARD_NAMES[page]}`)
 }
 
 export function cycleDashboardPage(dir: 1 | -1): void {
-  const next = ((getAppState().dashboardPage + dir + 3) % 3) as 0 | 1 | 2
+  const next = ((getAppState().dashboardPage + dir + 5) % 5) as DashboardPage
   setDashboardPage(next)
 }
 

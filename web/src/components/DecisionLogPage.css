@@ -1,0 +1,64 @@
+/* DECISION LOG — plain-DOM dashboard page, self-contained styling. */
+.declog-page {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: #0a0e14;
+  color: #e2ecf7;
+  font-family: Inter, system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 56px;
+  overflow: hidden;
+}
+.dl-head { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+.dl-head h1 { font-size: 15px; letter-spacing: 0.12em; color: #f59e0b; margin: 0; }
+.dl-sub { font-size: 11px; color: rgba(148, 163, 184, 0.9); }
+.dl-back, .dl-print {
+  min-height: 44px;
+  padding: 0 18px;
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  border-radius: 6px;
+  color: #22d3ee;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.dl-print { margin-left: auto; }
+.dl-zone-label { font-size: 9px; letter-spacing: 0.12em; color: rgba(148, 163, 184, 0.8); margin: 8px 0 5px; }
+.dl-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+@media (max-width: 1100px) { .dl-grid { grid-template-columns: repeat(3, 1fr); } }
+.dl-btn {
+  min-height: 52px;
+  background: #0e1521;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 6px;
+  color: #e2ecf7;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.dl-btn:disabled { opacity: 0.4; cursor: default; }
+.dl-btn.alarm { border-color: rgba(245, 158, 11, 0.5); color: #fbbf24; font-weight: 700; }
+.dl-btn.alarm.current { background: rgba(245, 158, 11, 0.18); }
+.dl-btn.send { min-height: 44px; padding: 0 22px; border-color: rgba(74, 222, 128, 0.5); color: #4ade80; }
+.dl-note { display: flex; gap: 8px; margin-top: 10px; }
+.dl-note input {
+  flex: 1;
+  min-height: 44px;
+  background: #0e1521;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px;
+  color: #e2ecf7;
+  font-size: 14px;
+  padding: 0 12px;
+}
+.dl-log { flex: 1; overflow-y: auto; margin-top: 12px; border-top: 1px solid rgba(34, 211, 238, 0.15); }
+.dl-empty { color: rgba(148, 163, 184, 0.7); padding: 16px 4px; font-size: 12px; }
+.dl-row { display: flex; gap: 14px; padding: 8px 4px; border-bottom: 1px solid rgba(34, 211, 238, 0.08); align-items: baseline; }
+.dl-time { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: rgba(148, 163, 184, 0.95); flex: 0 0 84px; }
+.dl-text { font-size: 14px; }
+.dl-row.bench .dl-text { color: #fbbf24; font-weight: 600; letter-spacing: 0.04em; }
+.dl-row.ops .dl-text { color: #7dd3fc; }
+.dl-row.note .dl-text { color: #e2ecf7; }

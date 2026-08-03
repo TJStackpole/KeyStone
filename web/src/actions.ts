@@ -2421,6 +2421,21 @@ export async function placeExposureLabels(): Promise<void> {
   notify('EXPOSURES 1-4 placed — Exposure 1 is the street side')
 }
 
+/** THE alarm path: every caller (command strip chips, decision-log
+ *  benchmarks) escalates AND logs through POST /api/alarm — the server
+ *  appends the ic.benchmark row on the same request. */
+export async function transmitAlarm(level: import('./types').AlarmLevel): Promise<void> {
+  try {
+    await fetch('/api/alarm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ level }),
+    })
+  } catch (err) {
+    console.error('[alarm] failed:', err)
+  }
+}
+
 export function setDrawTool(tool: ReturnType<typeof getAppState>['drawTool']): void {
   const current = getAppState().drawTool
   getDrawController()?.cancelDraft()

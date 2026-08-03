@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { transmitAlarm } from '../actions'
 import { replayEngine } from '../replay'
 import { useAppSlice } from '../state/store'
 import type { Agency, AlarmLevel } from '../types'
@@ -22,17 +23,7 @@ function fmtElapsed(ms: number): string {
   return hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`
 }
 
-async function setAlarm(level: AlarmLevel): Promise<void> {
-  try {
-    await fetch('/api/alarm', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ level }),
-    })
-  } catch (err) {
-    console.error('[alarm] failed:', err)
-  }
-}
+
 
 /**
  * Replay scrub row: subscribes to the engine's fast clock DIRECTLY, so the
@@ -186,7 +177,7 @@ export function CommandStrip() {
             <button
               key={a.id}
               className={`alarm-btn${reached ? ' reached' : ''}${currentAlarm === a.id ? ' current' : ''}`}
-              onClick={() => void setAlarm(a.id)}
+              onClick={() => void transmitAlarm(a.id)}
               title={`Transmit ${a.label}`}
             >
               {a.label}

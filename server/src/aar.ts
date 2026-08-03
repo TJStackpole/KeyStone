@@ -137,7 +137,11 @@ export function generateAar(input: {
     }
   }
 
-  const mayday = timeline.find((e) => e.kind === 'alert.mayday')
+  const mayday = timeline.find(
+    (e) =>
+      e.kind === 'alert.mayday' ||
+      (e.kind === 'ic.benchmark' && (e.payload as { code?: string } | undefined)?.code === 'MAYDAY DECLARED'),
+  )
   if (mayday) {
     const fast = timeline.find(
       (e) => Date.parse(e.t) > Date.parse(mayday.t) && JSON.stringify(e.payload ?? '').toLowerCase().includes('fast'),

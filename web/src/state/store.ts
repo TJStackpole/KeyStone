@@ -142,7 +142,7 @@ export interface AppState {
   /** Swipeable FDNY dashboards: 0 = tactical map, 1 = command board,
    *  2 = riding lists. Pages 1-2 are plain-DOM fallbacks that keep working
    *  even if the 3D view dies. */
-  dashboardPage: 0 | 1 | 2
+  dashboardPage: 0 | 1 | 2 | 3 | 4
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
   /** Riding-list PAR checks: unit callsign -> ms epoch of last PAR. */

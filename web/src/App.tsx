@@ -49,6 +49,7 @@ import { RidingListPage } from './components/RidingListPage'
 import { DashboardTabs } from './components/DashboardTabs'
 import { CommandStrip } from './components/CommandStrip'
 import { OpsBanner } from './components/OpsBanner'
+import { DecisionLogPage } from './components/DecisionLogPage'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -192,6 +193,7 @@ export default function App() {
       <OpsBanner />
       <CommandBoardPage />
       <RidingListPage />
+      <DecisionLogPage />
       <DashboardTabs />
       {replayActive && <CommandStrip />}
       <ResponsePacket />
