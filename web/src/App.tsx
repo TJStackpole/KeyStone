@@ -44,6 +44,9 @@ import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
 import { PracticeTour } from './components/PracticeTour'
 import { ResponsePacket } from './components/ResponsePacket'
+import { CommandBoardPage } from './components/CommandBoardPage'
+import { RidingListPage } from './components/RidingListPage'
+import { DashboardTabs } from './components/DashboardTabs'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -184,6 +187,9 @@ export default function App() {
       <ScenarioBar />
       <FeedHealthPanel />
       <PracticeTour />
+      <CommandBoardPage />
+      <RidingListPage />
+      <DashboardTabs />
       <ResponsePacket />
       <MaydayAlert />
       <Gate cap="aar.drill-debrief">

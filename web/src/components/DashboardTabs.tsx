@@ -1,0 +1,36 @@
+import { setDashboardPage } from '../lib/layouts'
+import { useCapability } from '../profiles/manifest'
+import { useAppSlice } from '../state/store'
+
+// ---------------------------------------------------------------------------
+// The three FDNY command dashboards: tactical map, command board, riding
+// lists. Edge-swipe flips between them on a tablet; these tabs are the
+// mouse/keyboard path. Boards 2-3 are plain-DOM fallbacks — the way a chief
+// has always commanded, still there if the 3D view ever dies.
+// ---------------------------------------------------------------------------
+
+const PAGES: { id: 0 | 1 | 2; label: string; hint: string }[] = [
+  { id: 0, label: 'MAP', hint: 'The 3D tactical picture' },
+  { id: 1, label: 'BOARD', hint: 'Command board — tap units through ATTACK / SEARCH / VENT positions, the way the IC runs it' },
+  { id: 2, label: 'RIDING', hint: 'Riding lists + PAR — the paper board, digital. Works even if the map dies' },
+]
+
+export function DashboardTabs() {
+  const isFdny = useCapability('tactical.view-lock')
+  const { page } = useAppSlice((s) => ({ page: s.dashboardPage }))
+  if (!isFdny) return null
+  return (
+    <nav className="dash-tabs glass" aria-label="Command dashboards — swipe from the screen edge or tap">
+      {PAGES.map((p) => (
+        <button
+          key={p.id}
+          className={`dash-tab${page === p.id ? ' on' : ''}`}
+          onClick={() => setDashboardPage(p.id)}
+          title={p.hint}
+        >
+          {p.label}
+        </button>
+      ))}
+    </nav>
+  )
+}

@@ -1,0 +1,314 @@
+/* ---------------------------------------------------------------------------
+   RIDING LIST / ACCOUNTABILITY board — dashboard page 2.
+   Every rule is scoped under .riding-page. Colors are declared locally so
+   this board stays legible even if the global theme sheet never loads —
+   it is the fallback the chief reads when everything else dies.
+--------------------------------------------------------------------------- */
+
+.riding-page {
+  --rp-bg: #0a0e14;
+  --rp-panel: rgba(11, 17, 28, 0.85);
+  --rp-cyan: #22d3ee;
+  --rp-cyan-dim: rgba(34, 211, 238, 0.65);
+  --rp-amber: #f59e0b;
+  --rp-red: #ef4444;
+  --rp-text: #dbe4f0;
+  --rp-dim: #8294ab;
+  --rp-faint: #5b6b80;
+  --rp-border: rgba(34, 211, 238, 0.25);
+  --rp-ui: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --rp-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  position: fixed;
+  inset: 0;
+  z-index: 66; /* over the map + panels, under the dash tabs (72) and mayday */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 22px 64px; /* bottom clearance for the MAP/BOARD/RIDING tabs */
+  overflow: hidden;
+  background: var(--rp-bg);
+  color: var(--rp-text);
+  font-family: var(--rp-ui);
+}
+
+/* ---------- page header ---------- */
+
+.riding-page .rp-head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rp-border);
+}
+
+.riding-page .rp-title { flex: 1 1 auto; min-width: 220px; }
+
+.riding-page .rp-title h1 {
+  margin: 0;
+  font-family: var(--rp-mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--rp-cyan);
+}
+
+.riding-page .rp-address {
+  margin-top: 2px;
+  font-family: var(--rp-mono);
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  color: var(--rp-dim);
+}
+
+.riding-page .rp-totals {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--rp-mono);
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.riding-page .rp-total { color: var(--rp-text); font-weight: 600; }
+.riding-page .rp-total.in { color: var(--rp-amber); }
+.riding-page .rp-sep { color: var(--rp-faint); }
+
+/* ---------- buttons: glove-sized targets ---------- */
+
+.riding-page .rp-btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--rp-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--rp-cyan);
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  min-height: 52px;
+  padding: 10px 20px;
+  font-size: 18px;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.riding-page .rp-btn:hover:not(:disabled) {
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.55);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.25);
+}
+
+.riding-page .rp-btn:active:not(:disabled) { transform: translateY(1px); }
+
+.riding-page .rp-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.riding-page .rp-par-all {
+  color: var(--rp-amber);
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.riding-page .rp-par-all:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.65);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+}
+
+/* ---------- card grid ---------- */
+
+.riding-page .rp-grid {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
+  align-content: start;
+  padding-right: 4px;
+}
+
+.riding-page .rp-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--rp-mono);
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--rp-faint);
+  text-align: center;
+}
+
+/* ---------- apparatus card ---------- */
+
+.riding-page .rp-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--rp-panel);
+  border: 1px solid var(--rp-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* PAR aging escalates the whole card, readable across the room. */
+.riding-page .rp-card.stale { border-color: rgba(245, 158, 11, 0.6); }
+.riding-page .rp-card.overdue {
+  border-color: rgba(239, 68, 68, 0.75);
+  animation: rp-overdue-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rp-overdue-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+  50% { box-shadow: 0 0 18px rgba(239, 68, 68, 0.4); }
+}
+
+.riding-page .rp-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.15);
+}
+
+.riding-page .rp-callsign {
+  font-family: var(--rp-mono);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--rp-cyan);
+}
+
+.riding-page .rp-status {
+  font-family: var(--rp-mono);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--rp-dim);
+  white-space: nowrap;
+}
+
+.riding-page .rp-nodata {
+  padding: 20px 16px;
+  font-family: var(--rp-mono);
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  color: var(--rp-faint);
+}
+
+/* ---------- member rows ---------- */
+
+.riding-page .rp-members {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.riding-page .rp-row {
+  display: grid;
+  grid-template-columns: 1fr 76px minmax(90px, auto) 104px;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 16px;
+}
+
+.riding-page .rp-row + .rp-row { border-top: 1px solid rgba(34, 211, 238, 0.08); }
+
+.riding-page .rp-member {
+  font-family: var(--rp-mono);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--rp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.riding-page .rp-floor {
+  font-family: var(--rp-mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--rp-faint);
+  text-align: center;
+}
+
+.riding-page .rp-floor.in { color: var(--rp-cyan); }
+
+.riding-page .rp-mstatus {
+  font-family: var(--rp-mono);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--rp-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.riding-page .rp-air {
+  font-family: var(--rp-mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--rp-cyan-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.riding-page .rp-air.amber { color: var(--rp-amber); }
+.riding-page .rp-air.red {
+  color: var(--rp-red);
+  animation: rp-air-blink 1s steps(2, start) infinite;
+}
+.riding-page .rp-air.none { color: var(--rp-faint); }
+
+@keyframes rp-air-blink {
+  0%, 60%, 100% { opacity: 1; }
+  61%, 99% { opacity: 0.35; }
+}
+
+/* ---------- PAR footer ---------- */
+
+.riding-page .rp-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(34, 211, 238, 0.15);
+}
+
+.riding-page .rp-par-when {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--rp-mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--rp-cyan-dim);
+}
+
+.riding-page .rp-par-when.stale { color: var(--rp-amber); }
+.riding-page .rp-par-when.overdue { color: var(--rp-red); }
+
+.riding-page .rp-par-ago {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--rp-dim);
+}
+
+.riding-page .rp-par-when.stale .rp-par-ago,
+.riding-page .rp-par-when.overdue .rp-par-ago { color: inherit; }
+
+.riding-page .rp-par {
+  margin-left: auto;
+  min-width: 132px;
+  min-height: 56px;
+  font-size: 20px;
+}

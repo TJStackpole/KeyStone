@@ -57,6 +57,19 @@ export function applyLayoutPreset(key: string): void {
   notify(`LAYOUT · ${preset.label} — ${preset.hint}`)
 }
 
+const DASHBOARD_NAMES = ['TACTICAL MAP', 'COMMAND BOARD', 'RIDING LISTS'] as const
+
+export function setDashboardPage(page: 0 | 1 | 2): void {
+  if (getAppState().dashboardPage === page) return
+  setAppState({ dashboardPage: page })
+  notify(`DASHBOARD · ${DASHBOARD_NAMES[page]}`)
+}
+
+export function cycleDashboardPage(dir: 1 | -1): void {
+  const next = ((getAppState().dashboardPage + dir + 3) % 3) as 0 | 1 | 2
+  setDashboardPage(next)
+}
+
 export function cycleLayoutPreset(dir: 1 | -1): void {
   const current = getAppState().layoutPreset
   const idx = LAYOUT_PRESETS.findIndex((p) => p.key === current)
@@ -95,7 +108,10 @@ export function attachLayoutSwipe(): () => void {
     if (Math.abs(dx) < MIN_DX || dy > MAX_DY || dt > MAX_MS) return
     // Swipe from the left edge rightward = next page; from the right edge
     // leftward = previous — matches page-flip intuition on both hands.
-    cycleLayoutPreset(dx > 0 ? 1 : -1)
+    // FDNY gets the three command DASHBOARDS (map / board / riding lists);
+    // other profiles keep cycling layout presets.
+    if (getAppState().profile === 'fdny') cycleDashboardPage(dx > 0 ? 1 : -1)
+    else cycleLayoutPreset(dx > 0 ? 1 : -1)
   }
   window.addEventListener('touchstart', onStart, { passive: true })
   window.addEventListener('touchend', onEnd, { passive: true })

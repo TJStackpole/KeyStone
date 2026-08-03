@@ -136,6 +136,14 @@ export interface AppState {
   gloveMode: boolean
   /** Guided first-run checklist (plain language, self-checking steps). */
   practiceTour: boolean
+  /** Swipeable FDNY dashboards: 0 = tactical map, 1 = command board,
+   *  2 = riding lists. Pages 1-2 are plain-DOM fallbacks that keep working
+   *  even if the 3D view dies. */
+  dashboardPage: 0 | 1 | 2
+  /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
+  boardAssignments: Record<string, string>
+  /** Riding-list PAR checks: unit callsign -> ms epoch of last PAR. */
+  parChecks: Record<string, number>
   /** The CAD feed entry the officer pressed to respond (SIMULATED FireCAD). */
   cadIncident: import('../types').FeedIncident | null
   responsePacketOpen: boolean
@@ -338,6 +346,15 @@ const initial: AppState = {
   layoutPreset: null,
   gloveMode: localStorage.getItem('ks-glove') === '1',
   practiceTour: false,
+  dashboardPage: 0,
+  boardAssignments: (() => {
+    try {
+      return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>
+    } catch {
+      return {}
+    }
+  })(),
+  parChecks: {},
   cadIncident: null,
   responsePacketOpen: false,
   portfolio: [],

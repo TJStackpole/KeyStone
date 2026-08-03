@@ -2937,3 +2937,30 @@ body.panel-dragging * { cursor: grabbing !important; }
     z-index: 60;
   }
 }
+
+/* Dashboard tabs — bottom center, above everything, glove-sized. */
+.dash-tabs {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 8px;
+  z-index: 72;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+}
+.dash-tab {
+  padding: 8px 18px;
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  border-radius: 5px;
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.dash-tab.on {
+  color: var(--cyan, #22d3ee);
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.7);
+}
