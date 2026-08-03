@@ -1,92 +1,682 @@
 {
-  "name": "Ellis Island — Baggage & Dormitory Building (HABS NY-6086-E)",
-  "matchAddress": "CONTAGIOUS DISEASE HOSPITAL",
-  "origin": { "lat": 40.69856, "lon": -74.04159 },
-  "bearingDeg": 46,
-  "footprint": { "widthM": 71.7, "depthM": 59.8 },
-  "levels": [
-    { "name": "Basement", "z0M": -1.8, "heightM": 1.8 },
-    { "name": "Floor 1 — Baggage Room / Railroad Lobby (USCG Drill Room ext.)", "z0M": 0, "heightM": 4.2 },
-    { "name": "Floor 2 — Family Dormitories / Detention (Enclosed Recreation Porch ext.)", "z0M": 4.2, "heightM": 3.7 },
-    { "name": "Floor 3 — Dormitory Wards 1-4 (1913-14 addition)", "z0M": 7.9, "heightM": 3.4 }
-  ],
-  "walls": [
-    { "x0": 0, "y0": 0, "x1": 71.7, "y1": 0, "z0M": 0, "heightM": 12.2, "thickM": 0.75 },
-    { "x0": 0, "y0": 0, "x1": 0, "y1": 34.2, "z0M": 0, "heightM": 12.2, "thickM": 0.75 },
-    { "x0": 0, "y0": 34.2, "x1": 0, "y1": 59.8, "z0M": 0, "heightM": 10.9, "thickM": 0.6 },
-    { "x0": 0, "y0": 59.8, "x1": 71.7, "y1": 59.8, "z0M": 0, "heightM": 10.9, "thickM": 0.6 },
-    { "x0": 71.7, "y0": 59.8, "x1": 71.7, "y1": 34.2, "z0M": 0, "heightM": 10.9, "thickM": 0.6 },
-    { "x0": 71.7, "y0": 34.2, "x1": 71.7, "y1": 0, "z0M": 0, "heightM": 12.2, "thickM": 0.75 },
-    { "x0": 0, "y0": 34.2, "x1": 71.7, "y1": 34.2, "z0M": 0, "heightM": 12.2, "thickM": 0.5 },
-    { "x0": 20.6, "y0": 20.4, "x1": 51.3, "y1": 20.4, "z0M": 4.2, "heightM": 7.1, "thickM": 0.4 },
-    { "x0": 20.6, "y0": 29.6, "x1": 51.3, "y1": 29.6, "z0M": 4.2, "heightM": 7.1, "thickM": 0.4 },
-    { "x0": 20.6, "y0": 20.4, "x1": 20.6, "y1": 29.6, "z0M": 4.2, "heightM": 7.1, "thickM": 0.4 },
-    { "x0": 51.3, "y0": 20.4, "x1": 51.3, "y1": 29.6, "z0M": 4.2, "heightM": 7.1, "thickM": 0.4 },
-    { "x0": 18.0, "y0": 0, "x1": 18.0, "y1": 34.2, "z0M": 0, "heightM": 11.3, "thickM": 0.35 },
-    { "x0": 53.7, "y0": 0, "x1": 53.7, "y1": 34.2, "z0M": 0, "heightM": 11.3, "thickM": 0.35 },
-    { "x0": 18.0, "y0": 16.2, "x1": 53.7, "y1": 16.2, "z0M": 4.2, "heightM": 7.1, "thickM": 0.3 },
-    { "x0": 0, "y0": 0, "x1": 71.7, "y1": 0, "z0M": -1.8, "heightM": 1.8, "thickM": 0.9 },
-    { "x0": 0, "y0": 0, "x1": 0, "y1": 59.8, "z0M": -1.8, "heightM": 1.8, "thickM": 0.9 },
-    { "x0": 0, "y0": 59.8, "x1": 71.7, "y1": 59.8, "z0M": -1.8, "heightM": 1.8, "thickM": 0.9 },
-    { "x0": 71.7, "y0": 59.8, "x1": 71.7, "y1": 0, "z0M": -1.8, "heightM": 1.8, "thickM": 0.9 }
-  ],
-  "windows": [
-    { "wall": 0, "offsetM": 6.0, "sillM": 1.1, "wM": 1.55, "hM": 3.0, "count": 13, "pitchM": 4.7, "levels": [1] },
-    { "wall": 0, "offsetM": 2.8, "sillM": 5.1, "wM": 1.5, "hM": 1.95, "count": 16, "pitchM": 4.35, "levels": [2] },
-    { "wall": 0, "offsetM": 2.8, "sillM": 8.8, "wM": 1.5, "hM": 1.7, "count": 16, "pitchM": 4.35, "levels": [3] },
-    { "wall": 1, "offsetM": 2.8, "sillM": 1.1, "wM": 1.55, "hM": 3.0, "count": 6, "pitchM": 5.0, "levels": [1] },
-    { "wall": 1, "offsetM": 2.4, "sillM": 5.1, "wM": 1.5, "hM": 1.95, "count": 7, "pitchM": 4.6, "levels": [2] },
-    { "wall": 1, "offsetM": 2.4, "sillM": 8.8, "wM": 1.5, "hM": 1.7, "count": 7, "pitchM": 4.6, "levels": [3] },
-    { "wall": 5, "offsetM": 2.8, "sillM": 1.1, "wM": 1.55, "hM": 3.0, "count": 6, "pitchM": 5.0, "levels": [1] },
-    { "wall": 5, "offsetM": 2.4, "sillM": 5.1, "wM": 1.5, "hM": 1.95, "count": 7, "pitchM": 4.6, "levels": [2] },
-    { "wall": 5, "offsetM": 2.4, "sillM": 8.8, "wM": 1.5, "hM": 1.7, "count": 7, "pitchM": 4.6, "levels": [3] },
-    { "wall": 2, "offsetM": 2.2, "sillM": 1.4, "wM": 2.6, "hM": 3.6, "count": 4, "pitchM": 5.6, "levels": [1] },
-    { "wall": 2, "offsetM": 1.8, "sillM": 6.5, "wM": 3.0, "hM": 2.4, "count": 5, "pitchM": 4.7, "levels": [2] },
-    { "wall": 3, "offsetM": 3.2, "sillM": 1.4, "wM": 2.6, "hM": 3.6, "count": 12, "pitchM": 5.6, "levels": [1] },
-    { "wall": 3, "offsetM": 2.5, "sillM": 6.5, "wM": 3.0, "hM": 2.4, "count": 15, "pitchM": 4.5, "levels": [2] },
-    { "wall": 4, "offsetM": 2.2, "sillM": 1.4, "wM": 2.6, "hM": 3.6, "count": 4, "pitchM": 5.6, "levels": [1] },
-    { "wall": 4, "offsetM": 1.8, "sillM": 6.5, "wM": 3.0, "hM": 2.4, "count": 5, "pitchM": 4.7, "levels": [2] },
-    { "wall": 7, "offsetM": 0.9, "sillM": 0.7, "wM": 1.2, "hM": 1.75, "count": 10, "pitchM": 3.0, "levels": [2] },
-    { "wall": 7, "offsetM": 0.9, "sillM": 4.4, "wM": 1.2, "hM": 1.75, "count": 10, "pitchM": 3.0, "levels": [3] },
-    { "wall": 8, "offsetM": 0.9, "sillM": 0.7, "wM": 1.2, "hM": 1.75, "count": 10, "pitchM": 3.0, "levels": [2] },
-    { "wall": 8, "offsetM": 0.9, "sillM": 4.4, "wM": 1.2, "hM": 1.75, "count": 10, "pitchM": 3.0, "levels": [3] },
-    { "wall": 9, "offsetM": 0.85, "sillM": 0.7, "wM": 1.2, "hM": 1.75, "count": 3, "pitchM": 2.9, "levels": [2] },
-    { "wall": 9, "offsetM": 0.85, "sillM": 4.4, "wM": 1.2, "hM": 1.75, "count": 3, "pitchM": 2.9, "levels": [3] },
-    { "wall": 10, "offsetM": 0.85, "sillM": 0.7, "wM": 1.2, "hM": 1.75, "count": 3, "pitchM": 2.9, "levels": [2] },
-    { "wall": 10, "offsetM": 0.85, "sillM": 4.4, "wM": 1.2, "hM": 1.75, "count": 3, "pitchM": 2.9, "levels": [3] }
-  ],
-  "doors": [
-    { "wall": 0, "offsetM": 2.3, "wM": 2.4, "hM": 3.8, "label": "SW arched entry — Railroad West Lobby" },
-    { "wall": 0, "offsetM": 66.9, "wM": 2.4, "hM": 3.8, "label": "SE arched entry — Railroad West Lobby" },
-    { "wall": 0, "offsetM": 17.4, "wM": 2.2, "hM": 3.4, "label": "Connecting-corridor door to Main Building (HABS sheet 5)" },
-    { "wall": 2, "offsetM": 16.4, "wM": 2.4, "hM": 3.6, "label": "West drill-room service door" },
-    { "wall": 3, "offsetM": 34.0, "wM": 2.6, "hM": 4.0, "label": "North baggage-extension doors" },
-    { "wall": 5, "offsetM": 5.0, "wM": 2.0, "hM": 3.2, "label": "East service entry (USCG galley)" }
-  ],
-  "columns": [
-    { "x": 10.5, "y": 8.6, "rM": 0.23, "z0M": 0, "heightM": 4.2, "count": 8, "dx": 7.65, "dy": 0 },
-    { "x": 10.5, "y": 16.2, "rM": 0.23, "z0M": 0, "heightM": 4.2, "count": 8, "dx": 7.65, "dy": 0 },
-    { "x": 10.5, "y": 23.8, "rM": 0.23, "z0M": 0, "heightM": 4.2, "count": 8, "dx": 7.65, "dy": 0 },
-    { "x": 10.5, "y": 31.4, "rM": 0.23, "z0M": 0, "heightM": 4.2, "count": 8, "dx": 7.65, "dy": 0 },
-    { "x": 10.5, "y": 42.0, "rM": 0.25, "z0M": 0, "heightM": 5.7, "count": 8, "dx": 7.65, "dy": 0 },
-    { "x": 10.5, "y": 49.6, "rM": 0.25, "z0M": 0, "heightM": 5.7, "count": 8, "dx": 7.65, "dy": 0 }
-  ],
-  "stairs": [
-    { "kind": "straight", "x": 22.6, "y": 41.0, "wM": 1.4, "z0M": 0, "topM": 10.3, "label": "Stair hall (west, drill-room extension)" },
-    { "kind": "straight", "x": 16.2, "y": 6.8, "wM": 1.3, "z0M": 0, "topM": 11.3, "label": "SW stair (dormitory access)" },
-    { "kind": "straight", "x": 53.2, "y": 17.4, "wM": 1.3, "z0M": 0, "topM": 11.3, "label": "East stair (dormitory access)" },
-    { "kind": "straight", "x": 66.5, "y": 55.0, "wM": 1.2, "z0M": 0, "topM": 5.7, "label": "NE stair (USCG armory / extension)" },
-    { "kind": "spiral", "x": 55.6, "y": 18.3, "rM": 1.1, "z0M": 0, "topM": 7.9, "label": "Iron service stair (east)" },
-    { "kind": "straight", "x": 14.6, "y": 0.8, "wM": 1.5, "z0M": 0, "topM": 4.2, "label": "Enclosed metal exterior staircase to Main Building (HABS sheet 10)" }
-  ],
-  "fireEscapes": [
-    { "wall": 0, "offsetM": 13.2, "wM": 2.4, "z0M": 0, "topM": 5.4 }
-  ],
-  "shafts": [
-    { "x": 20.6, "y": 20.4, "wM": 30.7, "dM": 9.2, "z0M": 4.2, "topM": 11.3, "label": "Light court (open above baggage-room roof, skylights below)" },
-    { "x": 19.0, "y": 18.0, "wM": 1.2, "dM": 1.2, "z0M": 0, "topM": 11.3, "label": "Vent shaft (V.S., west)" },
-    { "x": 52.8, "y": 18.0, "wM": 1.2, "dM": 1.2, "z0M": 0, "topM": 11.3, "label": "Vent shaft (V.S., east)" }
-  ],
-  "roof": { "kind": "flat", "heightM": 0.9 },
-  "source": "HABS NY-6086-E (LOC id ny1602), Ellis Island Baggage & Dormitory Building: sheets 2-4 (1st/2nd/3rd floor plans), sheet 5 (connecting corridors), sheet 8 (sections A-A/B-B), sheet 10 (enclosed metal exterior staircase); Library of Congress, public domain. Front 235'-2 3/4\", west flank 196'-3 3/4\", original block 112'-2\" deep + 1913-14 two-story north extension 84'-1 3/4\"; story heights 12'-3 7/8\"/11'-0 1/4\"/10'-6 1/8\", drill room 17'-5 5/8\" to joists."
+ "name": "Ellis Island \u2014 Baggage & Dormitory Building (HABS NY-6086-E)",
+ "matchAddress": "CONTAGIOUS DISEASE HOSPITAL",
+ "origin": {
+  "lat": 40.69856,
+  "lon": -74.04159
+ },
+ "bearingDeg": 46,
+ "footprint": {
+  "widthM": 71.7,
+  "depthM": 59.8
+ },
+ "levels": [
+  {
+   "name": "Basement",
+   "z0M": -1.8,
+   "heightM": 1.8
+  },
+  {
+   "name": "Floor 1 \u2014 Baggage Room / Railroad Lobby (USCG Drill Room ext.)",
+   "z0M": 0,
+   "heightM": 4.2
+  },
+  {
+   "name": "Floor 2 \u2014 Family Dormitories / Detention (Enclosed Recreation Porch ext.)",
+   "z0M": 4.2,
+   "heightM": 3.7
+  },
+  {
+   "name": "Floor 3 \u2014 Dormitory Wards 1-4 (1913-14 addition)",
+   "z0M": 7.9,
+   "heightM": 3.4
+  }
+ ],
+ "walls": [
+  {
+   "x0": 0,
+   "y0": 0,
+   "x1": 71.7,
+   "y1": 0,
+   "z0M": 0,
+   "heightM": 12.2,
+   "thickM": 0.75
+  },
+  {
+   "x0": 0,
+   "y0": 0,
+   "x1": 0,
+   "y1": 34.2,
+   "z0M": 0,
+   "heightM": 12.2,
+   "thickM": 0.75
+  },
+  {
+   "x0": 0,
+   "y0": 34.2,
+   "x1": 0,
+   "y1": 59.8,
+   "z0M": 0,
+   "heightM": 10.9,
+   "thickM": 0.6
+  },
+  {
+   "x0": 0,
+   "y0": 59.8,
+   "x1": 71.7,
+   "y1": 59.8,
+   "z0M": 0,
+   "heightM": 10.9,
+   "thickM": 0.6
+  },
+  {
+   "x0": 71.7,
+   "y0": 59.8,
+   "x1": 71.7,
+   "y1": 34.2,
+   "z0M": 0,
+   "heightM": 10.9,
+   "thickM": 0.6
+  },
+  {
+   "x0": 71.7,
+   "y0": 34.2,
+   "x1": 71.7,
+   "y1": 0,
+   "z0M": 0,
+   "heightM": 12.2,
+   "thickM": 0.75
+  },
+  {
+   "x0": 0,
+   "y0": 34.2,
+   "x1": 71.7,
+   "y1": 34.2,
+   "z0M": 0,
+   "heightM": 12.2,
+   "thickM": 0.5
+  },
+  {
+   "x0": 20.6,
+   "y0": 20.4,
+   "x1": 51.3,
+   "y1": 20.4,
+   "z0M": 4.2,
+   "heightM": 7.1,
+   "thickM": 0.4
+  },
+  {
+   "x0": 20.6,
+   "y0": 29.6,
+   "x1": 51.3,
+   "y1": 29.6,
+   "z0M": 4.2,
+   "heightM": 7.1,
+   "thickM": 0.4
+  },
+  {
+   "x0": 20.6,
+   "y0": 20.4,
+   "x1": 20.6,
+   "y1": 29.6,
+   "z0M": 4.2,
+   "heightM": 7.1,
+   "thickM": 0.4
+  },
+  {
+   "x0": 51.3,
+   "y0": 20.4,
+   "x1": 51.3,
+   "y1": 29.6,
+   "z0M": 4.2,
+   "heightM": 7.1,
+   "thickM": 0.4
+  },
+  {
+   "x0": 18.0,
+   "y0": 0,
+   "x1": 18.0,
+   "y1": 34.2,
+   "z0M": 0,
+   "heightM": 11.3,
+   "thickM": 0.35
+  },
+  {
+   "x0": 53.7,
+   "y0": 0,
+   "x1": 53.7,
+   "y1": 34.2,
+   "z0M": 0,
+   "heightM": 11.3,
+   "thickM": 0.35
+  },
+  {
+   "x0": 18.0,
+   "y0": 16.2,
+   "x1": 53.7,
+   "y1": 16.2,
+   "z0M": 4.2,
+   "heightM": 7.1,
+   "thickM": 0.3
+  },
+  {
+   "x0": 0,
+   "y0": 0,
+   "x1": 71.7,
+   "y1": 0,
+   "z0M": -1.8,
+   "heightM": 1.8,
+   "thickM": 0.9
+  },
+  {
+   "x0": 0,
+   "y0": 0,
+   "x1": 0,
+   "y1": 59.8,
+   "z0M": -1.8,
+   "heightM": 1.8,
+   "thickM": 0.9
+  },
+  {
+   "x0": 0,
+   "y0": 59.8,
+   "x1": 71.7,
+   "y1": 59.8,
+   "z0M": -1.8,
+   "heightM": 1.8,
+   "thickM": 0.9
+  },
+  {
+   "x0": 71.7,
+   "y0": 59.8,
+   "x1": 71.7,
+   "y1": 0,
+   "z0M": -1.8,
+   "heightM": 1.8,
+   "thickM": 0.9
+  }
+ ],
+ "windows": [
+  {
+   "wall": 0,
+   "offsetM": 6.0,
+   "sillM": 1.1,
+   "wM": 1.55,
+   "hM": 3.0,
+   "count": 13,
+   "pitchM": 4.7,
+   "levels": [
+    1
+   ]
+  },
+  {
+   "wall": 0,
+   "offsetM": 2.8,
+   "sillM": 1.35,
+   "wM": 1.5,
+   "hM": 1.95,
+   "count": 16,
+   "pitchM": 4.35,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 0,
+   "offsetM": 2.8,
+   "sillM": 1.3,
+   "wM": 1.5,
+   "hM": 1.7,
+   "count": 16,
+   "pitchM": 4.35,
+   "levels": [
+    3
+   ]
+  },
+  {
+   "wall": 1,
+   "offsetM": 2.8,
+   "sillM": 1.1,
+   "wM": 1.55,
+   "hM": 3.0,
+   "count": 6,
+   "pitchM": 5.0,
+   "levels": [
+    1
+   ]
+  },
+  {
+   "wall": 1,
+   "offsetM": 2.4,
+   "sillM": 1.35,
+   "wM": 1.5,
+   "hM": 1.95,
+   "count": 7,
+   "pitchM": 4.6,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 1,
+   "offsetM": 2.4,
+   "sillM": 1.3,
+   "wM": 1.5,
+   "hM": 1.7,
+   "count": 7,
+   "pitchM": 4.6,
+   "levels": [
+    3
+   ]
+  },
+  {
+   "wall": 5,
+   "offsetM": 2.8,
+   "sillM": 1.1,
+   "wM": 1.55,
+   "hM": 3.0,
+   "count": 6,
+   "pitchM": 5.0,
+   "levels": [
+    1
+   ]
+  },
+  {
+   "wall": 5,
+   "offsetM": 2.4,
+   "sillM": 1.35,
+   "wM": 1.5,
+   "hM": 1.95,
+   "count": 7,
+   "pitchM": 4.6,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 5,
+   "offsetM": 2.4,
+   "sillM": 1.3,
+   "wM": 1.5,
+   "hM": 1.7,
+   "count": 7,
+   "pitchM": 4.6,
+   "levels": [
+    3
+   ]
+  },
+  {
+   "wall": 2,
+   "offsetM": 2.2,
+   "sillM": 0.6,
+   "wM": 2.6,
+   "hM": 3.6,
+   "count": 4,
+   "pitchM": 5.6,
+   "levels": [
+    1
+   ]
+  },
+  {
+   "wall": 2,
+   "offsetM": 1.8,
+   "sillM": 0.9,
+   "wM": 3.0,
+   "hM": 2.4,
+   "count": 5,
+   "pitchM": 4.7,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 3,
+   "offsetM": 3.2,
+   "sillM": 0.6,
+   "wM": 2.6,
+   "hM": 3.6,
+   "count": 12,
+   "pitchM": 5.6,
+   "levels": [
+    1
+   ]
+  },
+  {
+   "wall": 3,
+   "offsetM": 2.5,
+   "sillM": 0.9,
+   "wM": 3.0,
+   "hM": 2.4,
+   "count": 15,
+   "pitchM": 4.5,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 4,
+   "offsetM": 2.2,
+   "sillM": 0.6,
+   "wM": 2.6,
+   "hM": 3.6,
+   "count": 4,
+   "pitchM": 5.6,
+   "levels": [
+    1
+   ]
+  },
+  {
+   "wall": 4,
+   "offsetM": 1.8,
+   "sillM": 0.9,
+   "wM": 3.0,
+   "hM": 2.4,
+   "count": 5,
+   "pitchM": 4.7,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 7,
+   "offsetM": 0.9,
+   "sillM": 0.7,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 10,
+   "pitchM": 3.0,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 7,
+   "offsetM": 0.9,
+   "sillM": 1.25,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 10,
+   "pitchM": 3.0,
+   "levels": [
+    3
+   ]
+  },
+  {
+   "wall": 8,
+   "offsetM": 0.9,
+   "sillM": 0.7,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 10,
+   "pitchM": 3.0,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 8,
+   "offsetM": 0.9,
+   "sillM": 1.25,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 10,
+   "pitchM": 3.0,
+   "levels": [
+    3
+   ]
+  },
+  {
+   "wall": 9,
+   "offsetM": 0.85,
+   "sillM": 0.7,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 3,
+   "pitchM": 2.9,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 9,
+   "offsetM": 0.85,
+   "sillM": 1.25,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 3,
+   "pitchM": 2.9,
+   "levels": [
+    3
+   ]
+  },
+  {
+   "wall": 10,
+   "offsetM": 0.85,
+   "sillM": 0.7,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 3,
+   "pitchM": 2.9,
+   "levels": [
+    2
+   ]
+  },
+  {
+   "wall": 10,
+   "offsetM": 0.85,
+   "sillM": 1.25,
+   "wM": 1.2,
+   "hM": 1.75,
+   "count": 3,
+   "pitchM": 2.9,
+   "levels": [
+    3
+   ]
+  }
+ ],
+ "doors": [
+  {
+   "wall": 0,
+   "offsetM": 2.3,
+   "wM": 2.4,
+   "hM": 3.8,
+   "label": "SW arched entry \u2014 Railroad West Lobby"
+  },
+  {
+   "wall": 0,
+   "offsetM": 66.9,
+   "wM": 2.4,
+   "hM": 3.8,
+   "label": "SE arched entry \u2014 Railroad West Lobby"
+  },
+  {
+   "wall": 0,
+   "offsetM": 17.4,
+   "wM": 2.2,
+   "hM": 3.4,
+   "label": "Connecting-corridor door to Main Building (HABS sheet 5)"
+  },
+  {
+   "wall": 2,
+   "offsetM": 16.4,
+   "wM": 2.4,
+   "hM": 3.6,
+   "label": "West drill-room service door"
+  },
+  {
+   "wall": 3,
+   "offsetM": 34.0,
+   "wM": 2.6,
+   "hM": 4.0,
+   "label": "North baggage-extension doors"
+  },
+  {
+   "wall": 5,
+   "offsetM": 5.0,
+   "wM": 2.0,
+   "hM": 3.2,
+   "label": "East service entry (USCG galley)"
+  }
+ ],
+ "columns": [
+  {
+   "x": 10.5,
+   "y": 8.6,
+   "rM": 0.23,
+   "z0M": 0,
+   "heightM": 4.2,
+   "count": 8,
+   "dx": 7.65,
+   "dy": 0
+  },
+  {
+   "x": 10.5,
+   "y": 16.2,
+   "rM": 0.23,
+   "z0M": 0,
+   "heightM": 4.2,
+   "count": 8,
+   "dx": 7.65,
+   "dy": 0
+  },
+  {
+   "x": 10.5,
+   "y": 23.8,
+   "rM": 0.23,
+   "z0M": 0,
+   "heightM": 4.2,
+   "count": 8,
+   "dx": 7.65,
+   "dy": 0
+  },
+  {
+   "x": 10.5,
+   "y": 31.4,
+   "rM": 0.23,
+   "z0M": 0,
+   "heightM": 4.2,
+   "count": 8,
+   "dx": 7.65,
+   "dy": 0
+  },
+  {
+   "x": 10.5,
+   "y": 42.0,
+   "rM": 0.25,
+   "z0M": 0,
+   "heightM": 5.7,
+   "count": 8,
+   "dx": 7.65,
+   "dy": 0
+  },
+  {
+   "x": 10.5,
+   "y": 49.6,
+   "rM": 0.25,
+   "z0M": 0,
+   "heightM": 5.7,
+   "count": 8,
+   "dx": 7.65,
+   "dy": 0
+  }
+ ],
+ "stairs": [
+  {
+   "kind": "straight",
+   "x": 22.6,
+   "y": 41.0,
+   "wM": 1.4,
+   "z0M": 0,
+   "topM": 10.3,
+   "label": "Stair hall (west, drill-room extension)"
+  },
+  {
+   "kind": "straight",
+   "x": 16.2,
+   "y": 6.8,
+   "wM": 1.3,
+   "z0M": 0,
+   "topM": 11.3,
+   "label": "SW stair (dormitory access)"
+  },
+  {
+   "kind": "straight",
+   "x": 53.2,
+   "y": 17.4,
+   "wM": 1.3,
+   "z0M": 0,
+   "topM": 11.3,
+   "label": "East stair (dormitory access)"
+  },
+  {
+   "kind": "straight",
+   "x": 66.5,
+   "y": 55.0,
+   "wM": 1.2,
+   "z0M": 0,
+   "topM": 5.7,
+   "label": "NE stair (USCG armory / extension)"
+  },
+  {
+   "kind": "spiral",
+   "x": 55.6,
+   "y": 18.3,
+   "rM": 1.1,
+   "z0M": 0,
+   "topM": 7.9,
+   "label": "Iron service stair (east)"
+  },
+  {
+   "kind": "straight",
+   "x": 14.6,
+   "y": 0.8,
+   "wM": 1.5,
+   "z0M": 0,
+   "topM": 4.2,
+   "label": "Enclosed metal exterior staircase to Main Building (HABS sheet 10)"
+  }
+ ],
+ "fireEscapes": [
+  {
+   "wall": 0,
+   "offsetM": 13.2,
+   "wM": 2.4,
+   "z0M": 0,
+   "topM": 5.4
+  }
+ ],
+ "shafts": [
+  {
+   "x": 20.6,
+   "y": 20.4,
+   "wM": 30.7,
+   "dM": 9.2,
+   "z0M": 4.2,
+   "topM": 11.3,
+   "label": "Light court (open above baggage-room roof, skylights below)"
+  },
+  {
+   "x": 19.0,
+   "y": 18.0,
+   "wM": 1.2,
+   "dM": 1.2,
+   "z0M": 0,
+   "topM": 11.3,
+   "label": "Vent shaft (V.S., west)"
+  },
+  {
+   "x": 52.8,
+   "y": 18.0,
+   "wM": 1.2,
+   "dM": 1.2,
+   "z0M": 0,
+   "topM": 11.3,
+   "label": "Vent shaft (V.S., east)"
+  }
+ ],
+ "roof": {
+  "kind": "flat",
+  "heightM": 0.9
+ },
+ "source": "HABS NY-6086-E (LOC id ny1602), Ellis Island Baggage & Dormitory Building: sheets 2-4 (1st/2nd/3rd floor plans), sheet 5 (connecting corridors), sheet 8 (sections A-A/B-B), sheet 10 (enclosed metal exterior staircase); Library of Congress, public domain. Front 235'-2 3/4\", west flank 196'-3 3/4\", original block 112'-2\" deep + 1913-14 two-story north extension 84'-1 3/4\"; story heights 12'-3 7/8\"/11'-0 1/4\"/10'-6 1/8\", drill room 17'-5 5/8\" to joists."
 }

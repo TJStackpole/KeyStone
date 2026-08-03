@@ -353,6 +353,7 @@ export class TwinLayer {
    * a straight-down camera reads rooms. Out-of-range n falls back to full 3D.
    */
   setPlanFloor(floorNumber: number | null): void {
+    if (this.planFloor === floorNumber) return // syncs fire per camera apply — never rebuild for a no-op
     this.planFloor = floorNumber
     if (this.def) this.rebuild()
   }

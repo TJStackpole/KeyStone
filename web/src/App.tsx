@@ -47,6 +47,7 @@ import { ResponsePacket } from './components/ResponsePacket'
 import { CommandBoardPage } from './components/CommandBoardPage'
 import { RidingListPage } from './components/RidingListPage'
 import { DashboardTabs } from './components/DashboardTabs'
+import { CommandStrip } from './components/CommandStrip'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -113,7 +114,7 @@ function BootVeil({ msg }: { msg: string }) {
 export default function App() {
   const globeRef = useRef<HTMLDivElement>(null)
   const [bootMsg, setBootMsg] = useState('Initializing 3D scene')
-  const { gloveMode } = useAppSlice((s) => ({ gloveMode: s.gloveMode }))
+  const { gloveMode, replayActive } = useAppSlice((s) => ({ gloveMode: s.gloveMode, replayActive: s.replay.active }))
 
   useEffect(() => {
     let disposed = false
@@ -190,6 +191,7 @@ export default function App() {
       <CommandBoardPage />
       <RidingListPage />
       <DashboardTabs />
+      {replayActive && <CommandStrip />}
       <ResponsePacket />
       <MaydayAlert />
       <Gate cap="aar.drill-debrief">

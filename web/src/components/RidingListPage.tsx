@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { setDashboardPage } from '../lib/layouts'
 import { setAppState, useAppSlice } from '../state/store'
+import { crewCompositionAllowed } from '../profiles/policy'
+import { useProfile } from '../profiles/manifest'
 import { crewOf } from '../types'
 import type { Unit } from '../types'
 import './RidingListPage.css'
@@ -78,7 +80,7 @@ function stampParAll(callsigns: string[]): void {
   })
 }
 
-function ApparatusCard({ card, par, now }: { card: Card; par: number | undefined; now: number }) {
+function ApparatusCard({ card, par, now, membersAllowed }: { card: Card; par: number | undefined; now: number; membersAllowed: boolean }) {
   // Minutes since last PAR — clamped so a stamp newer than the 10 s tick
   // never reads negative.
   const age = par === undefined ? null : Math.max(0, Math.floor((now - par) / 60_000))
@@ -90,7 +92,9 @@ function ApparatusCard({ card, par, now }: { card: Card; par: number | undefined
         <span className="rp-callsign">{card.callsign}</span>
         {card.status !== '' && <span className="rp-status">{card.status.toUpperCase()}</span>}
       </header>
-      {card.members.length === 0 ? (
+      {!membersAllowed ? (
+        <div className="rp-nodata">MEMBER DETAIL RESTRICTED BY VISIBILITY POLICY</div>
+      ) : card.members.length === 0 ? (
         <div className="rp-nodata">NO MEMBER DATA — riding list per MDT</div>
       ) : (
         <ul className="rp-members">
@@ -130,12 +134,16 @@ function ApparatusCard({ card, par, now }: { card: Card; par: number | undefined
 }
 
 export function RidingListPage() {
-  const { page, incident, units, parChecks } = useAppSlice((s) => ({
+  const { page, incident, units, parChecks, visibilityPolicy } = useAppSlice((s) => ({ visibilityPolicy: s.visibilityPolicy,
     page: s.dashboardPage,
     incident: s.incident,
     units: s.units,
     parChecks: s.parChecks,
   }))
+  const profileRl = useProfile()
+  // Same invariant as the roster: member-level detail renders only when the
+  // cross-agency policy allows crew composition for this workspace.
+  const membersAllowed = crewCompositionAllowed(profileRl, visibilityPolicy)
 
   // Self-ticking clock so "N MIN AGO" and the stale/overdue tones advance
   // without any store traffic. Only runs while this page is showing.
@@ -188,7 +196,7 @@ export function RidingListPage() {
       ) : (
         <div className="rp-grid">
           {cards.map((c) => (
-            <ApparatusCard key={c.callsign} card={c} par={parChecks[c.callsign]} now={now} />
+            <ApparatusCard key={c.callsign} card={c} par={parChecks[c.callsign]} now={now} membersAllowed={membersAllowed} />
           ))}
         </div>
       )}

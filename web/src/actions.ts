@@ -89,6 +89,11 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // running replay of the OLD incident must end too, or its engine keeps
   // painting historical tracks over the new board.
   if (getAppState().replay.active) replayEngine.stop()
+  try {
+    localStorage.removeItem('ks-board')
+  } catch {
+    // storage blocked — in-memory reset above still applies
+  }
   resetIsolate()
   hideInspectedModel()
   lastFootprints = null
@@ -674,7 +679,7 @@ function applyIsolateAppearance(): void {
     const { fetchTwinForAddress } = await import('./cesium/twin')
     const def = await fetchTwinForAddress(inc!.address)
     const now = getAppState()
-    if (!def || !now.isolateMode || now.isolateView !== 'model' || now.incident?.id !== inc!.id) return
+    if (!def || !now.isolateMode || now.isolateView !== 'model' || now.isolateScale !== 1 || now.incident?.id !== inc!.id) return
     await twin.load(def, now.isolateFloors?.z0 ?? 0)
     twin.setVisible(true)
     const st = getAppState()
@@ -862,6 +867,8 @@ export async function restoreIncident(): Promise<void> {
 export function setProfile(next: 'fdny' | 'nycem'): void {
   // FDNY loses the menu items for coordination POIs — persisted ON toggles
   // must not keep painting layers the workspace can no longer control.
+  // Dashboard pages are FDNY chrome — a profile switch always lands on MAP.
+  setAppState({ dashboardPage: 0 })
   if (next === 'fdny') {
     setAppState((s) => ({ layerToggles: { ...s.layerToggles, poiPrecincts: false, poiNycem: false } }))
     for (const kind of ['poiPrecincts', 'poiNycem'] as const) void getPoiLayer()?.setEnabled(kind, false).catch(() => {})
@@ -1512,6 +1519,10 @@ export function clearLocalIncident(): void {
     incident: null,
     cadIncident: null,
     responsePacketOpen: false,
+    // The accountability surfaces die with the incident — a stale PAR stamp
+    // or last week's SEARCH assignment presented as current is a lie.
+    parChecks: {},
+    boardAssignments: {},
     shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,

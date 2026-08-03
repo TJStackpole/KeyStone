@@ -30,15 +30,16 @@
    "kind": "timeline",
    "event": "sim.dispatched",
    "payload": {
-    "fireFloor": 6,
-    "floors": 6,
+    "fireFloor": 4,
+    "floors": 4,
     "callsigns": [
      "E-6",
      "E-4",
      "L-15",
      "L-10",
      "BC-1"
-    ]
+    ],
+    "note": "Above-ground storeys per HABS NY-470: first, second, third, attic (fire floor). Sub-basement + basement tracked on the twin, not the stepper."
    }
   },
   {

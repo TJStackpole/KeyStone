@@ -23,7 +23,10 @@ const EDGE_CLASS: Record<string, string> = {
 }
 
 function isApparatus(u: Unit): boolean {
-  return u.category !== 'ff' && u.category !== 'officer' && u.category !== 'drone'
+  // Slash callsigns are crew MEMBERS (E-6/1); medic is a personnel category.
+  if (u.callsign.includes('/')) return false
+  if (u.category === 'ff' || u.category === 'officer' || u.category === 'drone' || u.category === 'medic') return false
+  return true
 }
 
 function callsignKey(cs: string): string {

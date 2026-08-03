@@ -140,7 +140,7 @@ function EditableAddress({ incident }: { incident: Incident }) {
 
 export function IncidentCard() {
   const mvIncidentcard = useMovable('incident-card')
-  const { incident } = useAppSlice((s) => ({ incident: s.incident }))
+  const { incident, replayActive } = useAppSlice((s) => ({ replayActive: s.replay.active, incident: s.incident }))
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
@@ -183,9 +183,9 @@ export function IncidentCard() {
         )}
         <span>
           STOOD UP <b>{hhmmss}</b>
-        <CommandStrip />
         </span>
       </div>
+      {!replayActive && <CommandStrip />}
       <div className="seg" role="radiogroup" aria-label="Incident type">
         {INCIDENT_TYPES.map((t) => (
           <button
