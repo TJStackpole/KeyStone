@@ -128,6 +128,8 @@ export interface AppState {
   uiNotice: { text: string; tone: 'amber' | 'red' } | null
   /** Drag offsets per movable panel id (transform-only; {} = default layout). */
   panelOffsets: import('../lib/movable').PanelOffsets
+  /** Panels collapsed to their smallest (header-only) state, persisted. */
+  panelMinimized: Record<string, boolean>
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -141,6 +143,9 @@ export interface AppState {
   feedHealth: Record<string, import('../types').FeedHealthWire>
   feedData: Record<string, import('../types').FeedDataWire>
   feedPanelOpen: boolean
+  /** Shape-tool undo: stack depth + top entry's label (button tooltip). */
+  undoDepth: number
+  undoLabel: string | null
   weatherAlerts: NwsAlert[]
   weatherObs: WeatherObsNycem | null
   triggerSuggestions: TriggerSuggestion[]
@@ -313,6 +318,14 @@ const initial: AppState = {
       return {}
     }
   })(),
+  panelMinimized: (() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('ks-panel-min') ?? '{}') as Record<string, boolean>
+      return Object.fromEntries(Object.entries(parsed).filter(([, v]) => v === true))
+    } catch {
+      return {}
+    }
+  })(),
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],
@@ -323,6 +336,8 @@ const initial: AppState = {
   feedHealth: {},
   feedData: {},
   feedPanelOpen: false,
+  undoDepth: 0,
+  undoLabel: null,
   weatherAlerts: [],
   weatherObs: null,
   triggerSuggestions: [],

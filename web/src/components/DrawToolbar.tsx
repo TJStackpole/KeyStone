@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMovable } from '../lib/movable'
-import { clearAllShapes, deleteSelectedShape, rotateSelectedApparatus, setDrawTool } from '../actions'
+import { clearAllShapes, deleteSelectedShape, rotateSelectedApparatus, setDrawTool, undoShapeAction } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { setAppState, useAppSlice } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
@@ -54,7 +54,18 @@ function StagingPicker() {
 
 export function DrawToolbar() {
   const mvDrawtoolbar = useMovable('draw-toolbar')
-  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes }))
+  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes, undoDepth, undoLabel } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes, undoDepth: s.undoDepth, undoLabel: s.undoLabel }))
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return
+      const t = e.target as HTMLElement
+      if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return
+      e.preventDefault()
+      void undoShapeAction()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   // CLR ALL is destructive — two presses within 3s, like the AAR discard.
   const [clearArmed, setClearArmed] = useState(false)
   useEffect(() => {
@@ -167,6 +178,15 @@ export function DrawToolbar() {
           title="Delete selected shape (Del)"
         >
           ✕ DEL
+        </button>
+        <button
+          className="tool-btn"
+          style={{ ['--tool-color' as string]: '#22d3ee' }}
+          disabled={undoDepth === 0}
+          onClick={() => void undoShapeAction()}
+          title={undoDepth === 0 ? 'Nothing to undo yet' : `Undo ${undoLabel} — ${undoDepth} step${undoDepth === 1 ? '' : 's'} back available (⌘Z)`}
+        >
+          ↩ UNDO
         </button>
         <button
           className={`tool-btn danger${clearArmed ? ' armed' : ''}`}

@@ -472,7 +472,7 @@ function PanelsMenu({
       <button
         className={`chip chip-btn${active ? ' active' : ''}`}
         onClick={() => setOpen((o) => !o)}
-        title="Utility panels — SITREP, video feeds, biometrics, floor accountability"
+        title="Utility panels — SITREP, video feeds, biometrics, floor accountability. Tip: drag any box to move it, double-click its background to minimize it"
       >
         <span className="dot" /> {active ? `PANELS · ${active.label}` : 'PANELS'} {open ? '▴' : '▾'}
         {layoutMoved && <span className="wc-chip-badge" title="Boxes have been moved — RESET LAYOUT inside">·</span>}

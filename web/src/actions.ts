@@ -65,6 +65,7 @@ function newIncidentId(): string {
  * footprints with the target building highlighted, persistence to the server.
  */
 export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structural Fire'): Promise<void> {
+  clearShapeUndo()
   const incident: Incident = {
     id: newIncidentId(),
     address: hit.label,
@@ -116,7 +117,7 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // otherwise the new building's schematic/floors panels inherit a stale fire
   // floor. stagingPick likewise: a reserved callsign from the old response.
   setAppState({
-    shapes: {},
+    shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,
     targetHeightM: null,
@@ -1334,6 +1335,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
  * local treatment as an operator search: fly-in, footprints, intel, focus.
  */
 export function adoptIncident(incident: Incident): void {
+  clearShapeUndo()
   if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
   hideInspectedModel()
@@ -1341,7 +1343,7 @@ export function adoptIncident(incident: Incident): void {
   getTrafficLayer()?.clear() // stale polylines from the previous location
   setAppState({
     incident,
-    shapes: {},
+    shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,
     targetHeightM: null,
@@ -1455,6 +1457,7 @@ export async function endIncident(): Promise<void> {
 
 /** Local teardown shared by endIncident and the ws incident:null broadcast. */
 export function clearLocalIncident(): void {
+  clearShapeUndo()
   // A running replay owns the globe and its EXIT control lives on the
   // incident UI — ending the incident must end the replay too.
   if (getAppState().replay.active) replayEngine.stop()
@@ -1462,7 +1465,7 @@ export function clearLocalIncident(): void {
   lastFootprints = null
   setAppState({
     incident: null,
-    shapes: {},
+    shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,
     targetHeightM: null,
@@ -2179,8 +2182,36 @@ export function toggleUnitCategory(category: UnitCategory): void {
 // ICS shapes (Phase 5)
 // ---------------------------------------------------------------------------
 
-/** Persist + broadcast + CoT-publish one shape (create or vertex edit). */
-export async function saveShape(shape: IcsShape): Promise<void> {
+// Undo stack for operator shape actions (place / edit / delete / clear-all).
+// Entries reverse through the SILENT internals so an undo never records a
+// new undo. Multi-user semantics stay last-write-wins, same as every other
+// shape write. Cleared whenever the incident's shape set is torn down.
+interface ShapeUndoEntry {
+  label: string
+  apply: () => Promise<void>
+}
+const undoStack: ShapeUndoEntry[] = []
+const UNDO_MAX = 50
+
+function pushShapeUndo(entry: ShapeUndoEntry): void {
+  undoStack.push(entry)
+  if (undoStack.length > UNDO_MAX) undoStack.shift()
+  setAppState({ undoDepth: undoStack.length, undoLabel: entry.label })
+}
+
+export function clearShapeUndo(): void {
+  undoStack.length = 0
+  setAppState({ undoDepth: 0, undoLabel: null })
+}
+
+export async function undoShapeAction(): Promise<void> {
+  const entry = undoStack.pop()
+  setAppState({ undoDepth: undoStack.length, undoLabel: undoStack[undoStack.length - 1]?.label ?? null })
+  if (entry) await entry.apply()
+}
+
+/** Silent write: optimistic apply + PUT, no undo recording. */
+async function persistShape(shape: IcsShape): Promise<void> {
   // Optimistic local apply; the WS echo is idempotent.
   setAppState((s) => ({ shapes: { ...s.shapes, [shape.id]: shape } }))
   getShapeLayer()?.upsert(shape)
@@ -2197,7 +2228,8 @@ export async function saveShape(shape: IcsShape): Promise<void> {
   }
 }
 
-export async function deleteShape(id: string): Promise<void> {
+/** Silent delete: optimistic apply + DELETE, no undo recording. */
+async function removeShapeSilent(id: string): Promise<void> {
   setAppState((s) => {
     const shapes = { ...s.shapes }
     delete shapes[id]
@@ -2211,6 +2243,23 @@ export async function deleteShape(id: string): Promise<void> {
   }
 }
 
+/** Persist + broadcast + CoT-publish one shape (create or vertex edit). */
+export async function saveShape(shape: IcsShape): Promise<void> {
+  const prior = getAppState().shapes[shape.id]
+  pushShapeUndo(
+    prior
+      ? { label: `${prior.kind} edit`, apply: () => persistShape(prior) }
+      : { label: `${shape.kind} placement`, apply: () => removeShapeSilent(shape.id) },
+  )
+  await persistShape(shape)
+}
+
+export async function deleteShape(id: string): Promise<void> {
+  const prior = getAppState().shapes[id]
+  if (prior) pushShapeUndo({ label: `${prior.kind} delete`, apply: () => persistShape(prior) })
+  await removeShapeSilent(id)
+}
+
 /**
  * CLR ALL under the draw tools: wipe every placed shape — perimeter, posts,
  * staging pads, collapse zones, measurements — in one press (two-press
@@ -2218,12 +2267,18 @@ export async function deleteShape(id: string): Promise<void> {
  * so every other dashboard's board clears too.
  */
 export async function clearAllShapes(): Promise<void> {
-  const ids = Object.keys(getAppState().shapes)
-  if (!ids.length) return
+  const prior = Object.values(getAppState().shapes)
+  if (!prior.length) return
+  pushShapeUndo({
+    label: `clear all (${prior.length})`,
+    apply: async () => {
+      await Promise.allSettled(prior.map((s) => persistShape(s)))
+    },
+  })
   setAppState({ shapes: {}, selectedShapeId: null, drawTool: null })
   getShapeLayer()?.clear()
   const results = await Promise.allSettled(
-    ids.map((id) => fetch(`/api/shapes/${encodeURIComponent(id)}`, { method: 'DELETE' })),
+    prior.map((s) => fetch(`/api/shapes/${encodeURIComponent(s.id)}`, { method: 'DELETE' })),
   )
   const failed = results.filter((r) => r.status === 'rejected').length
   if (failed) notify(`CLEAR ALL: ${failed} shape${failed === 1 ? '' : 's'} failed to delete on the server`, 'red')

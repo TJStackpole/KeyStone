@@ -2687,3 +2687,25 @@ body.panel-dragging * { cursor: grabbing !important; }
   color: #fca5a5;
   animation: ks-pulse-hint 0.8s ease-in-out infinite;
 }
+
+/* Double-click minimize: any movable box collapses to its first row. */
+[data-movable][data-minimized] {
+  max-height: 32px !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+  cursor: pointer;
+}
+[data-movable][data-minimized] > *:not(:first-child) {
+  display: none !important;
+}
+[data-movable][data-minimized]::after {
+  content: '▾';
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  color: rgba(34, 211, 238, 0.75);
+  font-size: 11px;
+  pointer-events: none;
+}

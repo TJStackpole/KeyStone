@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { getAppState, setAppState, useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
@@ -15,6 +15,7 @@ import { getAppState, setAppState, useAppSlice } from '../state/store'
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = 'ks-panel-offsets'
+const MIN_KEY = 'ks-panel-min'
 
 export type PanelOffsets = Record<string, { x: number; y: number }>
 
@@ -47,14 +48,36 @@ export function setPanelOffset(id: string, off: { x: number; y: number }): void 
   })
 }
 
-/** The RESET LAYOUT button: every box returns to its default position. */
+function persistMin(min: Record<string, boolean>): void {
+  try {
+    localStorage.setItem(MIN_KEY, JSON.stringify(min))
+  } catch {
+    // storage full/blocked — minimize still works for this session
+  }
+}
+
+/** Double-click a panel's background: collapse to its smallest (header-only)
+ *  state. Double-click again restores. Persisted like drag offsets. */
+export function togglePanelMinimized(id: string): void {
+  setAppState((s) => {
+    const next = { ...s.panelMinimized }
+    if (next[id]) delete next[id]
+    else next[id] = true
+    persistMin(next)
+    return { panelMinimized: next }
+  })
+}
+
+/** The RESET LAYOUT button: every box returns to its default position and size. */
 export function resetPanelLayout(): void {
   persist({})
-  setAppState({ panelOffsets: {} })
+  persistMin({})
+  setAppState({ panelOffsets: {}, panelMinimized: {} })
 }
 
 export function anyPanelMoved(): boolean {
-  return Object.keys(getAppState().panelOffsets).length > 0
+  const s = getAppState()
+  return Object.keys(s.panelOffsets).length > 0 || Object.keys(s.panelMinimized).length > 0
 }
 
 /** Don't let a panel be dragged fully offscreen — keep a grabbable margin. */
@@ -68,10 +91,21 @@ const KEEP_VISIBLE_PX = 48
 export function useMovable(id: string): {
   style: CSSProperties
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onDoubleClick: (e: ReactMouseEvent<HTMLElement>) => void
+  title: string | undefined
   'data-movable': string
   'data-moved': string | undefined
+  'data-minimized': string | undefined
 } {
-  const { off } = useAppSlice((s) => ({ off: s.panelOffsets[id] }))
+  const { off, minimized } = useAppSlice((s) => ({ off: s.panelOffsets[id], minimized: !!s.panelMinimized[id] }))
+
+  const onDoubleClick = (e: ReactMouseEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement
+    // Interactive content keeps its normal behavior (matches drag exclusion).
+    if (!minimized && target.closest('button, input, select, textarea, a, iframe, [contenteditable], .no-drag')) return
+    e.preventDefault()
+    togglePanelMinimized(id)
+  }
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0) return
@@ -128,9 +162,12 @@ export function useMovable(id: string): {
   return {
     style: moved ? { translate: `${off.x}px ${off.y}px` } : {},
     onPointerDown,
+    onDoubleClick,
+    title: minimized ? 'Double-click to restore this panel' : undefined,
     'data-movable': id,
     // CSS hooks (e.g. the Watch Command GeoChat shift) exempt user-placed
     // panels — a base-position jump under a stored offset strands the box.
     'data-moved': moved ? 'true' : undefined,
+    'data-minimized': minimized ? 'true' : undefined,
   }
 }
