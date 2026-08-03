@@ -1,0 +1,648 @@
+{
+ "name": "FDNY Working Fire \u2014 100 Gold St (Box 0087)",
+ "drill": true,
+ "incident": {
+  "address": "100 GOLD STREET (DRILL)",
+  "lat": 40.710156,
+  "lon": -74.00324,
+  "bin": "1001289",
+  "bbl": "1000940025",
+  "type": "Structural Fire"
+ },
+ "chapters": [
+  {
+   "id": "ch1",
+   "t": 0,
+   "title": "First Alarm"
+  },
+  {
+   "id": "ch2",
+   "t": 300,
+   "title": "All Hands"
+  },
+  {
+   "id": "ch3",
+   "t": 640,
+   "title": "MAYDAY"
+  },
+  {
+   "id": "ch4",
+   "t": 880,
+   "title": "Knockdown + PAR"
+  }
+ ],
+ "events": [
+  {
+   "t": 2,
+   "kind": "timeline",
+   "event": "sim.dispatched",
+   "payload": {
+    "fireFloor": 4,
+    "floors": 10,
+    "callsigns": [
+     "E-6",
+     "E-7",
+     "E-10",
+     "L-1",
+     "L-10",
+     "BC-1"
+    ]
+   }
+  },
+  {
+   "t": 4,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "Manhattan",
+   "text": "Box 0087, 100 Gold Street. Phone alarm reports fire on the 4th floor of a 10-story class 1 commercial. E-6, E-7, E-10, L-1, L-10, BC-1 assigned."
+  },
+  {
+   "t": 8,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "BC-1",
+    "lat": 40.70985,
+    "lon": -74.0041,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 10,
+   "kind": "unit_move",
+   "callsign": "BC-1",
+   "path": [
+    [
+     -74.0041,
+     40.70985
+    ],
+    [
+     -74.00335,
+     40.71
+    ]
+   ],
+   "durationS": 70,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 12,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-6",
+    "lat": 40.7089,
+    "lon": -74.0052,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 14,
+   "kind": "unit_move",
+   "callsign": "E-6",
+   "path": [
+    [
+     -74.0052,
+     40.7089
+    ],
+    [
+     -74.0035,
+     40.7099
+    ]
+   ],
+   "durationS": 90,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 16,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-1",
+    "lat": 40.7112,
+    "lon": -74.0061,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 18,
+   "kind": "unit_move",
+   "callsign": "L-1",
+   "path": [
+    [
+     -74.0061,
+     40.7112
+    ],
+    [
+     -74.0031,
+     40.7104
+    ]
+   ],
+   "durationS": 100,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 20,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-7",
+    "lat": 40.7076,
+    "lon": -74.0018,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 22,
+   "kind": "unit_move",
+   "callsign": "E-7",
+   "path": [
+    [
+     -74.0018,
+     40.7076
+    ],
+    [
+     -74.0029,
+     40.70975
+    ]
+   ],
+   "durationS": 115,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 24,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-10",
+    "lat": 40.7126,
+    "lon": -74.0012,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 26,
+   "kind": "unit_move",
+   "callsign": "E-10",
+   "path": [
+    [
+     -74.0012,
+     40.7126
+    ],
+    [
+     -74.00355,
+     40.7105
+    ]
+   ],
+   "durationS": 130,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 28,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-10",
+    "lat": 40.7119,
+    "lon": -73.9993,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 30,
+   "kind": "unit_move",
+   "callsign": "L-10",
+   "path": [
+    [
+     -73.9993,
+     40.7119
+    ],
+    [
+     -74.003,
+     40.7106
+    ]
+   ],
+   "durationS": 140,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 95,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "E-6",
+   "text": "E-6 10-84. Heavy smoke showing, 4th floor, two windows, Gold Street side."
+  },
+  {
+   "t": 110,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Battalion 1 on scene, transmitting a 10-75 for Box 0087. E-6 stretch a line to 4, L-1 take the roof."
+  },
+  {
+   "t": 112,
+   "kind": "timeline",
+   "event": "alarm.1075",
+   "payload": {
+    "note": "10-75 transmitted \u2014 working fire, Box 0087"
+   }
+  },
+  {
+   "t": 118,
+   "kind": "status_change",
+   "callsign": "E-6",
+   "status": "Operating"
+  },
+  {
+   "t": 150,
+   "kind": "status_change",
+   "callsign": "L-1",
+   "status": "Operating"
+  },
+  {
+   "t": 160,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-6/1",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 4,
+    "role": "nozzle"
+   }
+  },
+  {
+   "t": 162,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-6/2",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 4,
+    "role": "backup"
+   }
+  },
+  {
+   "t": 164,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-1/1",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 4,
+    "role": "irons"
+   }
+  },
+  {
+   "t": 166,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-1/2",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 5,
+    "role": "can"
+   }
+  },
+  {
+   "t": 168,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-1/3",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 10,
+    "role": "roof"
+   }
+  },
+  {
+   "t": 175,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "L-1 Roof",
+   "text": "Roof is open, we have good ventilation over the bulkhead."
+  },
+  {
+   "t": 185,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-H2O-1",
+    "kind": "post",
+    "post": "water",
+    "lat": 40.70995,
+    "lon": -74.00355,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 188,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "E-6 ECC",
+   "text": "Hydrant H107700, Gold and Frankfort, in service \u2014 good pressure."
+  },
+  {
+   "t": 205,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-HAZ-1",
+    "kind": "post",
+    "post": "hazard",
+    "lat": 40.71042,
+    "lon": -74.00265,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 208,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Be advised, wires down Frankfort side, Con Ed notified. Marked on the board."
+  },
+  {
+   "t": 240,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-FAST-1",
+    "kind": "post",
+    "post": "fast",
+    "lat": 40.70968,
+    "lon": -74.003,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 244,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "SQ-18 you are the FAST truck, stage at the front, Gold Street."
+  },
+  {
+   "t": 246,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "SQ-18",
+    "lat": 40.70968,
+    "lon": -74.003,
+    "status": "Staged"
+   }
+  },
+  {
+   "t": 262,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-EXP1",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.70975,
+    "lon": -74.0037,
+    "createdAt": "",
+    "label": "EXP 1"
+   }
+  },
+  {
+   "t": 264,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-EXP2",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.71,
+    "lon": -74.0027,
+    "createdAt": "",
+    "label": "EXP 2"
+   }
+  },
+  {
+   "t": 266,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-EXP3",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.71056,
+    "lon": -74.00278,
+    "createdAt": "",
+    "label": "EXP 3"
+   }
+  },
+  {
+   "t": 268,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-EXP4",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.7103,
+    "lon": -74.00378,
+    "createdAt": "",
+    "label": "EXP 4"
+   }
+  },
+  {
+   "t": 272,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Exposure 1 Gold Street, 2 Frankfort, 3 the rear yard, 4 Spruce. Checking extension into Exposure 2."
+  },
+  {
+   "t": 300,
+   "kind": "annotation",
+   "shape": {
+    "id": "DRILL-PERIM",
+    "kind": "zone",
+    "zone": "perimeter",
+    "positions": [
+     {
+      "lat": 40.7095,
+      "lon": -74.0042
+     },
+     {
+      "lat": 40.70955,
+      "lon": -74.0023
+     },
+     {
+      "lat": 40.7108,
+      "lon": -74.00225
+     },
+     {
+      "lat": 40.71085,
+      "lon": -74.0042
+     }
+    ],
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 330,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "E-6",
+   "text": "We have one line stretched and in operation on 4. Fire in the cockloft over the ceiling, we need a second line."
+  },
+  {
+   "t": 360,
+   "kind": "status_change",
+   "callsign": "E-7",
+   "status": "Operating"
+  },
+  {
+   "t": 362,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-7/1",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 4,
+    "role": "nozzle 2nd line"
+   }
+  },
+  {
+   "t": 400,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Manhattan, transmit the all-hands for Box 0087. Two lines in operation, primary searches in progress on 4 and 5."
+  },
+  {
+   "t": 430,
+   "kind": "alarm_level",
+   "level": "2nd"
+  },
+  {
+   "t": 434,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "Manhattan",
+   "text": "Second alarm assignment dispatched, Box 0087."
+  },
+  {
+   "t": 470,
+   "kind": "status_change",
+   "callsign": "L-1/2",
+   "floor": 6
+  },
+  {
+   "t": 480,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "L-1",
+   "text": "Primary search 4th floor negative. Moving to 5."
+  },
+  {
+   "t": 500,
+   "kind": "status_change",
+   "callsign": "E-6/1",
+   "floor": 5
+  },
+  {
+   "t": 520,
+   "kind": "status_change",
+   "callsign": "E-6/2",
+   "floor": 5
+  },
+  {
+   "t": 640,
+   "kind": "alert",
+   "alert": {
+    "kind": "mayday",
+    "callsign": "L-1/1",
+    "text": "MAYDAY MAYDAY MAYDAY \u2014 L-1 irons, disoriented, 5th floor, low air"
+   }
+  },
+  {
+   "t": 642,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "All units maintain radio silence, we have a mayday, 5th floor. SQ-18 deploy."
+  },
+  {
+   "t": 645,
+   "kind": "status_change",
+   "callsign": "SQ-18",
+   "status": "Operating",
+   "floor": 5
+  },
+  {
+   "t": 647,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "SQ-18/1",
+    "lat": 40.710156,
+    "lon": -74.00324,
+    "status": "Operating",
+    "floor": 5,
+    "role": "FAST search"
+   }
+  },
+  {
+   "t": 700,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "SQ-18",
+   "text": "We have him \u2014 L-1 irons located, stairwell B, 5th floor. Air shared, coming down."
+  },
+  {
+   "t": 730,
+   "kind": "alert",
+   "alert": {
+    "kind": "clear"
+   }
+  },
+  {
+   "t": 734,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Mayday cleared. All members accounted for. Resume normal traffic. PAR on the hour."
+  },
+  {
+   "t": 736,
+   "kind": "timeline",
+   "event": "mayday.resolved",
+   "payload": {
+    "callsign": "L-1/1",
+    "note": "Located stairwell B FL 5 by SQ-18 \u2014 air shared, ambulatory"
+   }
+  },
+  {
+   "t": 880,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "E-6",
+   "text": "Main body of fire knocked down on 4. Opening up to check the cockloft."
+  },
+  {
+   "t": 960,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Manhattan, Box 0087 is probably will hold. Fire under control at this time, K."
+  },
+  {
+   "t": 965,
+   "kind": "timeline",
+   "event": "fire.under-control",
+   "payload": {
+    "note": "Under control declared by Battalion 1"
+   }
+  },
+  {
+   "t": 1020,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Full PAR complete, all units accounted for. Beginning takeup, E-6 and L-1 remain for overhaul."
+  },
+  {
+   "t": 1030,
+   "kind": "timeline",
+   "event": "par.complete",
+   "payload": {
+    "note": "PAR complete \u2014 all members accounted for"
+   }
+  }
+ ]
+}
