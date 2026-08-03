@@ -449,8 +449,13 @@ function PanelsMenu({
   utilityTab: string | null
   toggleTab: (tab: PanelTabId) => void
 }) {
-  const { panelOffsets } = useAppSlice((s) => ({ panelOffsets: s.panelOffsets }))
+  const { panelOffsets, feedHealth, feedPanelOpen } = useAppSlice((s) => ({
+    panelOffsets: s.panelOffsets,
+    feedHealth: s.feedHealth,
+    feedPanelOpen: s.feedPanelOpen,
+  }))
   const layoutMoved = Object.keys(panelOffsets).length > 0
+  const feedTrouble = Object.values(feedHealth).some((f) => f.status === 'down' || f.status === 'stale')
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -483,6 +488,16 @@ function PanelsMenu({
             title="Every info box you dragged returns to its default position"
           >
             RESET LAYOUT
+          </button>
+          <button
+            className={`panel-item${feedPanelOpen ? ' on' : ''}`}
+            onClick={() => {
+              setOpen(false)
+              setAppState({ feedPanelOpen: !feedPanelOpen })
+            }}
+            title="Live-data feed health — every source's status, data age, and attribution"
+          >
+            LIVE FEEDS{feedTrouble ? ' ⚠' : ''}
           </button>
           <button
             className="panel-item"

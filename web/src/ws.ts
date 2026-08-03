@@ -22,6 +22,8 @@ import type {
   TranscriptLine,
   TriggerRule,
   TriggerSuggestion,
+  FeedDataWire,
+  FeedHealthWire,
   Unit,
   WeatherObsNycem,
 } from './types'
@@ -45,6 +47,15 @@ interface SnapshotMsg {
   weather?: { alerts: NwsAlert[]; obs: WeatherObsNycem | null; suggestions: TriggerSuggestion[] }
   rules?: TriggerRule[]
   visibilityPolicy?: Record<string, string>
+  feeds?: { health: FeedHealthWire[]; data: FeedDataWire[] }
+}
+interface FeedHealthMsg {
+  type: 'feed.health'
+  health: FeedHealthWire
+}
+interface FeedDataMsg {
+  type: 'feed.data'
+  data: FeedDataWire
 }
 interface PolicyMsg {
   type: 'policy'
@@ -170,6 +181,8 @@ type ServerMsg =
   | PlansMsg
   | RequestsMsg
   | WeatherMsg
+  | FeedHealthMsg
+  | FeedDataMsg
   | RulesMsg
 
 let started = false
@@ -281,6 +294,14 @@ function handle(msg: ServerMsg): void {
           ? { commsChannel: 'fdny' as const }
           : {}),
       }))
+      // Feed layer state rides every snapshot (live data is orthogonal to
+      // replay — the health board must stay honest even mid-playback).
+      if (msg.feeds) {
+        setAppState({
+          feedHealth: Object.fromEntries(msg.feeds.health.map((h) => [h.id, h])),
+          feedData: Object.fromEntries(msg.feeds.data.map((d) => [d.id, d])),
+        })
+      }
       // During replay, stop here: the globe/timeline belong to the replay
       // engine; resyncLive() rebuilds them from the server on exit.
       if (getAppState().replay.active) break
@@ -403,6 +424,16 @@ function handle(msg: ServerMsg): void {
     case 'requests':
       setAppState({ interagencyRequests: msg.requests })
       break
+    case 'feed.health': {
+      const h = msg.health
+      setAppState((s) => ({ feedHealth: { ...s.feedHealth, [h.id]: h } }))
+      break
+    }
+    case 'feed.data': {
+      const d = msg.data
+      setAppState((s) => ({ feedData: { ...s.feedData, [d.id]: d } }))
+      break
+    }
     case 'weather':
       setAppState({ weatherAlerts: msg.alerts, weatherObs: msg.obs, triggerSuggestions: msg.suggestions })
       break

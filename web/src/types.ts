@@ -430,3 +430,34 @@ export interface Unit {
   updatedAt: string
   staleAt: string
 }
+
+// ---- Prompt 13: feed ingestion layer wire types --------------------------
+
+export type FeedStatus = 'ok' | 'stale' | 'down' | 'unconfigured' | 'mock'
+
+export interface FeedHealthWire {
+  id: string
+  name: string
+  status: FeedStatus
+  lastSuccess: number | null
+  /** Age of the data currently served, ms — stale data ALWAYS shows this. */
+  ageMs: number | null
+  latencyMs: number | null
+  lastError: string | null
+  consecutiveFails: number
+  refreshIntervalMs: number
+  attribution: string
+  capabilityId: string
+  profiles: 'both' | string[]
+  unofficial: boolean
+  missingEnv: string[]
+  signupUrl: string | null
+}
+
+export interface FeedDataWire {
+  id: string
+  at: number
+  payload: unknown
+  mock: boolean
+  attribution: string
+}

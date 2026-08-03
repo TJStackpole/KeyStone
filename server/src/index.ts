@@ -39,7 +39,7 @@ import {
 } from './nycem.js'
 import { POLICY_SCHEMA, setVisibilityPolicy, visibilityPolicy } from './policy.js'
 import { WeatherWatch, type TriggerSuggestion } from './weather.js'
-import { allFeedHealth, clearAllFeedMocks, feedData, registerFeed, setFeedMock, startFeeds } from './feeds/registry.js'
+import { allFeedHealth, clearAllFeedMocks, feedData, pushableFeedData, registerFeed, setFeedMock, startFeeds } from './feeds/registry.js'
 import dotCameras from './feeds/adapters/dotCameras.js'
 import mtaSubway from './feeds/adapters/mtaSubway.js'
 import noaaWater from './feeds/adapters/noaaWater.js'
@@ -177,12 +177,7 @@ wss.on('connection', (socket) => {
       // Prompt 13 — live-data layer: health for every registered feed plus
       // the latest payload of each push-enabled feed (big pull-only lists
       // like the camera inventory are fetched over REST on demand).
-      feeds: {
-        health: allFeedHealth(),
-        data: allFeedHealth()
-          .map((h) => feedData(h.id))
-          .filter((d) => d !== null),
-      },
+      feeds: { health: allFeedHealth(), data: pushableFeedData() },
       // Rules ride the snapshot too — the client never GETs them, and the
       // only other writer is the PUT broadcast, so a fresh dashboard would
       // otherwise show an empty (dead) rules editor while the server is

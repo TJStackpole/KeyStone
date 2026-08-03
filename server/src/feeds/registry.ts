@@ -203,6 +203,18 @@ export function clearAllFeedMocks(): void {
   for (const id of entries.keys()) setFeedMock(id, null)
 }
 
+/** Snapshot slice for connecting dashboards: latest data of every
+ *  push-enabled feed. Pull-only feeds (big lists like the camera inventory)
+ *  stay off the ws — clients fetch them over REST on demand. */
+export function pushableFeedData(): FeedData[] {
+  const out: FeedData[] = []
+  for (const e of entries.values()) {
+    const served = e.mock ?? e.data
+    if (served && (e.adapter.push !== false || e.mock)) out.push(served)
+  }
+  return out
+}
+
 /** Test seam. */
 export function resetFeedsForTest(): void {
   for (const e of entries.values()) if (e.timer) clearTimeout(e.timer)

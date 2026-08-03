@@ -41,6 +41,7 @@ import { NoticeChip } from './components/NoticeChip'
 import { BattleViewBar } from './components/BattleViewBar'
 import { hasCapability, useCapability } from './profiles/manifest'
 import { applyOverlayLod } from './cesium/overlayLod'
+import { FeedHealthPanel } from './components/FeedHealthPanel'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -175,6 +176,7 @@ export default function App() {
       <GroundViewExit />
       <GroundHeightControl />
       <ScenarioBar />
+      <FeedHealthPanel />
       <MaydayAlert />
       <Gate cap="aar.drill-debrief">
         <AarPanel />

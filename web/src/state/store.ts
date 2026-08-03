@@ -136,6 +136,11 @@ export interface AppState {
   planActivations: PlanActivation[]
   interagencyRequests: InteragencyRequest[]
   requestThresholds: Record<RequestPriority, number>
+  /** Prompt 13 — feed layer: health per feed id + latest pushed payloads.
+   *  Big pull-only lists (camera inventory) are fetched over REST instead. */
+  feedHealth: Record<string, import('../types').FeedHealthWire>
+  feedData: Record<string, import('../types').FeedDataWire>
+  feedPanelOpen: boolean
   weatherAlerts: NwsAlert[]
   weatherObs: WeatherObsNycem | null
   triggerSuggestions: TriggerSuggestion[]
@@ -315,6 +320,9 @@ const initial: AppState = {
   planActivations: [],
   interagencyRequests: [],
   requestThresholds: { immediate: 120_000, urgent: 300_000, routine: 1_800_000 },
+  feedHealth: {},
+  feedData: {},
+  feedPanelOpen: false,
   weatherAlerts: [],
   weatherObs: null,
   triggerSuggestions: [],

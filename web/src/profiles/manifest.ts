@@ -55,6 +55,13 @@ export const CAPABILITIES: Record<string, Capability> = {
   'weather.wind-layer': { profiles: 'both' }, // NWS wind + advisory
   'overlays.map': { profiles: 'both' },
   'incidents.dispatch-feed': { profiles: 'both' }, // SIMULATED citywide feed dropdown
+  // ---- Prompt 13: live-data feeds (each mirrors its server adapter) ------
+  'feeds.health-panel': { profiles: 'both' },
+  'feeds.mta-subway': { profiles: 'both' },
+  'feeds.dot-cameras': { profiles: 'both' },
+  'feeds.noaa-water': { profiles: 'both' }, // nycem primary; fdny on coastal/flood types
+  'feeds.usgs-gages': { profiles: 'both' },
+  'feeds.openfema': { profiles: ['nycem'] },
   'comms.transcripts': { profiles: 'both', visibilityScope: 'all_agencies', sensitivity: 'tactical_audio' },
   'chat.tak': { profiles: 'both' },
   'video.panels': { profiles: 'both', sensitivity: 'tactical_audio' },
