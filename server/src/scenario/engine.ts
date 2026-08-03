@@ -73,6 +73,7 @@ export interface ScenarioEvent {
     | 'request'
     | 'request_transition'
     | 'nws_mock'
+    | 'feed_mock'
   unit?: SpawnDef
   callsign?: string
   path?: [number, number][]
@@ -108,6 +109,9 @@ export interface ScenarioEvent {
   state?: string
   by?: string
   reason?: string
+  /** Prompt 13: inject (payload) or clear (payload:null) a feed mock so
+   *  drills drive the live-data layers with zero external keys. */
+  feed?: { feedId: string; payload: unknown | null }
   nws?: {
     id: string
     event: string
@@ -160,6 +164,9 @@ export interface EngineDeps {
   openRequest?: (req: NonNullable<ScenarioEvent['request']>, incidentId: string | null) => string | null
   transitionRequest?: (id: string, state: string, by: string, reason?: string) => void
   injectNws?: (nws: NonNullable<ScenarioEvent['nws']>) => void
+  // Prompt 13 — feed layer hooks:
+  setFeedMock?: (feedId: string, payload: unknown | null) => void
+  clearFeedMocks?: () => void
 }
 
 const SCENARIO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../assets/scenarios')
@@ -413,6 +420,7 @@ export class ScenarioEngine extends EventEmitter {
     this.shapeIds.clear()
     this.deps.broadcast({ type: 'exposure', labels: [] })
     this.deps.broadcast({ type: 'alert', alert: { kind: 'clear' } })
+    if (!keepIncident) this.deps.clearFeedMocks?.()
     this.clock = 0
     this.cursor = 0
     this.playing = false
@@ -642,6 +650,10 @@ export class ScenarioEngine extends EventEmitter {
         if (rewind || replayed) break
         const realId = ev.refId ? this.requestIds.get(ev.refId) : undefined
         if (realId && ev.state) this.deps.transitionRequest?.(realId, ev.state, ev.by ?? 'scenario', ev.reason)
+        break
+      }
+      case 'feed_mock': {
+        if (ev.feed) this.deps.setFeedMock?.(ev.feed.feedId, ev.feed.payload)
         break
       }
       case 'nws_mock': {

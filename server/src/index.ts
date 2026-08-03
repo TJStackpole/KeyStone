@@ -39,6 +39,12 @@ import {
 } from './nycem.js'
 import { POLICY_SCHEMA, setVisibilityPolicy, visibilityPolicy } from './policy.js'
 import { WeatherWatch, type TriggerSuggestion } from './weather.js'
+import { allFeedHealth, clearAllFeedMocks, feedData, registerFeed, setFeedMock, startFeeds } from './feeds/registry.js'
+import dotCameras from './feeds/adapters/dotCameras.js'
+import mtaSubway from './feeds/adapters/mtaSubway.js'
+import noaaWater from './feeds/adapters/noaaWater.js'
+import openFema from './feeds/adapters/openFema.js'
+import usgsGages from './feeds/adapters/usgsGages.js'
 import {
   appendTimeline,
   clearIncident,
@@ -132,6 +138,11 @@ setInterval(() => {
   }
 }, 30_000).unref()
 
+// Prompt 13 — feed ingestion layer: register every adapter, then start the
+// staggered polling loops. Each feed degrades alone; keys are all optional.
+for (const adapter of [mtaSubway, dotCameras, noaaWater, usgsGages, openFema]) registerFeed(adapter)
+startFeeds(broadcast)
+
 wss.on('connection', (socket) => {
   socket.on('error', (err) => console.warn('[ws] client error:', err.message))
   socketAlive.set(socket, true)
@@ -163,6 +174,15 @@ wss.on('connection', (socket) => {
       requests: requestsWire(),
       requestThresholds: REQUEST_THRESHOLDS_MS,
       weather: weather.snapshot(),
+      // Prompt 13 — live-data layer: health for every registered feed plus
+      // the latest payload of each push-enabled feed (big pull-only lists
+      // like the camera inventory are fetched over REST on demand).
+      feeds: {
+        health: allFeedHealth(),
+        data: allFeedHealth()
+          .map((h) => feedData(h.id))
+          .filter((d) => d !== null),
+      },
       // Rules ride the snapshot too — the client never GETs them, and the
       // only other writer is the PUT broadcast, so a fresh dashboard would
       // otherwise show an empty (dead) rules editor while the server is
@@ -233,6 +253,15 @@ tak.on('event', (ev) => {
 })
 
 app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-200) }))
+
+// Prompt 13 — feed layer: health board + per-feed latest payload (pull path
+// for big lists; the ws pushes the small ones).
+app.get('/api/feeds/health', (_req, res) => res.json({ feeds: allFeedHealth() }))
+app.get('/api/feeds/:id', (req, res) => {
+  const data = feedData(req.params.id)
+  if (!data) return res.status(404).json({ error: 'no data for feed (unknown id, or nothing fetched yet)' })
+  res.json(data)
+})
 
 // ---------------------- Module 1: Ask the Manuals ---------------------------
 // Extractive search over the locally-indexed FD Books corpus. Only short
@@ -1300,6 +1329,10 @@ const scenario = new ScenarioEngine({
     const result = transitionRequest(id, state as RequestState, by, reason)
     if (!('error' in result)) afterRequestChange(result, state, by)
   },
+  setFeedMock: (feedId, payload) => {
+    setFeedMock(feedId, payload)
+  },
+  clearFeedMocks: () => clearAllFeedMocks(),
   injectNws: (nws) => {
     weather.injectMockProduct({
       id: nws.id,
