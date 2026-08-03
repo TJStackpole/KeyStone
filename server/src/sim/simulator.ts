@@ -1,7 +1,7 @@
 import { bearingDeg, destination, haversineMeters, Polyline, type PathPoint } from '../lib/geo.js'
 import { countWetSamples, isLand } from '../nyc.js'
 import { buildCotXml, CATEGORY_COT_TYPE, type BioTelemetry } from '../tak/cot.js'
-import { buildFirstAlarm, buildReinforcements, type UnitSpec } from './assignment.js'
+import { buildFirstAlarm, buildReinforcements, ESCALATION_PLAN, type UnitSpec } from './assignment.js'
 import { SIM_UID_PREFIX } from './ns.js'
 
 const TICK_MS = 2000
@@ -160,9 +160,9 @@ export class FirstAlarmSimulator {
    * Alarm escalation (Phase 8): each level adds reinforcements from the next-
    * nearest real companies not already assigned.
    */
-  async escalate(level: 'all-hands' | '2nd' | '3rd'): Promise<{ added: string[] }> {
+  async escalate(level: 'all-hands' | '2nd' | '3rd' | '4th' | '5th'): Promise<{ added: string[] }> {
     if (!this.active || !this.incident) return { added: [] }
-    const plan = { 'all-hands': { e: 1, l: 1, bc: 0 }, '2nd': { e: 4, l: 2, bc: 1 }, '3rd': { e: 4, l: 2, bc: 1 } }[level]
+    const plan = ESCALATION_PLAN[level]
     const assigned = new Set(this.units.map((u) => u.spec.callsign))
     const extra = await buildReinforcements(this.incident.lat, this.incident.lon, plan, assigned)
     const built = await Promise.all(extra.map((spec) => this.buildSimUnit(spec, this.incident!.lat, this.incident!.lon)))
@@ -171,6 +171,16 @@ export class FirstAlarmSimulator {
     console.log(`[sim] ${level} escalation: ${added.join(', ') || 'no companies available'}`)
     this.onEvent?.('sim.escalated', { level, added })
     return { added }
+  }
+
+  /** What the given escalation WOULD add — same plan, same reinforcement
+   *  builder, same assigned-set as escalate(), but dispatches nothing. */
+  async previewEscalation(level: 'all-hands' | '2nd' | '3rd' | '4th' | '5th'): Promise<{ callsign: string; category: string }[]> {
+    if (!this.active || !this.incident) return []
+    const plan = ESCALATION_PLAN[level]
+    const assigned = new Set(this.units.map((u) => u.spec.callsign))
+    const specs = await buildReinforcements(this.incident.lat, this.incident.lon, plan, assigned)
+    return specs.map((s) => ({ callsign: s.callsign, category: s.category }))
   }
 
   stop(): void {

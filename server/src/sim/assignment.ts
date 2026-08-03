@@ -115,6 +115,24 @@ export async function buildFirstAlarm(lat: number, lon: number): Promise<UnitSpe
 }
 
 /** Escalation reinforcements: next-nearest real companies not already assigned. */
+/** One escalation table for BOTH the live escalation and its preview —
+ *  fork this and the RESOURCES page starts lying about the next alarm. */
+export const ESCALATION_PLAN: Record<'all-hands' | '2nd' | '3rd' | '4th' | '5th', { e: number; l: number; bc: number }> = {
+  'all-hands': { e: 1, l: 1, bc: 0 },
+  '2nd': { e: 4, l: 2, bc: 1 },
+  '3rd': { e: 4, l: 2, bc: 1 },
+  '4th': { e: 4, l: 2, bc: 1 },
+  '5th': { e: 4, l: 2, bc: 1 },
+}
+
+const ALARM_LADDER = ['10-75', 'all-hands', '2nd', '3rd', '4th', '5th'] as const
+
+/** The next rung above the current alarm level (null at the top). */
+export function nextAlarmLevel(current: string | undefined): (typeof ALARM_LADDER)[number] | null {
+  const idx = ALARM_LADDER.indexOf((current ?? '10-75') as (typeof ALARM_LADDER)[number])
+  return idx >= 0 && idx < ALARM_LADDER.length - 1 ? ALARM_LADDER[idx + 1] : null
+}
+
 export async function buildReinforcements(
   lat: number,
   lon: number,
@@ -148,9 +166,15 @@ export async function buildReinforcements(
         break
       }
     }
-    for (; found < count; found++) {
-      const callsign = `${prefix}-${200 + Math.floor(Math.random() * 90)}`
+    // Deterministic synthetic fallback: walk up from 200 skipping anything
+    // already assigned, so an alarm PREVIEW and the escalation that follows
+    // name the exact same companies.
+    for (let n = 200; found < count; n++) {
+      const callsign = `${prefix}-${n}`
+      if (assignedCallsigns.has(callsign)) continue
+      assignedCallsigns.add(callsign)
       units.push(synthetic(callsign, category, lat, lon, 2500 + found * 600, speed))
+      found++
     }
   }
 

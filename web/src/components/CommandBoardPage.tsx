@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { setDashboardPage } from '../lib/layouts'
 import { setAppState, useAppSlice } from '../state/store'
+import { EDGE_CLASS, isApparatus } from '../lib/crews'
 import type { Unit } from '../types'
 import './CommandBoardPage.css'
 
@@ -14,20 +15,7 @@ import './CommandBoardPage.css'
  *  ids stored in boardAssignments (uid -> position). */
 const POSITIONS: readonly string[] = ['COMMAND', 'ATTACK', 'SEARCH', 'VENT', 'WATER', 'FAST/RIC', 'STAGING', 'REHAB']
 
-const EDGE_CLASS: Record<string, string> = {
-  engine: 'edge-engine',
-  ladder: 'edge-ladder',
-  battalion: 'edge-battalion',
-  rescue: 'edge-rescue',
-  ems: 'edge-ems',
-}
 
-function isApparatus(u: Unit): boolean {
-  // Slash callsigns are crew MEMBERS (E-6/1); medic is a personnel category.
-  if (u.callsign.includes('/')) return false
-  if (u.category === 'ff' || u.category === 'officer' || u.category === 'drone' || u.category === 'medic') return false
-  return true
-}
 
 function callsignKey(cs: string): string {
   const m = cs.match(/^([A-Za-z]+)[- ]?(\d+)/)

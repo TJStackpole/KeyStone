@@ -56,6 +56,7 @@ import {
   upsertShape,
 } from './incidentStore.js'
 import { ScenarioEngine } from './scenario/engine.js'
+import { nextAlarmLevel } from './sim/assignment.js'
 import { DRILL_UID_PREFIX, isForeignSimUid, SIM_UID_PREFIX } from './sim/ns.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
 import { POST_LABEL } from './tak/shapes.js'
@@ -530,6 +531,18 @@ app.get('/api/staging/next', async (_req, res) => {
   res.json({ callsign })
 })
 
+// What the NEXT alarm level would bring — same plan + reinforcement logic
+// as a real escalation, zero dispatch. Feeds the RESOURCES ledger.
+app.get('/api/alarm/preview', async (_req, res) => {
+  const state = getState()
+  if (!state.incident) return res.status(400).json({ error: 'no active incident' })
+  const next = nextAlarmLevel(state.incident.alarmLevel)
+  if (!next) return res.json({ nextLevel: null, adds: [] })
+  if (next === '10-75') return res.json({ nextLevel: next, adds: [] }) // level change only
+  const adds = await simulator.previewEscalation(next)
+  res.json({ nextLevel: next, adds, simActive: simulator.active })
+})
+
 app.post('/api/alarm', async (req, res) => {
   const { level } = req.body as { level?: string }
   if (!level || !['10-75', 'all-hands', '2nd', '3rd', '4th', '5th'].includes(level)) {
@@ -552,7 +565,7 @@ app.post('/api/alarm', async (req, res) => {
   let added: string[] = []
   try {
     if (level !== '10-75') {
-      const result = await simulator.escalate(level as 'all-hands' | '2nd' | '3rd')
+      const result = await simulator.escalate(level as 'all-hands' | '2nd' | '3rd' | '4th' | '5th')
       added = result.added
     }
   } catch (err) {

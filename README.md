@@ -165,6 +165,16 @@ drill, demo, and incident on all screens.
 
 ## Build status
 
+**Latest — FDNY command features:** the OPS CLOCK now runs the fireground's
+time discipline server-side (10-minute duration marks, PAR cycle with a
+countdown chip — interval default 20 min, VALIDATE—SME); the DECISION LOG
+(MANUAL → LOG) is a one-tap ICS-214: alarm benchmarks escalate and log on one
+path, notes and benchmarks land with server timestamps, and the whole log
+prints as an ICS-214 activity sheet; the RESOURCE LEDGER (MANUAL → RESOURCES)
+buckets every rig by live status, previews the next alarm with the same logic
+that would dispatch it, and flags EMPTY QUARTERS with simulated relocation
+suggestions (labeled SIMULATED, VALIDATE—SME).
+
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Scaffold, keyless 3D globe, address → incident bootstrap | ✅ |
