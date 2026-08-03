@@ -39,6 +39,7 @@ let lotLayer: LotLayer | null = null
 let poiLayer: PoiLayer | null = null
 let portfolioLayer: PortfolioLayer | null = null
 let roadLayer: RoadLayer | null = null
+let twinLayer: import('./twin').TwinLayer | null = null
 let hazardLayer: HazardLayer | null = null
 
 let detachRenderMode: (() => void) | null = null
@@ -63,6 +64,9 @@ export function registerScene(h: SceneHandle): void {
   poiLayer = new PoiLayer(h.viewer)
   portfolioLayer = new PortfolioLayer(h.viewer)
   roadLayer = new RoadLayer(h.viewer)
+  void import('./twin').then((m) => {
+    twinLayer = new m.TwinLayer(h.viewer)
+  })
   hazardLayer = new HazardLayer(h.viewer)
   if (import.meta.env.DEV) {
     // Debug handles for DevTools poking — dev builds only.
@@ -94,6 +98,7 @@ export function unregisterScene(): void {
   poiLayer = null
   portfolioLayer = null
   roadLayer = null
+  twinLayer = null
   hazardLayer = null
 }
 
@@ -155,6 +160,10 @@ export function getPoiLayer(): PoiLayer | null {
 
 export function getPortfolioLayer(): PortfolioLayer | null {
   return portfolioLayer
+}
+
+export function getTwinLayer(): import('./twin').TwinLayer | null {
+  return twinLayer
 }
 
 export function getRoadLayer(): RoadLayer | null {

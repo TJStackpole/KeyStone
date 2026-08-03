@@ -35,6 +35,7 @@ import {
   getStreetLayer,
   getTacticalLayer,
   getTrafficLayer,
+  getTwinLayer,
   getUnitLayer,
 } from './cesium/scene'
 import { replayEngine } from './replay'
@@ -569,6 +570,7 @@ function applyIsolate(on: boolean, opts: { frame?: boolean } = {}): void {
     // its stored toggle.
     setOverlaysParked(false)
     void applyTacticalModel(false)
+    getTwinLayer()?.clear()
     return
   }
 
@@ -657,6 +659,26 @@ function applyIsolateAppearance(): void {
     s.isolateMode ? scene.extrudeFootprints && live && s.layerToggles.targetbox : s.layerToggles.targetbox,
   )
   void applyTacticalModel(s.isolateMode)
+  // Blueprint digital twin (HABS/EIS-authored walls, windows, doors, stairs,
+  // fire escapes): replaces the generic massing in MODEL view at true scale.
+  // Vertical exaggeration would shear the drawn geometry — twin hides there.
+  void (async () => {
+    const twin = getTwinLayer()
+    if (!twin) return
+    const inc = getAppState().incident
+    const wantTwin = s.isolateMode && s.isolateView === 'model' && s.isolateScale === 1 && !!inc
+    if (!wantTwin) {
+      twin.setVisible(false)
+      return
+    }
+    const { fetchTwinForAddress } = await import('./cesium/twin')
+    const def = await fetchTwinForAddress(inc!.address)
+    const now = getAppState()
+    if (!def || !now.isolateMode || now.isolateView !== 'model' || now.incident?.id !== inc!.id) return
+    await twin.load(def, now.isolateFloors?.z0 ?? 0)
+    twin.setVisible(true)
+    notify(`BLUEPRINT TWIN — ${def.name} (${def.source.split(',')[0]})`)
+  })()
 }
 
 /** MODEL / LIVE sub-chips while ISOLATE is up. */

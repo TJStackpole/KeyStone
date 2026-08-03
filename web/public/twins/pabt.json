@@ -1,0 +1,862 @@
+{
+  "name": "Port Authority Bus Terminal (Main Block)",
+  "matchAddress": "PORT AUTHORITY BUS TERMINAL",
+  "origin": {
+    "lat": 40.756888,
+    "lon": -73.991493
+  },
+  "bearingDeg": 29,
+  "footprint": {
+    "widthM": 244.0,
+    "depthM": 61.0
+  },
+  "levels": [
+    {
+      "name": "Subway Mezzanine (A/C/E)",
+      "z0M": -6.0,
+      "heightM": 2.4
+    },
+    {
+      "name": "Lower Bus Level (Gates 1-56, 60-85)",
+      "z0M": -3.6,
+      "heightM": 3.6
+    },
+    {
+      "name": "Main Concourse / Ticketing",
+      "z0M": 0.0,
+      "heightM": 6.7
+    },
+    {
+      "name": "Second Level - Suburban Gates (200-234)",
+      "z0M": 6.7,
+      "heightM": 4.8
+    },
+    {
+      "name": "Third Level - Bus Decks (300-326)",
+      "z0M": 11.5,
+      "heightM": 4.8
+    }
+  ],
+  "walls": [
+    {
+      "x0": 0,
+      "y0": 0,
+      "x1": 244.0,
+      "y1": 0,
+      "z0M": 0,
+      "heightM": 16.3,
+      "thickM": 0.6
+    },
+    {
+      "x0": 244.0,
+      "y0": 0,
+      "x1": 244.0,
+      "y1": 61.0,
+      "z0M": 0,
+      "heightM": 16.3,
+      "thickM": 0.6
+    },
+    {
+      "x0": 244.0,
+      "y0": 61.0,
+      "x1": 0,
+      "y1": 61.0,
+      "z0M": 0,
+      "heightM": 16.3,
+      "thickM": 0.6
+    },
+    {
+      "x0": 0,
+      "y0": 61.0,
+      "x1": 0,
+      "y1": 0,
+      "z0M": 0,
+      "heightM": 16.3,
+      "thickM": 0.6
+    },
+    {
+      "x0": 10,
+      "y0": 20,
+      "x1": 234,
+      "y1": 20,
+      "z0M": 0.0,
+      "heightM": 6.7,
+      "thickM": 0.3
+    },
+    {
+      "x0": 10,
+      "y0": 41,
+      "x1": 234,
+      "y1": 41,
+      "z0M": 0.0,
+      "heightM": 6.7,
+      "thickM": 0.3
+    },
+    {
+      "x0": 10,
+      "y0": 20,
+      "x1": 234,
+      "y1": 20,
+      "z0M": 6.7,
+      "heightM": 4.8,
+      "thickM": 0.25
+    },
+    {
+      "x0": 10,
+      "y0": 41,
+      "x1": 234,
+      "y1": 41,
+      "z0M": 6.7,
+      "heightM": 4.8,
+      "thickM": 0.25
+    },
+    {
+      "x0": 10,
+      "y0": 20,
+      "x1": 234,
+      "y1": 20,
+      "z0M": 11.5,
+      "heightM": 4.8,
+      "thickM": 0.25
+    },
+    {
+      "x0": 10,
+      "y0": 41,
+      "x1": 234,
+      "y1": 41,
+      "z0M": 11.5,
+      "heightM": 4.8,
+      "thickM": 0.25
+    }
+  ],
+  "windows": [
+    {
+      "wall": 1,
+      "offsetM": 4.0,
+      "sillM": 3.8,
+      "wM": 4.6,
+      "hM": 2.2,
+      "count": 10,
+      "pitchM": 5.2,
+      "levels": [
+        2
+      ]
+    },
+    {
+      "wall": 1,
+      "offsetM": 2.5,
+      "sillM": 1.1,
+      "wM": 5.4,
+      "hM": 2.2,
+      "count": 9,
+      "pitchM": 6.2,
+      "levels": [
+        3,
+        4
+      ]
+    },
+    {
+      "wall": 0,
+      "offsetM": 8.0,
+      "sillM": 1.1,
+      "wM": 8.8,
+      "hM": 2.2,
+      "count": 20,
+      "pitchM": 11.6,
+      "levels": [
+        3,
+        4
+      ]
+    },
+    {
+      "wall": 0,
+      "offsetM": 12.0,
+      "sillM": 4.2,
+      "wM": 6.2,
+      "hM": 1.8,
+      "count": 19,
+      "pitchM": 11.8,
+      "levels": [
+        2
+      ]
+    },
+    {
+      "wall": 2,
+      "offsetM": 8.0,
+      "sillM": 1.1,
+      "wM": 8.8,
+      "hM": 2.2,
+      "count": 20,
+      "pitchM": 11.6,
+      "levels": [
+        3,
+        4
+      ]
+    },
+    {
+      "wall": 2,
+      "offsetM": 12.0,
+      "sillM": 4.2,
+      "wM": 6.2,
+      "hM": 1.8,
+      "count": 19,
+      "pitchM": 11.8,
+      "levels": [
+        2
+      ]
+    },
+    {
+      "wall": 3,
+      "offsetM": 3.0,
+      "sillM": 1.1,
+      "wM": 5.0,
+      "hM": 2.2,
+      "count": 8,
+      "pitchM": 7.0,
+      "levels": [
+        3,
+        4
+      ]
+    }
+  ],
+  "doors": [
+    {
+      "wall": 1,
+      "offsetM": 10.0,
+      "wM": 4.2,
+      "hM": 3.4,
+      "label": "8th Ave Entrance - South"
+    },
+    {
+      "wall": 1,
+      "offsetM": 27.0,
+      "wM": 6.0,
+      "hM": 3.4,
+      "label": "8th Ave Main Entrance"
+    },
+    {
+      "wall": 1,
+      "offsetM": 46.0,
+      "wM": 4.2,
+      "hM": 3.4,
+      "label": "8th Ave Entrance - North"
+    },
+    {
+      "wall": 0,
+      "offsetM": 196.0,
+      "wM": 3.6,
+      "hM": 3.2,
+      "label": "W 40th St Entrance - East"
+    },
+    {
+      "wall": 0,
+      "offsetM": 118.0,
+      "wM": 3.6,
+      "hM": 3.2,
+      "label": "W 40th St Entrance - Mid-block"
+    },
+    {
+      "wall": 2,
+      "offsetM": 24.0,
+      "wM": 3.6,
+      "hM": 3.2,
+      "label": "W 41st St Entrance - East"
+    },
+    {
+      "wall": 2,
+      "offsetM": 120.0,
+      "wM": 3.6,
+      "hM": 3.2,
+      "label": "W 41st St Entrance - Mid-block"
+    },
+    {
+      "wall": 3,
+      "offsetM": 6.0,
+      "wM": 11.0,
+      "hM": 4.4,
+      "label": "9th Ave Bus Ramp Portal - North"
+    },
+    {
+      "wall": 3,
+      "offsetM": 40.0,
+      "wM": 11.0,
+      "hM": 4.4,
+      "label": "9th Ave Bus Ramp Portal - South"
+    },
+    {
+      "wall": 6,
+      "offsetM": 8.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 200"
+    },
+    {
+      "wall": 6,
+      "offsetM": 21.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 201"
+    },
+    {
+      "wall": 6,
+      "offsetM": 34.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 202"
+    },
+    {
+      "wall": 6,
+      "offsetM": 47.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 203"
+    },
+    {
+      "wall": 6,
+      "offsetM": 60.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 204"
+    },
+    {
+      "wall": 6,
+      "offsetM": 73.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 205"
+    },
+    {
+      "wall": 6,
+      "offsetM": 86.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 206"
+    },
+    {
+      "wall": 6,
+      "offsetM": 99.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 207"
+    },
+    {
+      "wall": 6,
+      "offsetM": 112.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 208"
+    },
+    {
+      "wall": 6,
+      "offsetM": 125.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 209"
+    },
+    {
+      "wall": 6,
+      "offsetM": 138.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 210"
+    },
+    {
+      "wall": 6,
+      "offsetM": 151.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 211"
+    },
+    {
+      "wall": 6,
+      "offsetM": 164.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 212"
+    },
+    {
+      "wall": 6,
+      "offsetM": 177.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 213"
+    },
+    {
+      "wall": 6,
+      "offsetM": 190.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 214"
+    },
+    {
+      "wall": 6,
+      "offsetM": 203.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 215"
+    },
+    {
+      "wall": 6,
+      "offsetM": 216.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 216"
+    },
+    {
+      "wall": 7,
+      "offsetM": 6.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 217"
+    },
+    {
+      "wall": 7,
+      "offsetM": 18.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 218"
+    },
+    {
+      "wall": 7,
+      "offsetM": 30.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 219"
+    },
+    {
+      "wall": 7,
+      "offsetM": 42.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 220"
+    },
+    {
+      "wall": 7,
+      "offsetM": 54.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 221"
+    },
+    {
+      "wall": 7,
+      "offsetM": 66.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 222"
+    },
+    {
+      "wall": 7,
+      "offsetM": 78.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 223"
+    },
+    {
+      "wall": 7,
+      "offsetM": 90.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 224"
+    },
+    {
+      "wall": 7,
+      "offsetM": 102.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 225"
+    },
+    {
+      "wall": 7,
+      "offsetM": 114.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 226"
+    },
+    {
+      "wall": 7,
+      "offsetM": 126.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 227"
+    },
+    {
+      "wall": 7,
+      "offsetM": 138.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 228"
+    },
+    {
+      "wall": 7,
+      "offsetM": 150.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 229"
+    },
+    {
+      "wall": 7,
+      "offsetM": 162.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 230"
+    },
+    {
+      "wall": 7,
+      "offsetM": 174.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 231"
+    },
+    {
+      "wall": 7,
+      "offsetM": 186.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 232"
+    },
+    {
+      "wall": 7,
+      "offsetM": 198.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 233"
+    },
+    {
+      "wall": 7,
+      "offsetM": 210.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 234"
+    },
+    {
+      "wall": 8,
+      "offsetM": 10.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 300"
+    },
+    {
+      "wall": 8,
+      "offsetM": 25.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 301"
+    },
+    {
+      "wall": 8,
+      "offsetM": 41.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 302"
+    },
+    {
+      "wall": 8,
+      "offsetM": 56.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 303"
+    },
+    {
+      "wall": 8,
+      "offsetM": 72.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 304"
+    },
+    {
+      "wall": 8,
+      "offsetM": 87.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 305"
+    },
+    {
+      "wall": 8,
+      "offsetM": 103.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 306"
+    },
+    {
+      "wall": 8,
+      "offsetM": 118.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 307"
+    },
+    {
+      "wall": 8,
+      "offsetM": 134.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 308"
+    },
+    {
+      "wall": 8,
+      "offsetM": 149.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 309"
+    },
+    {
+      "wall": 8,
+      "offsetM": 165.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 310"
+    },
+    {
+      "wall": 8,
+      "offsetM": 180.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 311"
+    },
+    {
+      "wall": 8,
+      "offsetM": 196.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 312"
+    },
+    {
+      "wall": 8,
+      "offsetM": 211.5,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 313"
+    },
+    {
+      "wall": 9,
+      "offsetM": 12.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 314"
+    },
+    {
+      "wall": 9,
+      "offsetM": 28.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 315"
+    },
+    {
+      "wall": 9,
+      "offsetM": 44.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 316"
+    },
+    {
+      "wall": 9,
+      "offsetM": 60.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 317"
+    },
+    {
+      "wall": 9,
+      "offsetM": 76.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 318"
+    },
+    {
+      "wall": 9,
+      "offsetM": 92.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 319"
+    },
+    {
+      "wall": 9,
+      "offsetM": 108.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 320"
+    },
+    {
+      "wall": 9,
+      "offsetM": 124.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 321"
+    },
+    {
+      "wall": 9,
+      "offsetM": 140.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 322"
+    },
+    {
+      "wall": 9,
+      "offsetM": 156.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 323"
+    },
+    {
+      "wall": 9,
+      "offsetM": 172.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 324"
+    },
+    {
+      "wall": 9,
+      "offsetM": 188.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 325"
+    },
+    {
+      "wall": 9,
+      "offsetM": 204.0,
+      "wM": 1.4,
+      "hM": 2.4,
+      "label": "Gate 326"
+    }
+  ],
+  "columns": [
+    {
+      "x": 14,
+      "y": 12.5,
+      "rM": 0.55,
+      "z0M": -6.0,
+      "heightM": 22.3,
+      "count": 19,
+      "dx": 12,
+      "dy": 0
+    },
+    {
+      "x": 14,
+      "y": 30.5,
+      "rM": 0.55,
+      "z0M": -6.0,
+      "heightM": 22.3,
+      "count": 19,
+      "dx": 12,
+      "dy": 0
+    },
+    {
+      "x": 14,
+      "y": 48.5,
+      "rM": 0.55,
+      "z0M": -6.0,
+      "heightM": 22.3,
+      "count": 19,
+      "dx": 12,
+      "dy": 0
+    }
+  ],
+  "stairs": [
+    {
+      "kind": "straight",
+      "x": 7,
+      "y": 7,
+      "wM": 3.2,
+      "z0M": -6.0,
+      "topM": 16.3,
+      "label": "Stair A - SW Corner Core"
+    },
+    {
+      "kind": "straight",
+      "x": 237,
+      "y": 7,
+      "wM": 3.2,
+      "z0M": -6.0,
+      "topM": 16.3,
+      "label": "Stair B - SE Corner Core"
+    },
+    {
+      "kind": "straight",
+      "x": 237,
+      "y": 54,
+      "wM": 3.2,
+      "z0M": -6.0,
+      "topM": 16.3,
+      "label": "Stair C - NE Corner Core"
+    },
+    {
+      "kind": "straight",
+      "x": 7,
+      "y": 54,
+      "wM": 3.2,
+      "z0M": -6.0,
+      "topM": 16.3,
+      "label": "Stair D - NW Corner Core"
+    },
+    {
+      "kind": "straight",
+      "x": 90,
+      "y": 30.5,
+      "wM": 3.6,
+      "z0M": -6.0,
+      "topM": 16.3,
+      "label": "Stair E - Mid Core West"
+    },
+    {
+      "kind": "straight",
+      "x": 160,
+      "y": 30.5,
+      "wM": 3.6,
+      "z0M": -6.0,
+      "topM": 16.3,
+      "label": "Stair F - Mid Core East"
+    },
+    {
+      "kind": "spiral",
+      "x": 26,
+      "y": 17,
+      "rM": 11.0,
+      "z0M": 0.0,
+      "topM": 11.5,
+      "label": "Bus Ramp Helix - South (Lincoln Tunnel ramps)"
+    },
+    {
+      "kind": "spiral",
+      "x": 26,
+      "y": 44,
+      "rM": 11.0,
+      "z0M": 0.0,
+      "topM": 11.5,
+      "label": "Bus Ramp Helix - North (Lincoln Tunnel ramps)"
+    }
+  ],
+  "fireEscapes": [],
+  "shafts": [
+    {
+      "x": 70,
+      "y": 30.5,
+      "wM": 7.0,
+      "dM": 4.5,
+      "z0M": 0.0,
+      "topM": 17.5,
+      "label": "Bus Deck Vent Shaft - West"
+    },
+    {
+      "x": 186,
+      "y": 30.5,
+      "wM": 7.0,
+      "dM": 4.5,
+      "z0M": 0.0,
+      "topM": 17.5,
+      "label": "Bus Deck Vent Shaft - East"
+    },
+    {
+      "x": 230,
+      "y": 8,
+      "wM": 5.0,
+      "dM": 3.0,
+      "z0M": -6.0,
+      "topM": 0.5,
+      "label": "Subway Mezzanine Vent"
+    }
+  ],
+  "roof": {
+    "kind": "flat",
+    "heightM": 1.0
+  },
+  "source": "PANYNJ Port Authority Bus Terminal Replacement Project Final EIS (2024), Appendix A (DEIS chapters incl. existing-terminal plans), panynj.gov; existing gate ranges per PABT level plans (lower level 1-56/60-85, 2nd floor 200-234, 3rd floor 300-326); block footprint ~244 m x 61 m (8th-9th Ave x W 40th-41st St) per NYC GIS. North wing (W 41st-42nd, 400-level gates) not modeled."
+}

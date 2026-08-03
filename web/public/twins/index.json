@@ -1,0 +1,14 @@
+[
+  {
+    "file": "pabt.json",
+    "matchAddress": "PORT AUTHORITY BUS TERMINAL"
+  },
+  {
+    "file": "ellis-island.json",
+    "matchAddress": "CONTAGIOUS DISEASE HOSPITAL"
+  },
+  {
+    "file": "federal-hall.json",
+    "matchAddress": "FEDERAL HALL"
+  }
+]
