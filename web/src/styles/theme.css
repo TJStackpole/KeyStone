@@ -2411,7 +2411,7 @@ body:has(.wc-left) .home-btn { left: 384px; }
   font: 700 9.5px var(--mono); letter-spacing: 0.06em; padding: 6px 10px; transition: all 120ms;
 }
 .roster-demo-btn:hover { background: rgba(245,158,11,0.12); }
-@media (max-width: 1280px) {
+@media (max-width: 1680px) {
   /* 1024-wide projectors: the header must never clip PANELS/RESET away. */
   .topbar { gap: 6px; }
   .topbar .chip { padding: 3px 7px; font-size: 9px; }
@@ -2898,7 +2898,7 @@ body.panel-dragging * { cursor: grabbing !important; }
 }
 /* Left-anchored menus near the screen center can spill right on narrow
    viewports — clamp them to the viewport edge instead. */
-@media (max-width: 1280px) {
+@media (max-width: 1680px) {
   .scenarios-menu { left: auto; right: 0; }
   .incidents-menu { width: min(390px, calc(100vw - 24px)); }
 }
