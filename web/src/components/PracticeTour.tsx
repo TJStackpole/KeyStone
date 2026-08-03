@@ -57,7 +57,7 @@ export function PracticeTour() {
       ))}
       {complete && (
         <div className="practice-done">
-          THAT&apos;S THE WHOLE FLOW — you just ran an incident. Press ✕ up top, then END INCIDENT whenever you like.
+          THAT&apos;S THE WHOLE FLOW — you just ran an incident. Press ✕ END on the incident card (top-left) whenever you like.
         </div>
       )}
     </aside>

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { isApparatus } from '../lib/crews'
 import { setDashboardPage } from '../lib/layouts'
+import { airTone } from '../lib/scba'
+import { fmtWallClock } from '../lib/time'
 import { setAppState, useAppSlice } from '../state/store'
 import { crewCompositionAllowed } from '../profiles/policy'
 import { useProfile } from '../profiles/manifest'
@@ -42,7 +45,7 @@ function buildCards(units: Record<string, Unit>): Card[] {
       else members.set(crew, [u])
       continue
     }
-    if (u.category === 'ff' || u.category === 'officer' || u.category === 'drone') continue
+    if (!isApparatus(u)) continue
     apparatus.set(u.callsign, u)
   }
   const names = new Set([...apparatus.keys(), ...members.keys()])
@@ -53,42 +56,48 @@ function buildCards(units: Record<string, Unit>): Card[] {
   }))
 }
 
-function fmtClock(ms: number): string {
-  const d = new Date(ms)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
-
-/** '' fresh · ' amber' under 1500 psi · ' red' under 1000 psi. */
-function airTone(psi: number): string {
-  if (psi < 1000) return ' red'
-  if (psi < 1500) return ' amber'
-  return ''
+/** Shared SCBA thresholds mapped to this board's tone classes. */
+function airClass(psi: number): string {
+  const tone = airTone(psi)
+  return tone === 'low' ? ' red' : tone === 'warn' ? ' amber' : ''
 }
 
 /** A completed PAR is a COMMAND event: log it on the incident record (which
- *  also resets the OPS CLOCK's PAR countdown server-side). */
-function postParComplete(units: string[]): void {
-  void fetch('/api/timeline', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ kind: 'ic.par-complete', payload: { units } }),
-  }).catch((err) => console.error('[par] log failed:', err))
+ *  also resets the OPS CLOCK's PAR countdown server-side). Returns whether
+ *  the record actually took it. */
+async function postParComplete(units: string[]): Promise<boolean> {
+  try {
+    const res = await fetch('/api/timeline', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'ic.par-complete', payload: { units } }),
+    })
+    return res.ok
+  } catch (err) {
+    console.error('[par] log failed:', err)
+    return false
+  }
 }
 
+/** Stamp cards only AFTER the record takes the PAR — a green "JUST NOW"
+ *  with nothing on the record would be the exact lie this board exists to
+ *  prevent. */
 function stampPar(callsign: string): void {
-  setAppState((s) => ({ parChecks: { ...s.parChecks, [callsign]: Date.now() } }))
-  postParComplete([callsign])
+  void postParComplete([callsign]).then((ok) => {
+    if (ok) setAppState((s) => ({ parChecks: { ...s.parChecks, [callsign]: Date.now() } }))
+  })
 }
 
 function stampParAll(callsigns: string[]): void {
   if (callsigns.length === 0) return
-  const t = Date.now()
-  postParComplete(callsigns)
-  setAppState((s) => {
-    const next = { ...s.parChecks }
-    for (const c of callsigns) next[c] = t
-    return { parChecks: next }
+  void postParComplete(callsigns).then((ok) => {
+    if (!ok) return
+    const t = Date.now()
+    setAppState((s) => {
+      const next = { ...s.parChecks }
+      for (const c of callsigns) next[c] = t
+      return { parChecks: next }
+    })
   })
 }
 
@@ -123,7 +132,7 @@ function ApparatusCard({ card, par, now, membersAllowed }: { card: Card; par: nu
                 {psi === null ? (
                   <span className="rp-air none">—</span>
                 ) : (
-                  <span className={`rp-air${airTone(psi)}`}>{Math.round(psi)} PSI</span>
+                  <span className={`rp-air${airClass(psi)}`}>{Math.round(psi)} PSI</span>
                 )}
               </li>
             )
@@ -133,7 +142,7 @@ function ApparatusCard({ card, par, now, membersAllowed }: { card: Card; par: nu
       <footer className="rp-card-foot">
         {par !== undefined && agoLabel !== null && (
           <div className={`rp-par-when${tone}`}>
-            PAR {fmtClock(par)}
+            PAR {fmtWallClock(par)}
             <span className="rp-par-ago">{agoLabel}</span>
           </div>
         )}
@@ -200,7 +209,7 @@ export function RidingListPage() {
           onClick={() => stampParAll(cards.map((c) => c.callsign))}
           disabled={cards.length === 0}
         >
-          PAR ALL VISIBLE
+          PAR ALL ({cards.length})
         </button>
       </header>
       {cards.length === 0 ? (

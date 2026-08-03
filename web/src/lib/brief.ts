@@ -1,4 +1,5 @@
 import { notify } from '../components/NoticeChip'
+import { alarmLabel } from './alarms'
 import { getAppState } from '../state/store'
 import type { FeedDataWire } from '../types'
 
@@ -22,7 +23,7 @@ export function openBrief(): boolean {
 
   if (s.incident) {
     rows.push(line('Incident', `${s.incident.type ?? 'Incident'} — ${s.incident.address}`))
-    if (s.incident.alarmLevel) rows.push(line('Alarm level', String(s.incident.alarmLevel)))
+    if (s.incident.alarmLevel) rows.push(line('Alarm level', alarmLabel(s.incident.alarmLevel)))
   } else {
     rows.push(line('Incident', 'No active tactical incident'))
   }

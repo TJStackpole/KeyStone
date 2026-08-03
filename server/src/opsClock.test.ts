@@ -70,6 +70,20 @@ test('PAR cycle: ic.par-complete resets the window; the nag fires once per lapse
   assert.equal(h.emitted.filter((e) => e.kind === 'ops.par-due').length, 0, 'already announced this cycle')
 })
 
+test('an ignored PAR nag repeats every lapsed window — it never goes silent', () => {
+  // PAR taken 45 min ago, nag announced at the first lapse (t-22, i.e. 23 min
+  // after the PAR). Two full 20-min windows have now lapsed — a second nag
+  // is due even though no ic.par-complete ever arrived.
+  const h = makeHarness(60, [at(45, 'ic.par-complete', { units: ['E-6'] }), at(22, 'ops.par-due', { sinceMin: 23, intervalMin: 20 })])
+  h.clock.tick(T0)
+  const dues = h.emitted.filter((e) => e.kind === 'ops.par-due')
+  assert.equal(dues.length, 1, 'second window announces again')
+  assert.deepEqual(dues[0].payload, { sinceMin: 45, intervalMin: DEFAULT_PAR_INTERVAL_MIN })
+  // Same window, next tick: no duplicate.
+  h.clock.tick(T0 + 15_000)
+  assert.equal(h.emitted.filter((e) => e.kind === 'ops.par-due').length, 1, 'one nag per window')
+})
+
 test('interval is clamped and respected; no incident means no emissions at all', () => {
   const { clock, emitted } = makeHarness(8)
   assert.equal(clock.setParIntervalMin(2), 5, 'floor clamp')

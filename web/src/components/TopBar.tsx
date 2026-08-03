@@ -534,7 +534,7 @@ function PanelsMenu({
               setOpen(false)
               resetPanelLayout()
             }}
-            title="Every info box you dragged returns to its default position"
+            title="Every info box returns to its default position and size, and GLOVE MODE switches back off — one press un-messes the screen"
           >
             RESET LAYOUT
           </button>
@@ -779,16 +779,13 @@ export function TopBar() {
           <span className="dot" /> BRIEF
         </button>
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
-        {providerMode && (
+        {providerMode && viewLock === 'off' && (
+          // Hidden (not just disabled) while the battle-view rail owns the
+          // camera — a dead chip that duplicates the rail's TOP is clutter.
           <button
             className={`chip chip-btn${viewMode === 'topdown' ? ' active' : ''}`}
             onClick={() => void toggleTopDownView()}
-            disabled={viewLock !== 'off'}
-            title={
-              viewLock !== 'off'
-                ? 'Camera is locked to the incident battle views (TOP / N / E / S / W rail)'
-                : `Camera: tactical 3D ↔ straight-down top view · imagery: ${MODE_LABEL[providerMode]}`
-            }
+            title={`Camera: tactical 3D ↔ straight-down top view · imagery: ${MODE_LABEL[providerMode]}`}
           >
             <span className="dot" /> {viewMode === 'topdown' ? 'TOP-DOWN' : '3D VIEW'}
           </button>

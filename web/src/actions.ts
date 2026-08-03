@@ -89,10 +89,13 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // running replay of the OLD incident must end too, or its engine keeps
   // painting historical tracks over the new board.
   if (getAppState().replay.active) replayEngine.stop()
+  // The accountability surfaces belong to ONE box: a new stand-up must not
+  // inherit last box's ATTACK assignments or PAR stamps.
+  setAppState({ parChecks: {}, boardAssignments: {} })
   try {
     localStorage.removeItem('ks-board')
   } catch {
-    // storage blocked — in-memory reset above still applies
+    // storage blocked — the in-memory reset above still applies
   }
   resetIsolate()
   hideInspectedModel()
@@ -357,7 +360,6 @@ async function loadFootprints(incident: Incident): Promise<void> {
     // Self-heal ISOLATE: if the operator toggled it while footprints were in
     // flight, re-apply the clip against the freshly resolved target.
     if (getAppState().isolateMode) applyIsolate(true)
-    console.log(`[footprints] ${feats.length} footprints, target BIN ${targetBin ?? 'not resolved'}`)
   } catch (err) {
     console.error('[footprints] layer unavailable:', err)
     if (getAppState().incident?.id !== incident.id) return
@@ -1393,8 +1395,15 @@ export function adoptIncident(incident: Incident): void {
   hideInspectedModel()
   lastFootprints = null
   getTrafficLayer()?.clear() // stale polylines from the previous location
+  try {
+    localStorage.removeItem('ks-board') // a drill must not inherit last box's board
+  } catch {
+    // storage blocked — the in-memory reset below still applies
+  }
   setAppState({
     incident,
+    parChecks: {}, // accountability surfaces belong to ONE box
+    boardAssignments: {},
     shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,
@@ -1515,6 +1524,11 @@ export function clearLocalIncident(): void {
   if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
   lastFootprints = null
+  try {
+    localStorage.removeItem('ks-board') // persisted board dies with the box
+  } catch {
+    // storage blocked — the in-memory reset below still applies
+  }
   setAppState({
     incident: null,
     cadIncident: null,

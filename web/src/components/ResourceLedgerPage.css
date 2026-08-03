@@ -13,7 +13,7 @@
   overflow-y: auto;
 }
 .rl-head { display: flex; align-items: center; gap: 16px; }
-.rl-head h1 { font-size: 15px; letter-spacing: 0.12em; color: #f59e0b; margin: 0; }
+.rl-head h1 { font-size: 20px; letter-spacing: 0.12em; color: #f59e0b; margin: 0; }
 .rl-sub { font-size: 11px; color: rgba(148, 163, 184, 0.9); }
 .rl-back {
   min-height: 44px; padding: 0 18px;

@@ -543,6 +543,16 @@ app.get('/api/alarm/preview', async (_req, res) => {
   res.json({ nextLevel: next, adds, simActive: simulator.active })
 })
 
+/** The FDNY code the IC actually pressed — the record must not read wire ids. */
+const ALARM_CODE: Record<string, string> = {
+  '10-75': '10-75',
+  'all-hands': 'ALL HANDS',
+  '2nd': '2ND ALARM',
+  '3rd': '3RD ALARM',
+  '4th': '4TH ALARM',
+  '5th': '5TH ALARM',
+}
+
 app.post('/api/alarm', async (req, res) => {
   const { level } = req.body as { level?: string }
   if (!level || !['10-75', 'all-hands', '2nd', '3rd', '4th', '5th'].includes(level)) {
@@ -550,12 +560,20 @@ app.post('/api/alarm', async (req, res) => {
   }
   const state = getState()
   if (!state.incident) return res.status(400).json({ error: 'no active incident' })
+  // Alarms only climb. Without this, a double-tap dispatches a SECOND full
+  // reinforcement set (escalate() rebuilds against current units), and a
+  // stray 10-75 press at 3rd alarm silently downgrades the box.
+  const ladder = ['10-75', 'all-hands', '2nd', '3rd', '4th', '5th']
+  const cur = state.incident.alarmLevel ? ladder.indexOf(state.incident.alarmLevel) : -1
+  if (ladder.indexOf(level) <= cur) {
+    return res.status(409).json({ level, added: [], error: 'already at or above this alarm level' })
+  }
   const updated = updateIncident({ alarmLevel: level as Incident['alarmLevel'] })
   broadcast({ type: 'incident', incident: updated.incident })
   // Escalation and its log entry are ONE path: every alarm caller (command
   // strip, decision log) both dispatches and records — never one without
   // the other.
-  const benchEv = appendTimeline('ic.benchmark', { code: level.toUpperCase() })
+  const benchEv = appendTimeline('ic.benchmark', { code: ALARM_CODE[level] ?? level.toUpperCase() })
   broadcast({ type: 'timeline', event: benchEv })
   ticker('alarm', `Alarm level ${level.toUpperCase()} — ${updated.incident?.address ?? ''}`, {
     incidentId: updated.incident?.id,
@@ -748,7 +766,7 @@ const PRIMARY_BY_TYPE: Record<string, string> = {
   Collapse: 'FDNY',
   'Mass Casualty': 'EMS',
 }
-const ALARM_SEVERITY: Record<string, number> = { '10-75': 2, 'all-hands': 3, '2nd': 4, '3rd': 5 }
+const ALARM_SEVERITY: Record<string, number> = { '10-75': 2, 'all-hands': 3, '2nd': 4, '3rd': 5, '4th': 5, '5th': 5 }
 
 export interface PortfolioIncident {
   id: string
@@ -1285,6 +1303,10 @@ const opsClock = new OpsClock({
 })
 opsClock.start()
 
+app.get('/api/ops/par-interval', (_req, res) => {
+  res.json({ minutes: opsClock.getParIntervalMin() })
+})
+
 app.post('/api/ops/par-interval', (req, res) => {
   const { minutes } = req.body as { minutes?: number }
   if (typeof minutes !== 'number' || !Number.isFinite(minutes)) {
@@ -1296,6 +1318,7 @@ app.post('/api/ops/par-interval', (req, res) => {
 app.post('/api/timeline', (req, res) => {
   const { kind, payload } = req.body as { kind?: string; payload?: unknown }
   if (!kind) return res.status(400).json({ error: 'kind required' })
+  if (kind.startsWith('ops.')) return res.status(403).json({ error: 'ops.* kinds are emitted by the server clock only' })
   const ev = appendTimeline(kind, payload)
   broadcast({ type: 'timeline', event: ev })
   res.status(201).json(ev)

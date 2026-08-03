@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 14px 16px 56px; /* clearance for the MANUAL tabs (bottom-left, z72) */
   background: #0a0e14;
   color: var(--text, #dbe4f0);
   font-family: var(--ui, 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif);

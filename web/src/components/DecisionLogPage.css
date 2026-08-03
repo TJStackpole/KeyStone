@@ -12,7 +12,7 @@
   overflow: hidden;
 }
 .dl-head { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
-.dl-head h1 { font-size: 15px; letter-spacing: 0.12em; color: #f59e0b; margin: 0; }
+.dl-head h1 { font-size: 20px; letter-spacing: 0.12em; color: #f59e0b; margin: 0; }
 .dl-sub { font-size: 11px; color: rgba(148, 163, 184, 0.9); }
 .dl-back, .dl-print {
   min-height: 44px;
@@ -62,3 +62,10 @@
 .dl-row.bench .dl-text { color: #fbbf24; font-weight: 600; letter-spacing: 0.04em; }
 .dl-row.ops .dl-text { color: #7dd3fc; }
 .dl-row.note .dl-text { color: #e2ecf7; }
+
+.dl-note-err {
+  margin-top: 8px;
+  font: 600 12px var(--mono, 'JetBrains Mono', monospace);
+  letter-spacing: 0.08em;
+  color: #f87171;
+}

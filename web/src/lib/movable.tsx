@@ -19,19 +19,6 @@ const MIN_KEY = 'ks-panel-min'
 
 export type PanelOffsets = Record<string, { x: number; y: number }>
 
-export function loadPanelOffsets(): PanelOffsets {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as PanelOffsets
-    const out: PanelOffsets = {}
-    for (const [k, v] of Object.entries(parsed)) {
-      if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) out[k] = { x: v.x, y: v.y }
-    }
-    return out
-  } catch {
-    return {}
-  }
-}
-
 function persist(offsets: PanelOffsets): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(offsets))
@@ -80,11 +67,6 @@ export function resetPanelLayout(): void {
     // storage blocked — the state reset below still applies this session
   }
   setAppState({ panelOffsets: {}, panelMinimized: {}, gloveMode: false, layoutPreset: null })
-}
-
-export function anyPanelMoved(): boolean {
-  const s = getAppState()
-  return Object.keys(s.panelOffsets).length > 0 || Object.keys(s.panelMinimized).length > 0
 }
 
 /** Don't let a panel be dragged fully offscreen — keep a grabbable margin. */

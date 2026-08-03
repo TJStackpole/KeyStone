@@ -26,7 +26,8 @@ export function OpsBanner() {
       break
     }
   }
-  if (!latest || Date.now() - latest.at > SHOW_MS) return null
+  // A single unparseable stamp must not pin the ribbon on screen forever.
+  if (!latest || !Number.isFinite(latest.at) || Date.now() - latest.at > SHOW_MS) return null
 
   const text =
     latest.kind === 'ops.duration-mark'

@@ -1515,35 +1515,6 @@ html, body {
 .mayday-clock { font-family: var(--mono); font-size: 13px; color: var(--amber); margin-top: 12px; letter-spacing: 0.1em; }
 .mayday-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 
-.nycem-panel {
-  position: absolute;
-  top: 62px;
-  right: 10px;
-  bottom: 10px;
-  width: 540px;
-  border-radius: 6px;
-  z-index: 45;
-  display: flex;
-  flex-direction: column;
-}
-.nycem-status { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-bottom: 10px; }
-.nycem-status span { display: block; font-size: 9.5px; letter-spacing: 0.12em; color: var(--text-faint); text-transform: uppercase; }
-.nycem-status b { font-family: var(--mono); font-size: 12px; color: var(--text); }
-.nycem-status b.hot { color: #ef4444; }
-.nycem-unified { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.nycem-casualties { display: flex; gap: 8px; margin: 4px 0 12px; }
-.cas { font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-dim); }
-.cas.red { color: #ef4444; border-color: rgba(239, 68, 68, 0.5); }
-.cas.yellow { color: #f59e0b; border-color: rgba(245, 158, 11, 0.5); }
-.cas.green { color: #22c55e; border-color: rgba(34, 197, 94, 0.5); }
-.nycem-rollup { margin-bottom: 12px; }
-.rollup-row { display: grid; grid-template-columns: 1.4fr 0.7fr 0.7fr 0.9fr 0.8fr 0.7fr; gap: 6px; align-items: center; padding: 5px 4px; border-bottom: 1px solid rgba(148, 163, 184, 0.08); font-family: var(--mono); font-size: 11px; }
-.rollup-row.head { font-size: 8.5px; letter-spacing: 0.12em; color: var(--text-faint); border-bottom: 1px solid var(--border); }
-.request-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 4px; border-bottom: 1px solid rgba(148, 163, 184, 0.08); }
-.request-row .req-text { font-size: 11.5px; color: var(--text-dim); }
-.request-row .req-text b { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--text); }
-.request-row .req-text i { display: block; color: var(--text-faint); font-style: normal; font-size: 10.5px; }
-
 .aar-backdrop { position: absolute; inset: 0; background: rgba(4, 7, 12, 0.72); z-index: 70; display: flex; align-items: center; justify-content: center; }
 .aar-panel { width: 720px; max-height: 84vh; display: flex; flex-direction: column; border-radius: 6px; }
 .aar-body { overflow-y: auto; padding: 4px 18px 18px; }
@@ -1737,25 +1708,6 @@ html, body {
 }
 .tile-state.lost { color: var(--amber-bright); }
 
-.drone-panel {
-  position: absolute;
-  right: 10px;
-  bottom: 16px;
-  width: 380px;
-  z-index: 30;
-  padding-bottom: 10px;
-}
-.drone-panel .video-tile { margin: 0 10px; cursor: default; }
-.drone-meta { font-family: var(--mono); font-size: 11px; color: var(--cyan); }
-
-.bodycam-wall {
-  position: absolute;
-  top: 74px;
-  right: 340px;
-  width: 460px;
-  z-index: 22;
-  padding-bottom: 10px;
-}
 .bodycam-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1928,8 +1880,8 @@ html, body {
 .count-chip b { color: #4ade80; }
 .strip-alarms { display: flex; gap: 4px; }
 .alarm-btn {
-  height: 22px;
-  padding: 0 8px;
+  min-height: 34px;
+  padding: 0 10px;
   background: rgba(7, 12, 20, 0.6);
   border: 1px solid rgba(91, 107, 128, 0.4);
   border-radius: 2px;
@@ -1941,6 +1893,7 @@ html, body {
   transition: all 120ms;
 }
 .alarm-btn.reached { border-color: rgba(245, 158, 11, 0.5); color: var(--amber-bright); }
+.alarm-btn:disabled { cursor: default; opacity: 0.9; }
 .alarm-btn.current { background: rgba(245, 158, 11, 0.16); box-shadow: var(--glow-amber); }
 .strip-btn {
   height: 24px;
@@ -2334,7 +2287,6 @@ body:has(.wc-left) .home-btn { left: 384px; }
   display: flex; flex-direction: column; gap: 6px; align-items: stretch;
   border-radius: 10px; padding: 8px; width: 92px;
 }
-.bv-title { font: 700 8px var(--mono); color: var(--cyan-dim); letter-spacing: 0.14em; text-align: center; }
 .bv-btn {
   background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text); font: 700 12px var(--mono); padding: 8px 0; cursor: pointer; transition: all 120ms;
@@ -2873,6 +2825,8 @@ body.panel-dragging * { cursor: grabbing !important; }
   transform: none;
   translate: none;
   width: auto;
+  height: auto; /* base rule fixes 38px; wrapped chip rows must grow the card, not paint over the type radios below */
+  min-height: 38px;
   margin: 8px 0 2px;
   padding: 6px 8px;
   border-radius: 6px;
@@ -2961,7 +2915,10 @@ body.panel-dragging * { cursor: grabbing !important; }
   cursor: default;
 }
 .dash-tab {
-  padding: 7px 12px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
   background: rgba(34, 211, 238, 0.06);
   border: 1px solid rgba(34, 211, 238, 0.3);
   border-radius: 5px;
@@ -3043,6 +3000,7 @@ body.panel-dragging * { cursor: grabbing !important; }
 .ops-banner {
   position: fixed;
   top: 96px;
+  pointer-events: none; /* status ribbon — must never eat clicks on the alarm row beneath */
   left: 0;
   right: 0;
   z-index: 78; /* over pages, under mayday (80) */

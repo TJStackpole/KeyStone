@@ -3,10 +3,11 @@ import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
-// The three FDNY command dashboards: tactical map, command board, riding
-// lists. Edge-swipe flips between them on a tablet; these tabs are the
-// mouse/keyboard path. Boards 2-3 are plain-DOM fallbacks — the way a chief
-// has always commanded, still there if the 3D view ever dies.
+// The five FDNY command dashboards: tactical map, command board, riding
+// list, decision log, resource ledger. Edge-swipe flips between them on a
+// tablet; these tabs are the mouse/keyboard path. Pages 1-4 are plain-DOM
+// fallbacks — the way a chief has always commanded, still there if the 3D
+// view ever dies.
 // ---------------------------------------------------------------------------
 
 const PAGES: { id: 0 | 1 | 2 | 3 | 4; label: string; hint: string }[] = [
@@ -22,7 +23,7 @@ export function DashboardTabs() {
   const { page } = useAppSlice((s) => ({ page: s.dashboardPage }))
   if (!isFdny) return null
   return (
-    <nav className="dash-tabs glass" aria-label="Manual — Map, Board, or Riding List. Swipe from the screen edge or tap">
+    <nav className="dash-tabs glass" aria-label="Manual dashboards — Map, Board, Riding List, Log, or Resources. Swipe from the screen edge or tap">
       <span className="dash-tabs-label" title="The fallback set — every page here works even if the 3D map dies">
         MANUAL
       </span>

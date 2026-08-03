@@ -1,7 +1,9 @@
+import { alarmLabel } from '../lib/alarms'
+import { fmtElapsed } from '../lib/time'
 import { useEffect, useMemo, useState } from 'react'
 import { setDashboardPage } from '../lib/layouts'
 import { setAppState, useAppSlice } from '../state/store'
-import { EDGE_CLASS, isApparatus } from '../lib/crews'
+import { edgeClassFor, isApparatus } from '../lib/crews'
 import type { Unit } from '../types'
 import './CommandBoardPage.css'
 
@@ -20,13 +22,6 @@ const POSITIONS: readonly string[] = ['COMMAND', 'ATTACK', 'SEARCH', 'VENT', 'WA
 function callsignKey(cs: string): string {
   const m = cs.match(/^([A-Za-z]+)[- ]?(\d+)/)
   return m ? `${m[1].toUpperCase()}-${m[2].padStart(4, '0')}` : cs.toUpperCase()
-}
-
-function fmtElapsed(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  const p = (n: number) => String(n).padStart(2, '0')
-  const hh = Math.floor(s / 3600)
-  return hh > 0 ? `${p(hh)}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}` : `${p(Math.floor(s / 60))}:${p(s % 60)}`
 }
 
 /** Every assignment change goes through here: store + localStorage together. */
@@ -61,7 +56,7 @@ function UnitTile({ unit, assignments }: { unit: Unit; assignments: Record<strin
   const assigned = assignments[unit.uid] !== undefined
   const cls = [
     'cb-tile',
-    EDGE_CLASS[unit.category] ?? 'edge-other',
+    edgeClassFor(unit.category),
     unit.agency !== 'FDNY' ? 'dim' : '',
   ].join(' ')
   return (
@@ -75,7 +70,7 @@ function UnitTile({ unit, assignments }: { unit: Unit; assignments: Record<strin
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') advance(assignments, unit.uid)
       }}
-      title={assigned ? 'Tap: next position · ✕: unassign' : 'Tap: assign to COMMAND'}
+      title={assigned ? 'Tap: next position (wraps back to the pool after REHAB) · ✕: straight back to the pool' : 'Tap: assign to COMMAND'}
     >
       <span className="cb-callsign">{unit.callsign}</span>
       <span className="cb-status">{unit.status ?? '—'}</span>
@@ -141,19 +136,19 @@ export function CommandBoardPage() {
   return (
     <div className="cmdboard-page">
       <header className="cb-header">
+        <button className="cb-map-btn" onClick={() => setDashboardPage(0)}>
+          ◀ MAP
+        </button>
         <div className="cb-title">
           <span className="cb-eyebrow">ELECTRONIC COMMAND BOARD</span>
           <span className="cb-address">{incident ? incident.address : 'NO ACTIVE INCIDENT — board still works standalone'}</span>
         </div>
         {incident?.type && <span className="cb-chip">{incident.type}</span>}
-        {incident?.alarmLevel && <span className="cb-chip amber">{incident.alarmLevel}</span>}
+        {incident?.alarmLevel && <span className="cb-chip amber">{alarmLabel(incident.alarmLevel)}</span>}
         <div className="cb-clock" aria-label="Elapsed since incident created">
           <span className="cb-clock-label">T+</span>
           <span className="cb-clock-val">{startMs === null ? '--:--' : fmtElapsed(nowMs - startMs)}</span>
         </div>
-        <button className="cb-map-btn" onClick={() => setDashboardPage(0)}>
-          ◀ MAP
-        </button>
       </header>
 
       <section

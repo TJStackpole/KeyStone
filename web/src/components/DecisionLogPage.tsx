@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import './DecisionLogPage.css'
 import { transmitAlarm } from '../actions'
+import { ALARM_LADDER, alarmRank } from '../lib/alarms'
 import { setDashboardPage } from '../lib/layouts'
+import { fmtWallClock } from '../lib/time'
 import { useAppSlice } from '../state/store'
-import type { AlarmLevel, TimelineEvent } from '../types'
+import type { TimelineEvent } from '../types'
 
 // ---------------------------------------------------------------------------
 // DECISION LOG — dashboard page 3. The ICS-214 activity log, one-tap: the IC
@@ -15,32 +17,28 @@ import type { AlarmLevel, TimelineEvent } from '../types'
 // never a log entry without the dispatch or vice versa.
 // ---------------------------------------------------------------------------
 
-const ALARM_BENCHMARKS: { code: string; level: AlarmLevel }[] = [
-  { code: '10-75', level: '10-75' },
-  { code: 'ALL HANDS', level: 'all-hands' },
-  { code: '2ND ALARM', level: '2nd' },
-  { code: '3RD ALARM', level: '3rd' },
-  { code: '4TH ALARM', level: '4th' },
-  { code: '5TH ALARM', level: '5th' },
-]
-
 const LOG_BENCHMARKS = [
   'PROBABLY WILL HOLD',
   'UNDER CONTROL',
   'MAYDAY DECLARED',
-  'PAR COMPLETE',
   'EXPOSURE PROBLEM',
   'COLLAPSE ZONE ESTABLISHED',
 ]
 
-const LOG_KINDS = new Set(['ic.benchmark', 'ic.note', 'ic.par-complete', 'ops.duration-mark', 'ops.par-due'])
+const LOG_KINDS = new Set(['ic.benchmark', 'ic.note', 'ic.par-complete', 'ops.duration-mark', 'ops.par-due', 'alert.mayday'])
 
-function post(kind: string, payload: Record<string, unknown>): void {
-  void fetch('/api/timeline', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ kind, payload }),
-  }).catch((err) => console.error('[log] post failed:', err))
+async function post(kind: string, payload: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/timeline', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind, payload }),
+    })
+    return res.ok
+  } catch (err) {
+    console.error('[log] post failed:', err)
+    return false
+  }
 }
 
 function rowText(ev: TimelineEvent): string {
@@ -58,15 +56,11 @@ function rowText(ev: TimelineEvent): string {
       return `${String(p.minutes)} MINUTES ON THE BOX`
     case 'ops.par-due':
       return `PAR OVERDUE — ${String(p.sinceMin)} MIN SINCE LAST PAR`
+    case 'alert.mayday':
+      return `MAYDAY — ${String(p.callsign ?? p.unit ?? p.text ?? 'DECLARED')}`
     default:
       return ev.kind
   }
-}
-
-function hhmmss(t: string): string {
-  const d = new Date(t)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 /** ICS-214-styled printable activity log (AarPanel print→PDF pattern). */
@@ -75,7 +69,7 @@ function printIcs214(incident: { address: string; createdAt: string } | null, ro
   if (!w) return
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const body = rows
-    .map((ev) => `<tr><td class="t">${esc(hhmmss(ev.t))}</td><td>${esc(rowText(ev))}</td></tr>`)
+    .map((ev) => `<tr><td class="t">${esc(fmtWallClock(ev.t))}</td><td>${esc(rowText(ev))}</td></tr>`)
     .join('')
   w.document.write(`<!doctype html><html><head><title>ICS-214 Activity Log</title><style>
     body { font: 13px/1.5 Georgia, serif; color: #111; margin: 40px; }
@@ -104,15 +98,22 @@ export function DecisionLogPage() {
     alarmLevel: s.incident?.alarmLevel ?? null,
   }))
   const [note, setNote] = useState('')
+  const [noteFailed, setNoteFailed] = useState(false)
   if (page !== 3) return null
 
   const rows = timeline.filter((ev) => LOG_KINDS.has(ev.kind)).slice(-200).reverse()
 
-  const sendNote = () => {
+  const sendNote = async () => {
     const text = note.trim()
     if (!text) return
-    post('ic.note', { text })
     setNote('')
+    setNoteFailed(false)
+    // The one entry that can't be reconstructed — restore the draft if the
+    // record never got it, and say so visibly (never console-only).
+    if (!(await post('ic.note', { text }))) {
+      setNote(text)
+      setNoteFailed(true)
+    }
   }
 
   return (
@@ -133,51 +134,63 @@ export function DecisionLogPage() {
       <section className="dl-benchmarks">
         <div className="dl-zone-label">ALARMS — escalate + log in one press</div>
         <div className="dl-grid">
-          {ALARM_BENCHMARKS.map((b) => (
-            <button
-              key={b.code}
-              className={`dl-btn alarm${alarmLevel === b.level ? ' current' : ''}`}
-              disabled={!incident}
-              onClick={() => void transmitAlarm(b.level)}
-              title={`Transmit ${b.code} — dispatches the escalation AND records the benchmark`}
-            >
-              {b.code}
-            </button>
-          ))}
+          {ALARM_LADDER.map((b) => {
+            const reached = alarmRank(alarmLevel) >= alarmRank(b.id)
+            return (
+              <button
+                key={b.id}
+                className={`dl-btn alarm${alarmLevel === b.id ? ' current' : ''}`}
+                disabled={!incident || reached}
+                onClick={() => void transmitAlarm(b.id)}
+                title={reached ? `${b.label} already transmitted — alarms only climb` : `Transmit ${b.label} — dispatches the escalation AND records the benchmark`}
+              >
+                {b.label}
+              </button>
+            )
+          })}
         </div>
-        <div className="dl-zone-label">BENCHMARKS — one tap, on the record</div>
+        <div className="dl-zone-label">BENCHMARKS — log only, one tap on the record</div>
         <div className="dl-grid">
           {LOG_BENCHMARKS.map((code) => (
             <button
               key={code}
               className="dl-btn"
               disabled={!incident}
-              onClick={() => (code === 'PAR COMPLETE' ? post('ic.par-complete', { units: [] }) : post('ic.benchmark', { code }))}
-              title={code === 'PAR COMPLETE' ? 'Logs the PAR and resets the PAR countdown' : `Log "${code}" with a server timestamp`}
+              onClick={() => void post('ic.benchmark', { code })}
+              title={`Log "${code}" with a server timestamp`}
             >
               {code}
             </button>
           ))}
+          <button
+            className="dl-btn"
+            disabled={!incident}
+            onClick={() => setDashboardPage(2)}
+            title="PAR is taken company-by-company — this opens the RIDING LIST where each stamp goes on the record and resets the PAR clock"
+          >
+            PAR → RIDING LIST
+          </button>
         </div>
         <div className="dl-note">
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendNote()}
+            onKeyDown={(e) => e.key === 'Enter' && void sendNote()}
             placeholder="Free-text entry — decisions, orders, conditions…"
             disabled={!incident}
           />
-          <button className="dl-btn send" disabled={!incident || !note.trim()} onClick={sendNote}>
+          <button className="dl-btn send" disabled={!incident || !note.trim()} onClick={() => void sendNote()}>
             LOG IT
           </button>
         </div>
+        {noteFailed && <div className="dl-note-err">ENTRY DID NOT REACH THE RECORD — check the link and press LOG IT again.</div>}
       </section>
 
       <section className="dl-log">
         {rows.length === 0 && <div className="dl-empty">Nothing on the record yet — benchmarks and notes land here, newest first.</div>}
         {rows.map((ev, i) => (
           <div key={`${ev.t}:${i}`} className={`dl-row ${ev.kind.startsWith('ops.') ? 'ops' : ev.kind === 'ic.note' ? 'note' : 'bench'}`}>
-            <span className="dl-time">{hhmmss(ev.t)}</span>
+            <span className="dl-time">{fmtWallClock(ev.t)}</span>
             <span className="dl-text">{rowText(ev)}</span>
           </div>
         ))}

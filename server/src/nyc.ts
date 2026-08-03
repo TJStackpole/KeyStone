@@ -87,14 +87,25 @@ function numbers(name: string, re: RegExp): number[] {
   return out
 }
 
+// The firehouse listing is static citywide data; every escalation preview
+// re-derives from it, so one SODA fetch per 10 minutes is plenty.
+let firehouseCache: { rows: FirehouseRow[]; at: number } | null = null
+const FIREHOUSE_CACHE_MS = 10 * 60_000
+
 export async function fetchFirehousesNear(lat: number, lon: number): Promise<Firehouse[]> {
-  const params = new URLSearchParams({
-    $select: 'facilityname,facilityaddress,latitude,longitude',
-    $limit: '400',
-  })
-  const res = await fetch(`${FIREHOUSES}?${params}`, { signal: AbortSignal.timeout(8000) })
-  if (!res.ok) throw new Error(`firehouses SODA ${res.status}`)
-  const rows = (await res.json()) as FirehouseRow[]
+  let rows: FirehouseRow[]
+  if (firehouseCache && Date.now() - firehouseCache.at < FIREHOUSE_CACHE_MS) {
+    rows = firehouseCache.rows
+  } else {
+    const params = new URLSearchParams({
+      $select: 'facilityname,facilityaddress,latitude,longitude',
+      $limit: '400',
+    })
+    const res = await fetch(`${FIREHOUSES}?${params}`, { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error(`firehouses SODA ${res.status}`)
+    rows = (await res.json()) as FirehouseRow[]
+    firehouseCache = { rows, at: Date.now() }
+  }
   return rows
     .filter((r) => r.latitude && r.longitude && r.facilityname)
     .map((r) => {

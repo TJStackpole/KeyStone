@@ -320,7 +320,6 @@ export class DrawController {
       positions,
       createdAt: new Date().toISOString(),
     })
-    console.log(`[tools] collapse zone: r=${Math.round(radius)} m (building ${Math.round(targetHeightM ?? 0)} m × 1.5)`)
   }
 
   // ---------------------------- vertex editing ------------------------------

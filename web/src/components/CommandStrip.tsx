@@ -1,28 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { transmitAlarm } from '../actions'
+import { ALARM_LADDER, alarmRank } from '../lib/alarms'
+import { fmtElapsed } from '../lib/time'
 import { replayEngine } from '../replay'
 import { useAppSlice } from '../state/store'
-import type { Agency, AlarmLevel } from '../types'
+import type { Agency } from '../types'
 
-const ALARMS: { id: AlarmLevel; label: string }[] = [
-  { id: '10-75', label: '10-75' },
-  { id: 'all-hands', label: 'ALL HANDS' },
-  { id: '2nd', label: '2ND ALARM' },
-  { id: '3rd', label: '3RD ALARM' },
-]
-
-const ALARM_ORDER: AlarmLevel[] = ['10-75', 'all-hands', '2nd', '3rd']
 const AGENCIES: Agency[] = ['FDNY', 'EMS', 'NYPD', 'PAPD', 'OEM']
-
-function fmtElapsed(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  const hh = Math.floor(s / 3600)
-  const mm = Math.floor((s % 3600) / 60)
-  const ss = s % 60
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`
-}
-
 
 
 /**
@@ -62,31 +46,46 @@ const PAR_PRESETS = [10, 15, 20, 30]
 /** OPS CLOCK chips: the 10-minute drumbeat countdown and the PAR cycle.
  *  Interval default 20 min — VALIDATE—SME (FDNY's real cadence TBC); the
  *  preference persists locally and mirrors to the server clock. */
-function OpsChips({ incident, timeline }: { incident: { createdAt: string }; timeline: { t: string; kind: string }[] }) {
+function OpsChips({ incident, timeline }: { incident: { createdAt: string }; timeline: { t: string; kind: string; payload?: unknown }[] }) {
   const [parMin, setParMin] = useState(() => {
     const v = Number(localStorage.getItem('ks-par-interval'))
     return PAR_PRESETS.includes(v) ? v : 20
   })
+  // The server clock is authoritative: adopt its interval on mount instead of
+  // pushing ours — two stations with different local prefs must not fight
+  // over the incident-wide PAR cycle. POST happens only on an explicit tap.
   useEffect(() => {
-    void fetch('/api/ops/par-interval', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ minutes: parMin }),
-    }).catch(() => {})
-  }, [parMin])
+    let dead = false
+    fetch('/api/ops/par-interval')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p: { minutes?: number } | null) => {
+        if (!dead && p && PAR_PRESETS.includes(Number(p.minutes))) setParMin(Number(p.minutes))
+      })
+      .catch(() => {})
+    return () => {
+      dead = true
+    }
+  }, [])
 
   const started = Date.parse(incident.createdAt)
   let lastPar = started
-  for (let i = timeline.length - 1; i >= 0; i--) {
-    if (timeline[i].kind === 'ic.par-complete') {
-      lastPar = Date.parse(timeline[i].t)
-      break
+  let lastMark = 0
+  for (const ev of timeline) {
+    if (ev.kind === 'ic.par-complete') {
+      const t = Date.parse(ev.t)
+      if (t > lastPar) lastPar = t
+    } else if (ev.kind === 'ops.duration-mark') {
+      const m = Number((ev.payload as { minutes?: number } | undefined)?.minutes)
+      if (Number.isFinite(m) && m > lastMark) lastMark = m
     }
   }
   const now = Date.now()
   const parLeft = lastPar + parMin * 60_000 - now
   const parTone = parLeft <= 0 ? ' overdue' : parLeft <= 120_000 ? ' warn' : ''
-  const nextMark = (Math.floor((now - started) / 600_000) + 1) * 10
+  // Hold at MK{n} 00:00 until the server's mark actually lands on the record —
+  // rolling to the next window early would contradict the banner by ~15 s.
+  const dueMark = Math.floor((now - started) / 600_000) * 10
+  const nextMark = lastMark >= dueMark ? lastMark + 10 : Math.max(dueMark, 10)
 
   return (
     <>
@@ -103,8 +102,13 @@ function OpsChips({ incident, timeline }: { incident: { createdAt: string }; tim
           } catch {
             // storage blocked — session-only preference
           }
+          void fetch('/api/ops/par-interval', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ minutes: next }),
+          }).catch(() => {})
         }}
-        title={`PAR cycle: every ${parMin} min (VALIDATE—SME — confirm FDNY cadence). Complete a PAR on the RIDING LIST to reset. Click to change the interval.`}
+        title={`PAR cycle: every ${parMin} min (VALIDATE—SME — confirm FDNY cadence). Complete a PAR on the RIDING LIST (or log one on the DECISION LOG) to reset. Click to change the interval.`}
       >
         PAR {parLeft <= 0 ? `+${fmtElapsed(-parLeft)}` : fmtElapsed(parLeft)}
       </button>
@@ -141,7 +145,9 @@ export function CommandStrip() {
   if (!incident) return null
 
   const elapsed = Date.now() - Date.parse(incident.createdAt)
-  const currentAlarm = incident.alarmLevel ?? '10-75'
+  // null until something is actually transmitted — a fresh box must not
+  // render 10-75 as reached/current when no 10-75 ever went out.
+  const currentAlarm = incident.alarmLevel ?? null
 
   if (replay.active) {
     return <ReplayStrip playing={replay.playing} duration={replay.duration} />
@@ -171,16 +177,17 @@ export function CommandStrip() {
         ))}
       </span>
       <span className="strip-alarms">
-        {ALARMS.map((a) => {
-          const reached = ALARM_ORDER.indexOf(currentAlarm) >= ALARM_ORDER.indexOf(a.id)
+        {ALARM_LADDER.map((a) => {
+          const reached = alarmRank(currentAlarm) >= alarmRank(a.id)
           return (
             <button
               key={a.id}
               className={`alarm-btn${reached ? ' reached' : ''}${currentAlarm === a.id ? ' current' : ''}`}
+              disabled={reached}
               onClick={() => void transmitAlarm(a.id)}
-              title={`Transmit ${a.label}`}
+              title={reached ? `${a.label} already transmitted — alarms only climb` : `Transmit ${a.label}`}
             >
-              {a.label}
+              {a.short}
             </button>
           )
         })}

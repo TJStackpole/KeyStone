@@ -25,7 +25,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 18px 22px 64px; /* bottom clearance for the MAP/BOARD/RIDING tabs */
+  padding: 18px 22px 64px; /* bottom clearance for the MANUAL dashboard tabs */
   overflow: hidden;
   background: var(--rp-bg);
   color: var(--rp-text);

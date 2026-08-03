@@ -91,8 +91,13 @@ export class OpsClock {
       if (ev.kind === 'ic.par-complete' && t > lastParAt) lastParAt = t
       if (ev.kind === 'ops.par-due' && t > lastDueAt) lastDueAt = t
     }
-    const dueAt = lastParAt + this.parIntervalMin * 60_000
-    if (now >= dueAt && lastDueAt <= lastParAt) {
+    // Count lapsed windows, not a boolean — an ignored first nag must NOT
+    // silence the clock: with a 20-min cycle and no PAR ever taken, the nag
+    // repeats at t+20, t+40, t+60...
+    const intervalMs = this.parIntervalMin * 60_000
+    const lapsedWindows = Math.floor((now - lastParAt) / intervalMs)
+    const announcedWindows = lastDueAt > lastParAt ? Math.floor((lastDueAt - lastParAt) / intervalMs) : 0
+    if (lapsedWindows >= 1 && lapsedWindows > announcedWindows) {
       this.deps.emit('ops.par-due', {
         sinceMin: Math.floor((now - lastParAt) / 60_000),
         intervalMin: this.parIntervalMin,

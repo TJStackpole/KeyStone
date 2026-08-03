@@ -57,7 +57,7 @@ export function applyLayoutPreset(key: string): void {
   notify(`LAYOUT · ${preset.label} — ${preset.hint}`)
 }
 
-const DASHBOARD_NAMES = ['TACTICAL MAP', 'COMMAND BOARD', 'RIDING LISTS', 'DECISION LOG', 'RESOURCES'] as const
+const DASHBOARD_NAMES = ['TACTICAL MAP', 'COMMAND BOARD', 'RIDING LIST', 'DECISION LOG', 'RESOURCE LEDGER'] as const
 
 export type DashboardPage = 0 | 1 | 2 | 3 | 4
 
@@ -110,7 +110,7 @@ export function attachLayoutSwipe(): () => void {
     if (Math.abs(dx) < MIN_DX || dy > MAX_DY || dt > MAX_MS) return
     // Swipe from the left edge rightward = next page; from the right edge
     // leftward = previous — matches page-flip intuition on both hands.
-    // FDNY gets the three command DASHBOARDS (map / board / riding lists);
+    // FDNY gets the five command DASHBOARDS (map / board / riding list / log / resources);
     // other profiles keep cycling layout presets.
     if (getAppState().profile === 'fdny') cycleDashboardPage(dx > 0 ? 1 : -1)
     else cycleLayoutPreset(dx > 0 ? 1 : -1)

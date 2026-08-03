@@ -1,3 +1,4 @@
+import { fmtWallClock } from '../lib/time'
 import { useEffect, useRef, useState } from 'react'
 import { useMovable } from '../lib/movable'
 import { changeIncidentType, editIncidentAddress, endIncident } from '../actions'
@@ -144,8 +145,7 @@ export function IncidentCard() {
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
-  const created = new Date(incident.createdAt)
-  const hhmmss = created.toTimeString().slice(0, 8)
+  const hhmmss = fmtWallClock(incident.createdAt)
 
   if (collapsed) {
     return (

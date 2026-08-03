@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import './ResourceLedgerPage.css'
-import { setDashboardPage } from '../lib/layouts'
+import { transmitAlarm } from '../actions'
+import { alarmLabel } from '../lib/alarms'
 import { edgeClassFor, isApparatus } from '../lib/crews'
+import { setDashboardPage } from '../lib/layouts'
 import { useAppSlice } from '../state/store'
 import type { Unit } from '../types'
 
@@ -23,8 +25,10 @@ function bucketOf(u: Unit): Bucket {
   if (s.includes('rehab')) return 'REHAB'
   if (s === 'operating') return 'OPERATING'
   if (s === 'staged') return 'STAGED'
-  if (s === 'enroute') return 'ENROUTE'
-  if (s !== '') return 'ON SCENE'
+  if (s === 'enroute' || s === 'en route') return 'ENROUTE'
+  if (s === 'on scene' || s === 'onscene') return 'ON SCENE'
+  // Unknown vocabulary (a real ATAK EUD can send anything) files as ASSIGNED,
+  // never as ON SCENE — accountability must not overstate who's arrived.
   return 'ASSIGNED'
 }
 
@@ -55,12 +59,17 @@ export function ResourceLedgerPage() {
     alarmLevel: s.incident?.alarmLevel ?? null,
   }))
   const [preview, setPreview] = useState<Preview | null>(null)
-  // unitCount in the deps: an escalation raises the alarm level ~2s before
-  // the reinforcements actually spawn — refetching again when they land
-  // keeps already-dispatched companies out of the "next alarm" row.
-  const unitCount = Object.keys(units).length
+  const apparatus = Object.values(units).filter(isApparatus)
+  // Apparatus count (not raw unit count — crew members spawn constantly) in
+  // the deps: an escalation raises the alarm level ~2s before the rigs
+  // actually spawn, and the refetch when they land keeps already-dispatched
+  // companies out of the "next alarm" row.
+  const apparatusCount = apparatus.length
   useEffect(() => {
-    if (page !== 4 || !incident) return
+    if (page !== 4 || !incident) {
+      setPreview(null) // a dead box must not keep a live ESCALATE row
+      return
+    }
     let dead = false
     fetch('/api/alarm/preview')
       .then((r) => (r.ok ? r.json() : null))
@@ -71,10 +80,8 @@ export function ResourceLedgerPage() {
     return () => {
       dead = true
     }
-  }, [page, incident, alarmLevel, unitCount])
+  }, [page, incident, alarmLevel, apparatusCount])
   if (page !== 4) return null
-
-  const apparatus = Object.values(units).filter(isApparatus)
   const byBucket = new Map<Bucket, Unit[]>(BUCKETS.map((b) => [b, []]))
   for (const u of apparatus) byBucket.get(bucketOf(u))!.push(u)
 
@@ -97,14 +104,39 @@ export function ResourceLedgerPage() {
   }
 
   const committed = new Set(apparatus.map((u) => u.callsign))
+  // EMPTY QUARTERS means empty: every company the house runs is on this box.
+  // A house with one of two companies out is thin, not empty — listing it
+  // here would overstate the coverage hole.
   const emptyQuarters = firehouses
     .map((f) => {
       const companies = houseCompanies(f.name)
       const out = companies.filter((c) => committed.has(c))
       return { house: f, companies, out }
     })
-    .filter((h) => h.out.length > 0)
-  const coverCandidates = firehouses.filter((f) => houseCompanies(f.name).every((c) => !committed.has(c)))
+    .filter((h) => h.companies.length > 0 && h.out.length === h.companies.length)
+  // Relocation candidates must actually run companies (marine/HQ facilities
+  // parse to zero) and none of them committed here.
+  const coverCandidates = firehouses.filter((f) => {
+    const companies = houseCompanies(f.name)
+    return companies.length > 0 && companies.every((c) => !committed.has(c))
+  })
+  // Suggest the candidate nearest the EMPTY house (equirectangular approx is
+  // plenty at borough scale) — not the one nearest the fire, which would
+  // strip coverage right next to the incident.
+  const nearestCover = (house: { lat: number; lon: number }) => {
+    let best: (typeof coverCandidates)[number] | null = null
+    let bestD = Infinity
+    for (const c of coverCandidates) {
+      const dx = (c.lon - house.lon) * Math.cos((house.lat * Math.PI) / 180)
+      const dy = c.lat - house.lat
+      const d = dx * dx + dy * dy
+      if (d < bestD) {
+        bestD = d
+        best = c
+      }
+    }
+    return best
+  }
 
   const summary = (adds: Preview['adds']) => {
     const n = (cat: string) => adds.filter((a) => a.category === cat).length
@@ -148,28 +180,21 @@ export function ResourceLedgerPage() {
 
       <section className="rl-preview">
         <div className="rl-zone-label">NEXT ALARM — previewed by the same logic that would dispatch it</div>
-        {preview?.nextLevel ? (
+        {incident && preview?.nextLevel ? (
           <div className="rl-preview-row">
-            <b>{preview.nextLevel.toUpperCase()} ALARM ADDS: {summary(preview.adds)}</b>
+            <b>{alarmLabel(preview.nextLevel)} ADDS: {summary(preview.adds)}</b>
             <span className="rl-callsigns">{preview.adds.map((a) => a.callsign).join(' · ')}</span>
             {preview.simActive === false && <span className="rl-warn">dispatch sim idle — preview only</span>}
             <button
               className="rl-escalate"
-              onClick={() => {
-                // Same unified server path the strip and log use: /api/alarm
-                // escalates AND writes the ic.benchmark row in one request.
-                void fetch('/api/alarm', {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify({ level: preview.nextLevel }),
-                }).catch(() => {})
-              }}
+              onClick={() => void transmitAlarm(preview.nextLevel as Parameters<typeof transmitAlarm>[0])}
+              title={`Transmit ${alarmLabel(preview.nextLevel)} — dispatches the escalation AND records the benchmark`}
             >
-              ESCALATE TO {preview.nextLevel.toUpperCase()}
+              ESCALATE TO {alarmLabel(preview.nextLevel)}
             </button>
           </div>
         ) : (
-          <div className="rl-empty">{incident ? 'Top of the ladder — no further alarm level.' : 'Preview needs a live box.'}</div>
+          <div className="rl-empty">{incident ? 'Top of the ladder — no further alarm level.' : 'NO ACTIVE INCIDENT — the preview needs a live box.'}</div>
         )}
       </section>
 
@@ -177,16 +202,17 @@ export function ResourceLedgerPage() {
         <div className="rl-zone-label">
           COVERAGE — EMPTY QUARTERS <span className="rl-sim-tag">SIMULATED · relocation suggestions are a heuristic, real orders come from dispatch (VALIDATE—SME)</span>
         </div>
-        {emptyQuarters.length === 0 && <div className="rl-empty">No committed quarters on this box yet.</div>}
-        {emptyQuarters.slice(0, 8).map((h, i) => (
-          <div key={h.house.name} className="rl-house">
-            <span className="rl-house-name">{h.house.name}</span>
-            <span className="rl-house-out">{h.out.join(', ')} COMMITTED</span>
-            {coverCandidates[i] && (
-              <span className="rl-house-suggest">SUGGEST: {houseCompanies(coverCandidates[i].name)[0] ?? coverCandidates[i].name} RELOCATES TO COVER</span>
-            )}
-          </div>
-        ))}
+        {emptyQuarters.length === 0 && <div className="rl-empty">No emptied quarters on this box yet.</div>}
+        {emptyQuarters.slice(0, 8).map((h) => {
+          const cover = nearestCover(h.house)
+          return (
+            <div key={h.house.name} className="rl-house">
+              <span className="rl-house-name">{h.house.name}</span>
+              <span className="rl-house-out">{h.out.join(', ')} COMMITTED</span>
+              {cover && <span className="rl-house-suggest">SUGGEST: {houseCompanies(cover.name)[0]} RELOCATES TO COVER</span>}
+            </div>
+          )
+        })}
       </section>
     </div>
   )

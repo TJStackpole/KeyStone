@@ -11,7 +11,7 @@ import { SitrepContent } from './SitrepPanel'
 import { VideoTile } from './VideoTile'
 
 // ---------------------------------------------------------------------------
-// Right utility dock — one panel, three tabs (SITREP / VIDEO / BIO), so the
+// Right utility dock — one panel, one tab strip (SITREP / VIDEO / BIO / FLOORS), so the
 // right side of the screen can never overlap itself.
 // ---------------------------------------------------------------------------
 

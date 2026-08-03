@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { alarmLabel } from '../lib/alarms'
 import { useAppSlice } from '../state/store'
 import type { Agency } from '../types'
 
@@ -7,13 +8,6 @@ import type { Agency } from '../types'
 // dashboard needs, composed live from the incident record, timeline
 // milestones, the unit picture, ICS overlay, and priority radio traffic.
 // ---------------------------------------------------------------------------
-
-const ALARM_LABEL: Record<string, string> = {
-  '10-75': '10-75',
-  'all-hands': 'ALL HANDS',
-  '2nd': '2ND ALARM',
-  '3rd': '3RD ALARM',
-}
 
 function hhmm(iso?: string): string {
   return iso ? new Date(iso).toTimeString().slice(0, 5) : '—'
@@ -41,7 +35,7 @@ export function SitrepContent() {
       } else if (ev.kind === 'sim.escalated')
         out.push({
           t: ev.t,
-          text: `${ALARM_LABEL[String(p.level)] ?? String(p.level)} transmitted (+${(p.added as string[])?.length ?? 0} units)`,
+          text: `${alarmLabel(String(p.level))} transmitted (+${(p.added as string[])?.length ?? 0} units)`,
         })
       else if (ev.kind === 'incident.updated' && p.type) out.push({ t: ev.t, text: `Incident type: ${String(p.type)}` })
     }
@@ -86,7 +80,7 @@ export function SitrepContent() {
       <div className="sitrep-updated">LIVE · AUTO-UPDATING</div>
       <div className="sitrep-body">
         <p className="sitrep-lead">
-          <b>{incident.type}</b> at <b>{incident.address}</b> — {ALARM_LABEL[incident.alarmLevel ?? '10-75']},
+          <b>{incident.type}</b> at <b>{incident.address}</b> — {incident.alarmLevel ? alarmLabel(incident.alarmLevel) : 'no alarm transmitted yet'},
           {' '}operating {elapsedMin} min{incident.bin ? ` · BIN ${incident.bin}` : ''}.
         </p>
 
