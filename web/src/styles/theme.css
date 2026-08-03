@@ -2977,5 +2977,29 @@ body.panel-dragging * { cursor: grabbing !important; }
 }
 
 /* Replay controls must never be hideable: when replay owns the board the
-   strip floats as fixed chrome above every dashboard page. */
-.app > .command-strip { z-index: 80; }
+   strip floats as fixed chrome above the dashboard pages — parked at the
+   bottom-right like a video transport, clear of the top-bar dropdowns,
+   comms (center), and the MANUAL switcher (left). */
+.app > .command-strip {
+  position: fixed;
+  top: auto;
+  left: auto;
+  transform: none;
+  translate: none;
+  right: 12px;
+  bottom: 52px;
+  width: auto;
+  max-width: min(560px, calc(100vw - 24px));
+  z-index: 71; /* above the riding page (66), below MANUAL tabs (72) */
+}
+
+/* Dropdowns read over photorealistic rooftops — near-opaque backs so menu
+   text never visually tangles with the scene or floating chrome. */
+.incidents-menu,
+.scenarios-menu,
+.overlays-menu,
+.panels-menu,
+.isolate-menu,
+.profile-menu {
+  background: rgba(10, 14, 20, 0.96);
+}
