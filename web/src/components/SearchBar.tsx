@@ -4,6 +4,8 @@ import { standUpIncident } from '../actions'
 import { setAppState, useAppSlice } from '../state/store'
 import type { GeoHit } from '../types'
 import { useNextStep } from '../lib/guidance'
+import { tryVoiceCommand } from '../lib/voiceCommands'
+import { notify } from './NoticeChip'
 
 // Speech engines often return house numbers as WORDS ("one hundred gold
 // street") which GeoSearch won't match — fold a leading run of number words
@@ -201,9 +203,18 @@ export function SearchBar() {
     rec.maxAlternatives = 1
     rec.onresult = (e) => {
       const transcript = Array.from(e.results, (r) => r[0]?.transcript ?? '').join(' ').trim()
+      if (!transcript) return
+      // Voice VERBS first ("isolate", "north side", "floor four", "undo",
+      // "brief") — a matched command executes and never pollutes the search.
+      const command = tryVoiceCommand(transcript)
+      if (command) {
+        notify(`VOICE · ${command}`)
+        rec.stop()
+        return
+      }
       // Normalized ("one hundred gold street" -> "100 gold street") so the
       // suggestion list fills exactly as if the address had been typed.
-      if (transcript) onChange(normalizeSpoken(transcript))
+      onChange(normalizeSpoken(transcript))
     }
     rec.onend = () => setListening(false)
     rec.onerror = () => setListening(false)

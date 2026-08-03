@@ -2779,3 +2779,69 @@ body.panel-dragging * { cursor: grabbing !important; }
 .changed-row.cyan .changed-text { color: #a5f3fc; }
 .changed-row.amber .changed-text { color: #fbbf24; }
 .changed-row.red .changed-text { color: #fca5a5; font-weight: 600; }
+
+/* Practice tour — plain-language guided first run. */
+.practice-tour {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 102px; /* the attention slot — the WHAT CHANGED strip yields during practice */
+  z-index: 48;
+  width: 400px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+}
+.practice-head { display: flex; align-items: center; gap: 8px; }
+.practice-head b { color: var(--amber, #f59e0b); letter-spacing: 0.08em; font-size: 11px; }
+.practice-count { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 10px; color: rgba(148, 163, 184, 0.9); }
+.practice-note { color: rgba(148, 163, 184, 0.85); font-size: 10px; margin: 4px 0 7px; }
+.practice-step {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(34, 211, 238, 0.08);
+  color: #e2ecf7;
+}
+.practice-step.done { color: rgba(148, 163, 184, 0.6); text-decoration: line-through; }
+.practice-check {
+  flex: 0 0 18px;
+  height: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  border-radius: 50%;
+  text-align: center;
+  line-height: 16px;
+  font-size: 10px;
+  color: var(--cyan, #22d3ee);
+}
+.practice-step.done .practice-check { border-color: #34d399; color: #34d399; text-decoration: none; }
+.practice-done { margin-top: 7px; padding: 6px 8px; border: 1px solid rgba(52, 211, 153, 0.5); border-radius: 4px; color: #6ee7b7; font-size: 10.5px; }
+.practice-item { width: 100%; text-align: left; }
+
+/* Honest-data cues: source + age on every feed-derived readout. */
+.data-age {
+  margin-left: 7px;
+  padding-left: 7px;
+  border-left: 1px solid rgba(148, 163, 184, 0.35);
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 8.5px;
+  color: rgba(148, 163, 184, 0.8);
+  letter-spacing: 0.03em;
+}
+.harbor-chip { cursor: default; color: #7dd3fc; }
+.harbor-chip.rising-fast { color: #fbbf24; border-color: rgba(245, 158, 11, 0.5); }
+
+/* Narrow screens: center-top is contested by the incident card — the strip
+   docks bottom-right instead (still movable/minimizable). */
+@media (max-width: 1200px) {
+  /* The strip and the tour never coexist (the strip yields during practice),
+     so they share the one uncontested narrow-screen slot. */
+  .changed-strip,
+  .practice-tour {
+    left: auto;
+    right: 12px;
+    top: auto;
+    bottom: 210px; /* clear of the comms panel and TAK LINK */
+    transform: none;
+    width: 320px;
+  }
+}

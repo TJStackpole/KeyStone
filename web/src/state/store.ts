@@ -134,6 +134,8 @@ export interface AppState {
   layoutPreset: string | null
   /** Glove-and-distance mode: UI chrome scaled ~35% for cab tablets / walls. */
   gloveMode: boolean
+  /** Guided first-run checklist (plain language, self-checking steps). */
+  practiceTour: boolean
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -332,6 +334,7 @@ const initial: AppState = {
   })(),
   layoutPreset: null,
   gloveMode: localStorage.getItem('ks-glove') === '1',
+  practiceTour: false,
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],

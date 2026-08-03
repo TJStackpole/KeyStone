@@ -22,6 +22,8 @@ import { resetPanelLayout } from '../lib/movable'
 import { hasCapability, PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
 import { NEXT_STEP_LABEL, useNextStep } from '../lib/guidance'
 import { applyLayoutPreset, LAYOUT_PRESETS } from '../lib/layouts'
+import { openBrief } from '../lib/brief'
+import { HarborChip } from './DataAge'
 import { SearchBar } from './SearchBar'
 import { requestElapsed } from './WatchCommandPanel'
 
@@ -233,6 +235,15 @@ function ScenariosMenu() {
       </button>
       {open && (
         <div className="scenarios-menu glass">
+          <button
+            className="panel-item practice-item no-drag"
+            onClick={() => {
+              setAppState({ practiceTour: true })
+            }}
+            title="A five-step guided practice run in plain language — fully simulated, nothing can break"
+          >
+            🎓 PRACTICE — LEARN THE FLOW
+          </button>
           <button className="scenario-item" onClick={() => launch('demo', () => void runDemoScenario())}>
             <b>{armedId === 'demo' ? 'REPLACES THE CURRENT BOARD — CLICK AGAIN' : 'DEMO'}</b>
             <i>Structural fire, 100 Gold St — full flow, plays unattended</i>
@@ -739,6 +750,14 @@ export function TopBar() {
         {incident && activeIncidentMode && <IsolateMenu />}
         {canWatch && <WatchCmdChip watchCommand={watchCommand} />}
         {canEoc && <EocChip />}
+        <HarborChip />
+        <button
+          className="chip chip-btn"
+          onClick={openBrief}
+          title="One-page plain-language situation brief in a new tab — print it, read it on the phone, or hand it over at shift change"
+        >
+          <span className="dot" /> BRIEF
+        </button>
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && (
           <button

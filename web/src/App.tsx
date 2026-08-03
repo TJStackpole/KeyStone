@@ -44,6 +44,7 @@ import { applyOverlayLod } from './cesium/overlayLod'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
 import { WhatChangedStrip } from './components/WhatChangedStrip'
+import { PracticeTour } from './components/PracticeTour'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -185,6 +186,7 @@ export default function App() {
       <ScenarioBar />
       <FeedHealthPanel />
       <WhatChangedStrip />
+      <PracticeTour />
       <MaydayAlert />
       <Gate cap="aar.drill-debrief">
         <AarPanel />
