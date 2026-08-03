@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMovable } from '../lib/movable'
-import { deleteSelectedShape, rotateSelectedApparatus, setDrawTool } from '../actions'
+import { clearAllShapes, deleteSelectedShape, rotateSelectedApparatus, setDrawTool } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { setAppState, useAppSlice } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
@@ -55,6 +55,14 @@ function StagingPicker() {
 export function DrawToolbar() {
   const mvDrawtoolbar = useMovable('draw-toolbar')
   const { drawTool, selectedShapeId, incident, streetViewOpen, shapes } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes }))
+  // CLR ALL is destructive — two presses within 3s, like the AAR discard.
+  const [clearArmed, setClearArmed] = useState(false)
+  useEffect(() => {
+    if (!clearArmed) return
+    const t = setTimeout(() => setClearArmed(false), 3000)
+    return () => clearTimeout(t)
+  }, [clearArmed])
+  const placedCount = Object.keys(shapes).length
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
@@ -159,6 +167,27 @@ export function DrawToolbar() {
           title="Delete selected shape (Del)"
         >
           ✕ DEL
+        </button>
+        <button
+          className={`tool-btn danger${clearArmed ? ' armed' : ''}`}
+          disabled={placedCount === 0}
+          onClick={() => {
+            if (!clearArmed) {
+              setClearArmed(true)
+              return
+            }
+            setClearArmed(false)
+            void clearAllShapes()
+          }}
+          title={
+            placedCount === 0
+              ? 'Nothing placed yet'
+              : clearArmed
+                ? 'Press again to delete EVERYTHING placed with these tools'
+                : `Delete all ${placedCount} placed item${placedCount === 1 ? '' : 's'} — perimeter, posts, staging, zones (press twice)`
+          }
+        >
+          {clearArmed ? 'SURE?' : 'CLR ALL'}
         </button>
       </div>
       {drawTool && (

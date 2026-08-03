@@ -2680,3 +2680,10 @@ body.panel-dragging * { cursor: grabbing !important; }
 .feed-lat { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 9px; color: rgba(148, 163, 184, 0.6); }
 .feed-detail { grid-column: 2 / -1; font-size: 9.5px; color: rgba(148, 163, 184, 0.85); }
 .feed-detail a { color: var(--cyan, #22d3ee); }
+
+.tool-btn.danger.armed {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fca5a5;
+  animation: ks-pulse-hint 0.8s ease-in-out infinite;
+}

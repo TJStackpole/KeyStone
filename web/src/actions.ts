@@ -2211,6 +2211,24 @@ export async function deleteShape(id: string): Promise<void> {
   }
 }
 
+/**
+ * CLR ALL under the draw tools: wipe every placed shape — perimeter, posts,
+ * staging pads, collapse zones, measurements — in one press (two-press
+ * confirm lives in the toolbar). Optimistic local wipe, then server deletes
+ * so every other dashboard's board clears too.
+ */
+export async function clearAllShapes(): Promise<void> {
+  const ids = Object.keys(getAppState().shapes)
+  if (!ids.length) return
+  setAppState({ shapes: {}, selectedShapeId: null, drawTool: null })
+  getShapeLayer()?.clear()
+  const results = await Promise.allSettled(
+    ids.map((id) => fetch(`/api/shapes/${encodeURIComponent(id)}`, { method: 'DELETE' })),
+  )
+  const failed = results.filter((r) => r.status === 'rejected').length
+  if (failed) notify(`CLEAR ALL: ${failed} shape${failed === 1 ? '' : 's'} failed to delete on the server`, 'red')
+}
+
 export function setDrawTool(tool: ReturnType<typeof getAppState>['drawTool']): void {
   const current = getAppState().drawTool
   getDrawController()?.cancelDraft()
