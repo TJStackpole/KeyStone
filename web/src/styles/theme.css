@@ -2882,3 +2882,58 @@ body.panel-dragging * { cursor: grabbing !important; }
   align-items: center;
 }
 .incident-card .command-strip .strip-collapse { display: none; }
+
+/* ---- Dropdown containment: every top-bar menu stays clickable on ANY
+   screen — scroll inside the menu instead of running past the page. ---- */
+.scenarios-menu,
+.incidents-menu,
+.overlays-menu,
+.panels-menu,
+.isolate-menu,
+.profile-menu {
+  max-height: calc(100vh - 116px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-width: min(420px, calc(100vw - 24px));
+}
+/* Left-anchored menus near the screen center can spill right on narrow
+   viewports — clamp them to the viewport edge instead. */
+@media (max-width: 1280px) {
+  .scenarios-menu { left: auto; right: 0; }
+  .incidents-menu { width: min(390px, calc(100vw - 24px)); }
+}
+
+/* Condensed menu rows: same content, ~35% less height per item. */
+.scenario-item { padding: 7px 10px !important; }
+.scenario-item b { font-size: 11px; }
+.scenario-item i { font-size: 9px; line-height: 1.25; }
+.panel-item { padding: 7px 10px !important; font-size: 10.5px; }
+.practice-item { padding: 7px 10px !important; }
+
+/* Narrow screens (tablet portrait / small panes): anchored dropdowns can
+   hang off a chip that itself sits past the edge — pin every menu to the
+   VIEWPORT as a full-width sheet instead, and let the top bar itself
+   scroll sideways so no chip is ever unreachable. */
+@media (max-width: 900px) {
+  .topbar {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scenarios-menu,
+  .incidents-menu,
+  .overlays-menu,
+  .panels-menu,
+  .isolate-menu,
+  .profile-menu {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: 92px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - 104px);
+    z-index: 60;
+  }
+}
