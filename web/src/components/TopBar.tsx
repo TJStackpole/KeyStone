@@ -20,6 +20,8 @@ import { setAppState, useAppSlice } from '../state/store'
 import type { FeedIncident, ToggleLayerId } from '../types'
 import { resetPanelLayout } from '../lib/movable'
 import { hasCapability, PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
+import { NEXT_STEP_LABEL, useNextStep } from '../lib/guidance'
+import { applyLayoutPreset, LAYOUT_PRESETS } from '../lib/layouts'
 import { SearchBar } from './SearchBar'
 import { requestElapsed } from './WatchCommandPanel'
 
@@ -341,18 +343,15 @@ function EocChip() {
  * three top-bar slots.
  */
 function IsolateMenu() {
-  const { isolateMode, isolateView, isolateScale, hasIncident, profile, replayActive } = useAppSlice((s) => ({
+  const { isolateMode, isolateView, isolateScale } = useAppSlice((s) => ({
     isolateMode: s.isolateMode,
     isolateView: s.isolateView,
     isolateScale: s.isolateScale,
-    hasIncident: !!s.incident,
-    profile: s.profile,
-    replayActive: s.replay.active,
   }))
   // The FDNY flow the operators are trained on: ACTIVE INCIDENT → check
-  // ISOLATE on → structure views lock. Pulse the next step so nobody has to
-  // remember it mid-chaos.
-  const nextStep = hasIncident && !isolateMode && !replayActive && hasCapability(profile, 'tactical.view-lock')
+  // ISOLATE on → structure views lock. The guidance spine decides when this
+  // is THE next step so every pulse on screen agrees.
+  const nextStep = useNextStep() === 'isolate'
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -455,7 +454,12 @@ function PanelsMenu({
     feedPanelOpen: s.feedPanelOpen,
   }))
   const layoutMoved = Object.keys(panelOffsets).length > 0
-  const feedTrouble = Object.values(feedHealth).some((f) => f.status === 'down' || f.status === 'stale')
+  const menuProfile = useProfile()
+  // Trouble badge honors profile filtering — no phantom ⚠ for feeds this
+  // workspace can't even see (the panel filters identically).
+  const feedTrouble = Object.values(feedHealth).some(
+    (f) => hasCapability(menuProfile, f.capabilityId) && (f.status === 'down' || f.status === 'stale'),
+  )
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -479,6 +483,21 @@ function PanelsMenu({
       </button>
       {open && (
         <div className="panels-menu glass">
+          <div className="panel-presets" title="Role layouts — arrange every box for the job in one press (edge-swipe cycles these on a tablet)">
+            {LAYOUT_PRESETS.map((pr) => (
+              <button
+                key={pr.key}
+                className="preset-btn"
+                title={pr.hint}
+                onClick={() => {
+                  setOpen(false)
+                  applyLayoutPreset(pr.key)
+                }}
+              >
+                {pr.label}
+              </button>
+            ))}
+          </div>
           <button
             className="panel-item"
             onClick={() => {
@@ -636,6 +655,7 @@ function WatchCmdChip({ watchCommand }: { watchCommand: boolean }) {
 export function TopBar() {
   const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand, viewLock } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand, viewLock: s.viewLock }))
   const canManuals = useCapability('doctrine.manuals')
+  const nextStepId = useNextStep()
   const canTactics = useCapability('tactics.engine')
   const canWatch = useCapability('watchcommand.portfolio')
   const canEoc = useCapability('eoc.level-chip')
@@ -673,7 +693,7 @@ export function TopBar() {
           </button>
         )}
         <button
-          className={`chip chip-btn amber${incident && activeIncidentMode ? ' active' : ''}${!incident && !inspected ? ' disabled' : ''}`}
+          className={`chip chip-btn amber${incident && activeIncidentMode ? ' active' : ''}${!incident && !inspected ? ' disabled' : ''}${nextStepId === 'active-incident' ? ' pulse-hint' : ''}`}
           aria-disabled={!incident && !inspected}
           onClick={() => {
             // aria-disabled keeps the chip keyboard-reachable (its title is
@@ -692,6 +712,14 @@ export function TopBar() {
         >
           <span className="dot" /> ACTIVE INCIDENT
         </button>
+        {nextStepId && (
+          <span
+            className="chip next-chip"
+            title="The trained next action — the matching control is glowing. One lit step at a time."
+          >
+            NEXT · {NEXT_STEP_LABEL[nextStepId]}
+          </span>
+        )}
         {incident && activeIncidentMode && <IsolateMenu />}
         {canWatch && <WatchCmdChip watchCommand={watchCommand} />}
         {canEoc && <EocChip />}

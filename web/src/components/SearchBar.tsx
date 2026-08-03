@@ -3,6 +3,7 @@ import { autocompleteAddress } from '../api/geosearch'
 import { standUpIncident } from '../actions'
 import { setAppState, useAppSlice } from '../state/store'
 import type { GeoHit } from '../types'
+import { useNextStep } from '../lib/guidance'
 
 // Speech engines often return house numbers as WORDS ("one hundred gold
 // street") which GeoSearch won't match — fold a leading run of number words
@@ -90,6 +91,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 export function SearchBar() {
+  const searchNext = useNextStep() === 'search'
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<GeoHit[]>([])
   const [open, setOpen] = useState(false)
@@ -231,7 +233,7 @@ export function SearchBar() {
   }
 
   return (
-    <div className="searchwrap" ref={wrapRef}>
+    <div className={`searchwrap${searchNext ? ' pulse-hint' : ''}`} ref={wrapRef}>
       <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="11" cy="11" r="7" />
         <path d="m21 21-4.3-4.3" />

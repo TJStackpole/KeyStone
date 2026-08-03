@@ -42,6 +42,7 @@ import { BattleViewBar } from './components/BattleViewBar'
 import { hasCapability, useCapability } from './profiles/manifest'
 import { applyOverlayLod } from './cesium/overlayLod'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
+import { attachLayoutSwipe } from './lib/layouts'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -111,6 +112,7 @@ export default function App() {
 
   useEffect(() => {
     let disposed = false
+    let detachSwipe: (() => void) | null = null
     let viewer: Viewer | undefined
     if (!globeRef.current) return
 
@@ -147,6 +149,8 @@ export default function App() {
         })
         // The four major vehicular tunnels are citywide + static — load once.
         ensureTunnels()
+        // Tablet/ATAK: edge swipes flip role layouts like dashboard pages.
+        detachSwipe = attachLayoutSwipe()
       })
       .catch((err) => {
         console.error('[scene] init failed:', err)
@@ -155,6 +159,7 @@ export default function App() {
 
     return () => {
       disposed = true
+      detachSwipe?.()
       unregisterScene()
       viewer?.destroy()
     }

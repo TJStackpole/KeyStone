@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMovable } from '../lib/movable'
+import { useNextStep } from '../lib/guidance'
 import { clearAllShapes, deleteSelectedShape, rotateSelectedApparatus, setDrawTool, undoShapeAction } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { setAppState, useAppSlice } from '../state/store'
@@ -54,7 +55,7 @@ function StagingPicker() {
 
 export function DrawToolbar() {
   const mvDrawtoolbar = useMovable('draw-toolbar')
-  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes, undoDepth, undoLabel } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes, undoDepth: s.undoDepth, undoLabel: s.undoLabel }))
+  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes, undoDepth, undoLabel, replayActive } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes, undoDepth: s.undoDepth, undoLabel: s.undoLabel, replayActive: s.replay.active }))
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return
@@ -74,6 +75,7 @@ export function DrawToolbar() {
     return () => clearTimeout(t)
   }, [clearArmed])
   const placedCount = Object.keys(shapes).length
+  const perimNext = useNextStep() === 'perimeter'
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
@@ -101,7 +103,7 @@ export function DrawToolbar() {
         {ZONES.map((z) => (
           <button
             key={z}
-            className={`tool-btn${drawTool === z ? ' on' : ''}`}
+            className={`tool-btn${perimNext ? ' pulse-hint' : ''}${drawTool === z ? ' on' : ''}`}
             style={{ ['--tool-color' as string]: ZONE_STYLE[z].css }}
             onClick={() => setDrawTool(z)}
             title="Draw an editable perimeter outline — click vertices, Enter or double-click to close, then drag points to adjust"
@@ -173,7 +175,7 @@ export function DrawToolbar() {
         <div className="tool-divider" />
         <button
           className="tool-btn danger"
-          disabled={!selectedShapeId}
+          disabled={!selectedShapeId || replayActive}
           onClick={deleteSelectedShape}
           title="Delete selected shape (Del)"
         >
@@ -182,7 +184,7 @@ export function DrawToolbar() {
         <button
           className="tool-btn"
           style={{ ['--tool-color' as string]: '#22d3ee' }}
-          disabled={undoDepth === 0}
+          disabled={undoDepth === 0 || replayActive}
           onClick={() => void undoShapeAction()}
           title={undoDepth === 0 ? 'Nothing to undo yet' : `Undo ${undoLabel} — ${undoDepth} step${undoDepth === 1 ? '' : 's'} back available (⌘Z)`}
         >
@@ -190,7 +192,7 @@ export function DrawToolbar() {
         </button>
         <button
           className={`tool-btn danger${clearArmed ? ' armed' : ''}`}
-          disabled={placedCount === 0}
+          disabled={placedCount === 0 || replayActive}
           onClick={() => {
             if (!clearArmed) {
               setClearArmed(true)

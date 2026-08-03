@@ -130,6 +130,8 @@ export interface AppState {
   panelOffsets: import('../lib/movable').PanelOffsets
   /** Panels collapsed to their smallest (header-only) state, persisted. */
   panelMinimized: Record<string, boolean>
+  /** Active role layout preset key (ic/ops/planning/wall), if one applied. */
+  layoutPreset: string | null
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -326,6 +328,7 @@ const initial: AppState = {
       return {}
     }
   })(),
+  layoutPreset: null,
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],

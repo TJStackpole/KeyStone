@@ -2709,3 +2709,31 @@ body.panel-dragging * { cursor: grabbing !important; }
   font-size: 11px;
   pointer-events: none;
 }
+
+.next-chip {
+  color: var(--amber, #f59e0b);
+  border-color: rgba(245, 158, 11, 0.45);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: default;
+}
+.searchwrap.pulse-hint { border-radius: 6px; animation: ks-pulse-hint 2.2s ease-in-out infinite; }
+.tool-btn.pulse-hint { animation: ks-pulse-hint 2.2s ease-in-out infinite; }
+.panel-presets {
+  display: flex;
+  gap: 4px;
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.14);
+}
+.preset-btn {
+  flex: 1;
+  padding: 4px 0;
+  background: rgba(34, 211, 238, 0.07);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  border-radius: 4px;
+  color: var(--cyan, #22d3ee);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.preset-btn:hover { background: rgba(34, 211, 238, 0.16); }
