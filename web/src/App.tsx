@@ -16,7 +16,6 @@ import {
 import { getAppState, setAppState, useAppSlice, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
-import { CommandStrip } from './components/CommandStrip'
 import { CommsPanel } from './components/CommsPanel'
 import { UtilityDock } from './components/UtilityDock'
 import { DrawToolbar } from './components/DrawToolbar'
@@ -172,7 +171,6 @@ export default function App() {
     <div className={`app${gloveMode ? ' glove' : ''}`}>
       <div ref={globeRef} className="globe" />
       <TopBar />
-      <CommandStrip />
       <div className="left-dock">
         <IncidentCard />
         <RosterPanel />

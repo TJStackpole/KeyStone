@@ -4,6 +4,7 @@ import { changeIncidentType, editIncidentAddress, endIncident } from '../actions
 import { autocompleteAddress } from '../api/geosearch'
 import { useAppSlice } from '../state/store'
 import { INCIDENT_TYPES, type GeoHit, type Incident } from '../types'
+import { CommandStrip } from './CommandStrip'
 
 /** Two-click END control: first click arms CONFIRM, second tears the board down. */
 function EndIncidentButton() {
@@ -182,6 +183,7 @@ export function IncidentCard() {
         )}
         <span>
           STOOD UP <b>{hhmmss}</b>
+        <CommandStrip />
         </span>
       </div>
       <div className="seg" role="radiogroup" aria-label="Incident type">

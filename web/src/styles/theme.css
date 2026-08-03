@@ -2865,3 +2865,20 @@ body.panel-dragging * { cursor: grabbing !important; }
 @media (max-width: 1200px) {
   .packet { width: 380px; }
 }
+
+/* Command strip lives inside the incident card now — the alarm ladder is
+   incident chrome, not a second floating bar fighting the top bar. */
+.incident-card .command-strip {
+  position: static;
+  transform: none;
+  translate: none;
+  width: auto;
+  margin: 8px 0 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.incident-card .command-strip .strip-collapse { display: none; }
