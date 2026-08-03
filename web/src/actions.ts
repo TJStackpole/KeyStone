@@ -149,7 +149,16 @@ export async function focusFeedIncident(fi: FeedIncident): Promise<void> {
     },
     feedIncidentType(fi.type),
   )
-  setAppState({ focusedFeedId: fi.id })
+  // The officer pressed THEIR box: assemble the response packet — dispatch
+  // knowledge + building record + fire-so-far — and put the street view and
+  // full SITREP up alongside, so the size-up starts before they arrive.
+  setAppState({
+    focusedFeedId: fi.id,
+    cadIncident: fi,
+    responsePacketOpen: true,
+    streetViewOpen: true,
+    utilityTab: 'sitrep',
+  })
   // The feed reported units responding — put them on the picture.
   void dispatchAssignment()
 }
@@ -1465,6 +1474,8 @@ export function clearLocalIncident(): void {
   lastFootprints = null
   setAppState({
     incident: null,
+    cadIncident: null,
+    responsePacketOpen: false,
     shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,

@@ -29,7 +29,10 @@ import { requestElapsed } from './WatchCommandPanel'
 
 // Map overlays that live in the top-bar OVERLAYS dropdown rather than the
 // (incident-gated) Site Intel chip row — they're useful with no incident up.
-const OVERLAYS: { id: ToggleLayerId; label: string; hint: string }[] = [
+// `nycemOnly`: coordination geography (agency office locations) — an FDNY
+// officer reads NYPD/NYCEM presence as UNITS on the scene, not buildings on
+// a map. Their own boundaries, hydro/road context, and hospitals stay.
+const OVERLAYS: { id: ToggleLayerId; label: string; hint: string; nycemOnly?: boolean }[] = [
   { id: 'battalions', label: 'FDNY Battalions', hint: 'Battalion boundary lines' },
   { id: 'divisions', label: 'FDNY Divisions', hint: 'Division boundary lines' },
   { id: 'lots', label: 'Address grid', hint: 'Tax-lot borders — click inside one to load its address' },
@@ -37,13 +40,15 @@ const OVERLAYS: { id: ToggleLayerId; label: string; hint: string }[] = [
   { id: 'tunnels', label: 'Tunnels', hint: 'Major vehicular tunnels — Lincoln, Holland, Queens-Midtown, Hugh L. Carey (commercial access varies per tunnel)' },
   { id: 'poiFirehouses', label: 'All firehouses', hint: 'Every FDNY firehouse citywide (Facilities DB)' },
   { id: 'poiFdny', label: 'FDNY buildings', hint: 'Official FDNY buildings — HQ, offices, training, EMS stations' },
-  { id: 'poiPrecincts', label: 'NYPD precincts', hint: 'Precinct station houses citywide' },
+  { id: 'poiPrecincts', label: 'NYPD precincts', hint: 'Precinct station houses citywide', nycemOnly: true },
   { id: 'poiHospitals', label: 'Major hospitals', hint: 'Hospitals and acute-care hospitals citywide' },
-  { id: 'poiNycem', label: 'NYCEM HQ', hint: 'NYC Emergency Management headquarters and offices' },
+  { id: 'poiNycem', label: 'NYCEM HQ', hint: 'NYC Emergency Management headquarters and offices', nycemOnly: true },
 ]
 
 function OverlaysMenu() {
   const { layerToggles } = useAppSlice((s) => ({ layerToggles: s.layerToggles }))
+  const overlaysProfile = useProfile()
+  const items = OVERLAYS.filter((o) => !o.nycemOnly || overlaysProfile === 'nycem')
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -56,7 +61,7 @@ function OverlaysMenu() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [open])
 
-  const anyOn = OVERLAYS.some((o) => layerToggles[o.id])
+  const anyOn = items.some((o) => layerToggles[o.id])
   return (
     <div className="overlays-wrap" ref={wrapRef}>
       <button
@@ -68,7 +73,7 @@ function OverlaysMenu() {
       </button>
       {open && (
         <div className="overlays-menu glass">
-          {OVERLAYS.map((o) => (
+          {items.map((o) => (
             <label key={o.id} className="overlay-row" title={o.hint}>
               <input type="checkbox" checked={layerToggles[o.id]} onChange={() => toggleLayer(o.id)} />
               <span>{o.label}</span>
@@ -135,7 +140,7 @@ function IncidentsMenu() {
       <button
         className={`chip chip-btn amber${focusedFeedId ? ' active' : ''}`}
         onClick={() => setOpen((o) => !o)}
-        title="Citywide incidents from the FDNY / NYPD / PAPD dispatch centers (SIMULATED) — click one to focus the board on it"
+        title="Dispatch CAD feed (SIMULATED — FireCAD integration point). Press the box you are responding to: KeyStone stands it up and builds your response packet — dispatch info, the building, street view, and the fire so far"
       >
         <span className="dot" /> INCIDENTS {dispatchFeed.length} {open ? '▴' : '▾'}
       </button>
@@ -459,6 +464,7 @@ function PanelsMenu({
   utilityTab: string | null
   toggleTab: (tab: PanelTabId) => void
 }) {
+  const canPolicyAdmin = useCapability('admin.policy-editor')
   const { panelOffsets, feedHealth, feedPanelOpen, gloveMode } = useAppSlice((s) => ({
     panelOffsets: s.panelOffsets,
     feedHealth: s.feedHealth,
@@ -545,16 +551,18 @@ function PanelsMenu({
           >
             LIVE FEEDS{feedTrouble ? ' ⚠' : ''}
           </button>
-          <button
-            className="panel-item"
-            onClick={() => {
-              setOpen(false)
-              setAppState({ policyEditorOpen: true })
-            }}
-            title="Cross-agency visibility policy — hot-reloads on every dashboard (admin)"
-          >
-            POLICY · ADMIN
-          </button>
+          {canPolicyAdmin && (
+            <button
+              className="panel-item"
+              onClick={() => {
+                setOpen(false)
+                setAppState({ policyEditorOpen: true })
+              }}
+              title="Cross-agency visibility policy — hot-reloads on every dashboard (admin)"
+            >
+              POLICY · ADMIN
+            </button>
+          )}
           {PANEL_TABS.map((t) => (
             <button
               key={t.id}

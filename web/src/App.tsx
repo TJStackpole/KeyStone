@@ -45,6 +45,7 @@ import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
 import { WhatChangedStrip } from './components/WhatChangedStrip'
 import { PracticeTour } from './components/PracticeTour'
+import { ResponsePacket } from './components/ResponsePacket'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -187,6 +188,7 @@ export default function App() {
       <FeedHealthPanel />
       <WhatChangedStrip />
       <PracticeTour />
+      <ResponsePacket />
       <MaydayAlert />
       <Gate cap="aar.drill-debrief">
         <AarPanel />

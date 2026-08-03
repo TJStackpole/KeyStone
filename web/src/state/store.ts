@@ -136,6 +136,9 @@ export interface AppState {
   gloveMode: boolean
   /** Guided first-run checklist (plain language, self-checking steps). */
   practiceTour: boolean
+  /** The CAD feed entry the officer pressed to respond (SIMULATED FireCAD). */
+  cadIncident: import('../types').FeedIncident | null
+  responsePacketOpen: boolean
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -335,6 +338,8 @@ const initial: AppState = {
   layoutPreset: null,
   gloveMode: localStorage.getItem('ks-glove') === '1',
   practiceTour: false,
+  cadIncident: null,
+  responsePacketOpen: false,
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],

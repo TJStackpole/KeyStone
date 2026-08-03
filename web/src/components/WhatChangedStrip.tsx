@@ -40,7 +40,7 @@ function timelineText(kind: string, payload: unknown): string {
 
 export function WhatChangedStrip() {
   const mvChanged = useMovable('what-changed')
-  const { timeline, weatherAlerts, alert, requests, thresholds, incident, watchCommand, practiceTour } = useAppSlice(
+  const { timeline, weatherAlerts, alert, requests, thresholds, incident, watchCommand, practiceTour, packetOpen } = useAppSlice(
     (s) => ({
       timeline: s.timeline,
       weatherAlerts: s.weatherAlerts,
@@ -50,6 +50,7 @@ export function WhatChangedStrip() {
       incident: s.incident,
       watchCommand: s.watchCommand,
       practiceTour: s.practiceTour,
+      packetOpen: s.responsePacketOpen,
     }),
   )
   // Ages keep counting between store updates.
@@ -62,7 +63,8 @@ export function WhatChangedStrip() {
   // Watch Command has the CITYWIDE EVENT TICKER — a second queue on the
   // same screen is clutter, and the strip collides with the WC panels.
   // During PRACTICE the tour owns the attention slot for the same reason.
-  if (watchCommand || practiceTour) return null
+  // ...and the RESPONSE PACKET owns it while an officer is sizing up.
+  if (watchCommand || practiceTour || packetOpen) return null
 
   const now = Date.now()
   const rows: ChangeRow[] = []
