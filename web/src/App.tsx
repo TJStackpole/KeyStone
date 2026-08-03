@@ -13,7 +13,7 @@ import {
   restoreIncident,
   setGroundHeightFt,
 } from './actions'
-import { getAppState, setAppState, useAppState } from './state/store'
+import { getAppState, setAppState, useAppSlice, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { CommandStrip } from './components/CommandStrip'
@@ -43,6 +43,7 @@ import { hasCapability, useCapability } from './profiles/manifest'
 import { applyOverlayLod } from './cesium/overlayLod'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
+import { WhatChangedStrip } from './components/WhatChangedStrip'
 
 /**
  * Prompt 12 — manifest gate: children render only when the active profile
@@ -109,6 +110,7 @@ function BootVeil({ msg }: { msg: string }) {
 export default function App() {
   const globeRef = useRef<HTMLDivElement>(null)
   const [bootMsg, setBootMsg] = useState('Initializing 3D scene')
+  const { gloveMode } = useAppSlice((s) => ({ gloveMode: s.gloveMode }))
 
   useEffect(() => {
     let disposed = false
@@ -166,7 +168,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="app">
+    <div className={`app${gloveMode ? ' glove' : ''}`}>
       <div ref={globeRef} className="globe" />
       <TopBar />
       <CommandStrip />
@@ -182,6 +184,7 @@ export default function App() {
       <GroundHeightControl />
       <ScenarioBar />
       <FeedHealthPanel />
+      <WhatChangedStrip />
       <MaydayAlert />
       <Gate cap="aar.drill-debrief">
         <AarPanel />

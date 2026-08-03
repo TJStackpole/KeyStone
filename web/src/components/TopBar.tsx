@@ -448,10 +448,11 @@ function PanelsMenu({
   utilityTab: string | null
   toggleTab: (tab: PanelTabId) => void
 }) {
-  const { panelOffsets, feedHealth, feedPanelOpen } = useAppSlice((s) => ({
+  const { panelOffsets, feedHealth, feedPanelOpen, gloveMode } = useAppSlice((s) => ({
     panelOffsets: s.panelOffsets,
     feedHealth: s.feedHealth,
     feedPanelOpen: s.feedPanelOpen,
+    gloveMode: s.gloveMode,
   }))
   const layoutMoved = Object.keys(panelOffsets).length > 0
   const menuProfile = useProfile()
@@ -507,6 +508,21 @@ function PanelsMenu({
             title="Every info box you dragged returns to its default position"
           >
             RESET LAYOUT
+          </button>
+          <button
+            className={`panel-item${gloveMode ? ' on' : ''}`}
+            onClick={() => {
+              const next = !gloveMode
+              try {
+                localStorage.setItem('ks-glove', next ? '1' : '0')
+              } catch {
+                // storage blocked — session-only is fine
+              }
+              setAppState({ gloveMode: next })
+            }}
+            title="Glove-and-distance mode — every control and label ~35% bigger for apparatus-cab tablets and wall displays"
+          >
+            GLOVE MODE{gloveMode ? ' ✓' : ''}
           </button>
           <button
             className={`panel-item${feedPanelOpen ? ' on' : ''}`}

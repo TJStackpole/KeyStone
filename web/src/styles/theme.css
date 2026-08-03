@@ -2737,3 +2737,45 @@ body.panel-dragging * { cursor: grabbing !important; }
   cursor: pointer;
 }
 .preset-btn:hover { background: rgba(34, 211, 238, 0.16); }
+
+/* Glove-and-distance mode: scale every UI layer over the globe (the canvas
+   itself stays native). `zoom` composes with the panel translate offsets. */
+.app.glove > *:not(.globe) {
+  zoom: 1.35;
+}
+
+/* WHAT CHANGED — the single attention queue, bottom-center over the globe. */
+.changed-strip {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 102px; /* under the command strip — bottom-center belongs to comms */
+  z-index: 44;
+  width: 430px;
+  padding: 7px 10px;
+  font-size: 10.5px;
+}
+.changed-head {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: rgba(148, 163, 184, 0.85);
+  margin-bottom: 4px;
+}
+.changed-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  border-top: 1px solid rgba(34, 211, 238, 0.07);
+}
+.changed-age {
+  flex: 0 0 44px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 9px;
+  color: rgba(148, 163, 184, 0.7);
+  text-align: right;
+}
+.changed-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changed-row.cyan .changed-text { color: #a5f3fc; }
+.changed-row.amber .changed-text { color: #fbbf24; }
+.changed-row.red .changed-text { color: #fca5a5; font-weight: 600; }

@@ -132,6 +132,8 @@ export interface AppState {
   panelMinimized: Record<string, boolean>
   /** Active role layout preset key (ic/ops/planning/wall), if one applied. */
   layoutPreset: string | null
+  /** Glove-and-distance mode: UI chrome scaled ~35% for cab tablets / walls. */
+  gloveMode: boolean
   portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
   portfolioHoverId: string | null
@@ -329,6 +331,7 @@ const initial: AppState = {
     }
   })(),
   layoutPreset: null,
+  gloveMode: localStorage.getItem('ks-glove') === '1',
   portfolio: [],
   portfolioHoverId: null,
   tickerFeed: [],
