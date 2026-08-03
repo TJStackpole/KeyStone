@@ -68,11 +68,18 @@ export function togglePanelMinimized(id: string): void {
   })
 }
 
-/** The RESET LAYOUT button: every box returns to its default position and size. */
+/** The RESET LAYOUT button: every box returns to its default position and
+ *  size, and glove-mode zoom switches off — ONE button un-messes the screen
+ *  no matter what combination got someone lost. */
 export function resetPanelLayout(): void {
   persist({})
   persistMin({})
-  setAppState({ panelOffsets: {}, panelMinimized: {} })
+  try {
+    localStorage.setItem('ks-glove', '0')
+  } catch {
+    // storage blocked — the state reset below still applies this session
+  }
+  setAppState({ panelOffsets: {}, panelMinimized: {}, gloveMode: false, layoutPreset: null })
 }
 
 export function anyPanelMoved(): boolean {

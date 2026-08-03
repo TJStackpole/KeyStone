@@ -2741,7 +2741,14 @@ body.panel-dragging * { cursor: grabbing !important; }
 /* Glove-and-distance mode: scale every UI layer over the globe (the canvas
    itself stays native). `zoom` composes with the panel translate offsets. */
 .app.glove > *:not(.globe) {
-  zoom: 1.35;
+  zoom: 1.2;
+}
+/* Below full-desk width the bigger chrome no longer fits — glove scales
+   down instead of pushing panels off the screen. */
+@media (max-width: 1500px) {
+  .app.glove > *:not(.globe) {
+    zoom: 1.1;
+  }
 }
 
 /* WHAT CHANGED — the single attention queue, bottom-center over the globe. */
