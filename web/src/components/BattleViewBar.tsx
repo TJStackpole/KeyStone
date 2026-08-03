@@ -50,10 +50,10 @@ export function BattleViewBar() {
       else if (k === 'e') setViewLockMode('east')
       else if (k === 's') setViewLockMode('south')
       else if (k === 'w') setViewLockMode('west')
-      else if (e.key === 'ArrowUp' && viewLock !== 'top') {
+      else if (e.key === 'ArrowUp') {
         e.preventDefault()
         stepViewLockFloor(1)
-      } else if (e.key === 'ArrowDown' && viewLock !== 'top') {
+      } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         stepViewLockFloor(-1)
       } else return
@@ -64,6 +64,7 @@ export function BattleViewBar() {
 
   if (viewLock === 'off') return null
   const sideMode = viewLock !== 'top'
+  const planMode = viewLock === 'top'
   const floors = viewLockFloors()
   const fireFloor = battleFireFloor()
   const onFloor = sideMode
@@ -96,7 +97,7 @@ export function BattleViewBar() {
           </button>
         ))}
       </div>
-      {sideMode && (
+      {(sideMode || planMode) && (
         <div className="bv-floor">
           <button
             className="bv-btn"
@@ -107,7 +108,7 @@ export function BattleViewBar() {
             ▲
           </button>
           <div className="bv-floor-readout" title={`${onFloor} tracked member${onFloor === 1 ? '' : 's'} on this floor`}>
-            <b>FL {viewLockFloor}</b>
+            <b>{planMode ? 'PLAN ' : ''}FL {viewLockFloor}</b>
             <i>
               {onFloor > 0 ? `${onFloor} MBR` : '—'} · {floors} FL
             </i>

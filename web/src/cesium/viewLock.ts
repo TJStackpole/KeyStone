@@ -151,7 +151,9 @@ function lockController(mode: Exclude<ViewLockMode, 'off'>): void {
   }
   ctl.enableRotate = false
   ctl.enableTilt = false
-  ctl.enableTranslate = false
+  // TOP is a working plan view: panning stays live so the operator can
+  // drift and re-center over the building. Facade views stay fully pinned.
+  ctl.enableTranslate = mode === 'top'
   ctl.enableLook = false
   ctl.enableZoom = true // zoom stays live in every locked mode
   const { heightM } = buildingRef()
@@ -249,7 +251,9 @@ export function stepViewLockFloor(delta: number): void {
  *  readout, never the camera, so the operator's zoom is never yanked. */
 export function jumpViewLockFloor(floor: number): void {
   const s = getAppState()
-  if (s.viewLock === 'off' || s.viewLock === 'top') return
+  if (s.viewLock === 'off') return
+  // TOP view steps the PLAN floor (blueprint cutaway) — no camera motion.
+  if (s.viewLock === 'top' && !s.isolateMode) return
   const next = Math.max(1, Math.min(viewLockFloors(), Math.round(floor)))
   if (next === s.viewLockFloor) return
   setAppState({ viewLockFloor: next })
