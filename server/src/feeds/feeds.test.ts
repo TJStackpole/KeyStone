@@ -138,3 +138,53 @@ test('rate budget: calls beyond the window throw BudgetExhausted and recover aft
   await tick(140)
   await assert.rejects(feedContext.fetchJson(url, opts), (e: Error) => e.name !== 'BudgetExhausted')
 })
+
+test('BudgetExhausted never flips a feed DOWN nor escalates backoff', async () => {
+  const { BudgetExhausted: BE } = await import('./scheduler.js')
+  registerFeed(
+    makeAdapter({
+      id: 'budgeted',
+      poll: async () => {
+        throw new BE('tight')
+      },
+    }),
+  )
+  startFeeds(() => {})
+  await tick(200) // several refresh intervals of pure budget exhaustion
+  const h = feedHealth('budgeted')!
+  assert.equal(h.consecutiveFails, 0, 'our own throttle is not an upstream failure')
+  assert.notEqual(h.status, 'down')
+  assert.match(h.lastError ?? '', /rate budget/)
+})
+
+test('clearing an unmocked feed is a strict no-op (no timer churn, no re-push)', async () => {
+  let polled = 0
+  const msgs: unknown[] = []
+  registerFeed(
+    makeAdapter({
+      refreshIntervalMs: 60_000, // long — any extra poll must come from churn
+      poll: async () => {
+        polled++
+        return {}
+      },
+    }),
+  )
+  startFeeds((m) => msgs.push(m))
+  await tick(30)
+  const before = polled
+  const msgsBefore = msgs.length
+  setFeedMock('test-feed', null) // nothing was mocked
+  await tick(400) // past the 250ms resume-poll window that a real clear schedules
+  assert.equal(polled, before, 'no burst re-poll')
+  assert.equal(msgs.length, msgsBefore, 'no re-push or health chatter')
+})
+
+test('health re-announces on every successful poll, not just status flips', async () => {
+  const healths: unknown[] = []
+  registerFeed(makeAdapter({ refreshIntervalMs: 40 }))
+  startFeeds((m) => {
+    if ((m as { type: string }).type === 'feed.health') healths.push(m)
+  })
+  await tick(200)
+  assert.ok(healths.length >= 3, `dashboards must see fresh lastSuccess each round (got ${healths.length})`)
+})

@@ -17,6 +17,7 @@ function makeHarness() {
   const opened: string[] = []
   const transitions: { id: string; state: string }[] = []
   const alarms: { level: string; replay: boolean }[] = []
+  const feedMockClears: number[] = []
   const shapes = new Map<string, IcsShape>()
   const deps: EngineDeps = {
     publishCot: () => true,
@@ -38,12 +39,15 @@ function makeHarness() {
     transitionRequest: (id, state) => {
       transitions.push({ id, state })
     },
+    clearFeedMocks: () => {
+      feedMockClears.push(Date.now())
+    },
   }
-  return { engine: new ScenarioEngine(deps), opened, transitions, alarms }
+  return { engine: new ScenarioEngine(deps), opened, transitions, alarms, feedMockClears }
 }
 
 test('scripted requests open exactly once across rewind and re-cross; replayed transitions and alarms are suppressed', async () => {
-  const { engine, opened, transitions, alarms } = makeHarness()
+  const { engine, opened, transitions, alarms, feedMockClears } = makeHarness()
   await engine.load('pabt-flood-exercise')
 
   // Forward to t=400: all 8 scripted requests and the 9 transitions ≤400.
@@ -54,9 +58,12 @@ test('scripted requests open exactly once across rewind and re-cross; replayed t
   assert.deepEqual(alarms, [{ level: '2nd', replay: false }], 'first alarm announces live')
 
   // Rewind to t=200: requests persist (they are the accountability record) —
-  // the replay must not re-open or re-transition anything.
+  // the replay must not re-open or re-transition anything. Feed mocks follow
+  // transcript semantics: wiped on rewind so a pre-rewind FUTURE inject can't
+  // keep serving SIMULATED data (catchUp re-applies any inject <= target).
   engine.seekTo(200)
   assert.equal(opened.length, 8, 'rewind must not re-open scripted requests')
+  assert.ok(feedMockClears.length >= 1, 'rewind wipes feed mocks before catchUp re-applies them')
   assert.equal(transitions.length, 10, 'rewind must not re-apply transitions')
 
   // Forward re-cross of already-emitted span: still nothing new, and the

@@ -32,7 +32,11 @@ export function fmtAge(ms: number | null): string {
 export function FeedHealthPanel() {
   const mvFeeds = useMovable('feed-health')
   const profile = useProfile()
-  const { feedHealth, open } = useAppSlice((s) => ({ feedHealth: s.feedHealth, open: s.feedPanelOpen }))
+  const { feedHealth, feedData, open } = useAppSlice((s) => ({
+    feedHealth: s.feedHealth,
+    feedData: s.feedData,
+    open: s.feedPanelOpen,
+  }))
   // Ages advance every second even when no ws traffic arrives — an age that
   // stops counting is exactly the lie this panel exists to prevent.
   const [, setTick] = useState(0)
@@ -40,6 +44,27 @@ export function FeedHealthPanel() {
     if (!open) return
     const t = setInterval(() => setTick((n) => n + 1), 1000)
     return () => clearInterval(t)
+  }, [open])
+  // Pull-only feeds (dot-cameras) never push updates over the ws — while the
+  // panel is open, refresh the whole health set over REST so their rows stay
+  // as honest as the pushed ones.
+  useEffect(() => {
+    if (!open) return
+    let dead = false
+    const refresh = () =>
+      fetch('/api/feeds/health')
+        .then((r) => r.json())
+        .then((body: { feeds: FeedHealthWire[] }) => {
+          if (dead || !Array.isArray(body.feeds)) return
+          setAppState({ feedHealth: Object.fromEntries(body.feeds.map((h) => [h.id, h])) })
+        })
+        .catch(() => {}) // transient — the ws stream still updates push feeds
+    refresh()
+    const t = setInterval(refresh, 15_000)
+    return () => {
+      dead = true
+      clearInterval(t)
+    }
   }, [open])
 
   if (!open) return null
@@ -65,18 +90,19 @@ export function FeedHealthPanel() {
       <div className="feed-rows">
         {feeds.length === 0 && <div className="feed-empty">No feeds registered for this workspace.</div>}
         {feeds.map((f) => (
-          <FeedRow key={f.id} f={f} />
+          <FeedRow key={f.id} f={f} dataAt={feedData[f.id]?.at ?? null} />
         ))}
       </div>
     </aside>
   )
 }
 
-function FeedRow({ f }: { f: FeedHealthWire }) {
-  // ageMs was computed server-side at send time — advance it locally so the
-  // label keeps counting between pushes.
+function FeedRow({ f, dataAt }: { f: FeedHealthWire; dataAt: number | null }) {
+  // Age of the data ON SCREEN: the pushed payload's own timestamp beats the
+  // health record (which can lag between REST refreshes), and mock rows
+  // count from injection time instead of freezing at 'now'.
   const sentAgo = f.lastSuccess !== null ? Date.now() - f.lastSuccess : null
-  const age = f.status === 'mock' ? f.ageMs : (sentAgo ?? f.ageMs)
+  const age = dataAt !== null ? Date.now() - dataAt : (sentAgo ?? f.ageMs)
   return (
     <div className={`feed-row ${f.status}`}>
       <span className={`feed-dot ${f.status}`} />

@@ -315,7 +315,12 @@ export class ScenarioEngine extends EventEmitter {
       alarmLevel: '10-75',
     } as Incident
     this.deps.createIncident(inc)
-    this.resetTranscripts() // a previous run's radio log is stale, not history
+    this.resetTranscripts()
+    // Feed mocks follow transcript semantics on rewinds: wipe, then let
+    // catchUp re-apply every feed_mock inject at or before the seek target —
+    // otherwise a mock injected in the pre-rewind FUTURE keeps serving
+    // SIMULATED data at a clock before it exists.
+    this.deps.clearFeedMocks?.() // a previous run's radio log is stale, not history
     this.deps.emitTimeline('scenario.loaded', { name: file.name, drill: file.drill })
     this.pushStatus()
   }

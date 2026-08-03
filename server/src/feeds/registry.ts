@@ -27,6 +27,7 @@ interface Entry {
   consecutiveFails: number
   timer: NodeJS.Timeout | null
   lastBroadcastStatus: FeedStatus | null
+  lastBroadcastSuccess: number | null
   polling: boolean
 }
 
@@ -48,6 +49,7 @@ export function registerFeed(adapter: FeedAdapter): void {
     consecutiveFails: 0,
     timer: null,
     lastBroadcastStatus: null,
+    lastBroadcastSuccess: null,
     polling: false,
   })
 }
@@ -102,8 +104,12 @@ export function feedData(id: string): FeedData | null {
 
 function announce(e: Entry): void {
   const status = statusOf(e)
-  if (status !== e.lastBroadcastStatus) {
+  // Re-announce on every successful poll too (lastSuccess moved), not just
+  // on status flips — otherwise dashboards hold a boot-time health record
+  // and a perfectly LIVE feed's displayed age climbs forever.
+  if (status !== e.lastBroadcastStatus || e.lastSuccess !== e.lastBroadcastSuccess) {
     e.lastBroadcastStatus = status
+    e.lastBroadcastSuccess = e.lastSuccess
     broadcastFn({ type: 'feed.health', health: feedHealth(e.adapter.id) })
   }
 }
@@ -138,9 +144,11 @@ async function pollOnce(e: Entry): Promise<void> {
     }
     pushData(e)
   } catch (err) {
-    e.consecutiveFails++
     e.lastError = err instanceof Error ? err.message : String(err)
+    // Budget exhaustion is OUR throttle, not an upstream failure — it must
+    // never flip the feed DOWN or escalate backoff; just wait one refresh.
     if (!(err instanceof BudgetExhausted)) {
+      e.consecutiveFails++
       console.error(`[feeds] ${e.adapter.id} poll failed (${e.consecutiveFails}x):`, e.lastError)
     }
   } finally {
@@ -180,6 +188,10 @@ export function startFeeds(broadcast: Broadcast): void {
 export function setFeedMock(id: string, payload: unknown | null): boolean {
   const e = entries.get(id)
   if (!e) return false
+  // Clearing an unmocked feed is a strict no-op — clearAllFeedMocks runs on
+  // EVERY scenario load/stop, and timer churn here would burst-fire every
+  // adapter's upstream 250ms later for nothing.
+  if (payload === null && !e.mock) return true
   e.mock =
     payload === null
       ? null
@@ -187,12 +199,15 @@ export function setFeedMock(id: string, payload: unknown | null): boolean {
   if (e.mock) {
     pushData(e)
   } else {
-    // Back to live: poll soon so the layer refills with real data.
+    // Back to live: poll soon so the layer refills with real data. Feeds
+    // with nothing pushable to re-serve (pull-only lists, or never-polled)
+    // get an explicit tombstone so clients drop the stranded SIMULATED data.
     if (e.timer) clearTimeout(e.timer)
     const t = setTimeout(() => void pollOnce(e), 250)
     t.unref?.()
     e.timer = t
-    if (e.data) pushData(e)
+    if (e.data && e.adapter.push !== false) pushData(e)
+    else broadcastFn({ type: 'feed.data.clear', id })
   }
   announce(e)
   return true

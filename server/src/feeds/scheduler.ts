@@ -58,9 +58,10 @@ function cacheGet(url: string, ttlMs: number): Buffer | null {
 }
 
 function cachePut(url: string, body: Buffer): void {
+  // Delete-then-set moves a re-written key to the back — true LRU-on-write.
+  cache.delete(url)
   cache.set(url, { at: Date.now(), body })
   if (cache.size > CACHE_MAX_ENTRIES) {
-    // Oldest-first eviction (Map preserves insertion order; re-set on write).
     const first = cache.keys().next().value
     if (first !== undefined) cache.delete(first)
   }
@@ -76,7 +77,9 @@ async function fetchRaw(url: string, opts: FeedFetchOpts): Promise<Buffer> {
     const res = await fetch(url, { headers: opts.headers, signal: ctl.signal })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = Buffer.from(await res.arrayBuffer())
-    cachePut(url, body)
+    // Cache only what a caller can ever read back — ttl-less fetches would
+    // just pin dead bodies in the LRU.
+    if ((opts.ttlMs ?? 0) > 0) cachePut(url, body)
     return body
   } finally {
     clearTimeout(timer)

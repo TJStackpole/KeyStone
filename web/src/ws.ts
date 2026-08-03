@@ -57,6 +57,10 @@ interface FeedDataMsg {
   type: 'feed.data'
   data: FeedDataWire
 }
+interface FeedDataClearMsg {
+  type: 'feed.data.clear'
+  id: string
+}
 interface PolicyMsg {
   type: 'policy'
   policy: Record<string, string>
@@ -183,6 +187,7 @@ type ServerMsg =
   | WeatherMsg
   | FeedHealthMsg
   | FeedDataMsg
+  | FeedDataClearMsg
   | RulesMsg
 
 let started = false
@@ -221,6 +226,11 @@ export function connectWs(): void {
 // (scenario.status), incident lifecycle, and the reconnect snapshot (handled
 // replay-aware below).
 const REPLAY_SAFE = new Set([
+  // Feed layer state is orthogonal to replay — the health board must stay
+  // honest mid-playback (handlers only touch feedHealth/feedData records).
+  'feed.health',
+  'feed.data',
+  'feed.data.clear',
   'transcript',
   'transcript.reset',
   'tak.status',
@@ -432,6 +442,16 @@ function handle(msg: ServerMsg): void {
     case 'feed.data': {
       const d = msg.data
       setAppState((s) => ({ feedData: { ...s.feedData, [d.id]: d } }))
+      break
+    }
+    case 'feed.data.clear': {
+      // Mock cleared with no live payload to re-push (pull-only feeds) —
+      // drop the stranded SIMULATED data instead of serving it forever.
+      setAppState((s) => {
+        const feedData = { ...s.feedData }
+        delete feedData[msg.id]
+        return { feedData }
+      })
       break
     }
     case 'weather':

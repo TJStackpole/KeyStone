@@ -2205,6 +2205,7 @@ export function clearShapeUndo(): void {
 }
 
 export async function undoShapeAction(): Promise<void> {
+  if (getAppState().replay.active) return
   const entry = undoStack.pop()
   setAppState({ undoDepth: undoStack.length, undoLabel: undoStack[undoStack.length - 1]?.label ?? null })
   if (entry) await entry.apply()
@@ -2243,8 +2244,21 @@ async function removeShapeSilent(id: string): Promise<void> {
   }
 }
 
+/** Drag-end save: the undo entry restores the PRE-drag shape captured when
+ *  the drag started — recording the post-drag state would make undo a no-op. */
+export async function saveShapeWithPrior(shape: IcsShape, prior: IcsShape | null): Promise<void> {
+  if (getAppState().replay.active) return
+  pushShapeUndo(
+    prior
+      ? { label: `${prior.kind} edit`, apply: () => persistShape(prior) }
+      : { label: `${shape.kind} placement`, apply: () => removeShapeSilent(shape.id) },
+  )
+  await persistShape(shape)
+}
+
 /** Persist + broadcast + CoT-publish one shape (create or vertex edit). */
 export async function saveShape(shape: IcsShape): Promise<void> {
+  if (getAppState().replay.active) return // the replayed picture is history, not a draft
   const prior = getAppState().shapes[shape.id]
   pushShapeUndo(
     prior
@@ -2255,6 +2269,7 @@ export async function saveShape(shape: IcsShape): Promise<void> {
 }
 
 export async function deleteShape(id: string): Promise<void> {
+  if (getAppState().replay.active) return
   const prior = getAppState().shapes[id]
   if (prior) pushShapeUndo({ label: `${prior.kind} delete`, apply: () => persistShape(prior) })
   await removeShapeSilent(id)
@@ -2267,6 +2282,7 @@ export async function deleteShape(id: string): Promise<void> {
  * so every other dashboard's board clears too.
  */
 export async function clearAllShapes(): Promise<void> {
+  if (getAppState().replay.active) return // never bulk-delete the historical picture
   const prior = Object.values(getAppState().shapes)
   if (!prior.length) return
   pushShapeUndo({
@@ -2277,10 +2293,18 @@ export async function clearAllShapes(): Promise<void> {
   })
   setAppState({ shapes: {}, selectedShapeId: null, drawTool: null })
   getShapeLayer()?.clear()
+  // Half-drawn drafts and the selected shape's vertex handles live in the
+  // DrawController's own sources — clear them too or they orphan on screen.
+  getDrawController()?.cancelDraft()
+  getDrawController()?.renderHandles()
   const results = await Promise.allSettled(
     prior.map((s) => fetch(`/api/shapes/${encodeURIComponent(s.id)}`, { method: 'DELETE' })),
   )
-  const failed = results.filter((r) => r.status === 'rejected').length
+  // HTTP-level failures count too (a 5xx is a fulfilled fetch); 404 means
+  // the shape was already gone — that IS success for a delete.
+  const failed = results.filter(
+    (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok && r.value.status !== 404),
+  ).length
   if (failed) notify(`CLEAR ALL: ${failed} shape${failed === 1 ? '' : 's'} failed to delete on the server`, 'red')
 }
 

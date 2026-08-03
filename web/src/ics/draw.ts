@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium'
-import { deleteShape, exitGround, inspectBuildingAt, rotateSelectedApparatus, saveShape } from '../actions'
+import { deleteShape, exitGround, inspectBuildingAt, rotateSelectedApparatus, saveShape, saveShapeWithPrior } from '../actions'
 import { ShapeLayer, ZONE_STYLE } from '../cesium/shapes'
 import { enterGroundView } from '../cesium/viewmode'
 import { haversineMeters } from '../lib/geo'
@@ -26,6 +26,8 @@ export class DrawController {
   private draftSource = new Cesium.CustomDataSource('draw-draft')
   private handleSource = new Cesium.CustomDataSource('draw-handles')
   private dragIndex: number | null = null
+  /** Shape as it was when the current drag started — the undo target. */
+  private dragPrior: import('../types').IcsShape | null = null
   private draggingApparatus: string | null = null
   private lastDragUpdate = 0
   private keyListener = (e: KeyboardEvent) => this.onKey(e)
@@ -336,6 +338,7 @@ export class DrawController {
     if (typeof entityId !== 'string') return
     if (entityId.startsWith('handle:')) {
       this.dragIndex = Number(entityId.split(':')[1])
+      this.dragPrior = getAppState().shapes[getAppState().selectedShapeId ?? ''] ?? null
       this.viewer.scene.screenSpaceCameraController.enableInputs = false
       return
     }
@@ -345,6 +348,7 @@ export class DrawController {
       const shape = shapeId ? getAppState().shapes[shapeId] : null
       if (shape?.kind === 'apparatus') {
         this.draggingApparatus = shape.id
+        this.dragPrior = shape
         setAppState({ selectedShapeId: shape.id })
         this.viewer.scene.screenSpaceCameraController.enableInputs = false
       }
@@ -390,7 +394,8 @@ export class DrawController {
       const dragged = getAppState().shapes[this.draggingApparatus]
       this.draggingApparatus = null
       this.viewer.scene.screenSpaceCameraController.enableInputs = true
-      if (dragged) void saveShape(dragged) // persist + re-publish CoT
+      if (dragged) void saveShapeWithPrior(dragged, this.dragPrior) // undo restores the pre-drag spot
+      this.dragPrior = null
       return
     }
     if (this.dragIndex === null) return
@@ -398,7 +403,8 @@ export class DrawController {
     this.viewer.scene.screenSpaceCameraController.enableInputs = true
     const state = getAppState()
     const shape = state.selectedShapeId ? state.shapes[state.selectedShapeId] : null
-    if (shape) void saveShape(shape) // persist + re-publish CoT after the edit
+    if (shape) void saveShapeWithPrior(shape, this.dragPrior) // undo restores the pre-drag outline
+    this.dragPrior = null
   }
 
   // ------------------------------- rendering -------------------------------

@@ -83,8 +83,13 @@ function trainStatus(s: number | null | undefined): SubwayTrain['status'] {
 // coordinates as strings.
 const stations = new Map<string, { name: string; lat: number; lon: number }>()
 
+// The full NYCT station set is ~496 rows — below this floor the response
+// was truncated/partial, so keep refetching instead of freezing a cache
+// that would silently drop most trains forever.
+const STATIONS_COMPLETE_FLOOR = 400
+
 async function loadStations(ctx: FeedContext): Promise<void> {
-  if (stations.size > 0) return
+  if (stations.size >= STATIONS_COMPLETE_FLOOR) return
   const rows = await ctx.fetchJson(STATIONS_URL)
   if (!Array.isArray(rows)) throw new Error('mta-subway: stations payload not an array')
   for (const row of rows) {
@@ -177,6 +182,14 @@ async function poll(ctx: FeedContext): Promise<MtaSubwayPayload> {
       if (trains.length >= MAX_TRAINS) break
       trains.push(t)
     }
+  }
+
+  // Positions decoded but NOTHING resolved because the stations lookup is
+  // empty: that is a broken round, not a healthy 'trains: []' — throw so the
+  // registry marks the feed down and backs off instead of serving a lie.
+  const sawVehicles = trainRes.some((r) => r.status === 'fulfilled' && r.value.length > 0)
+  if (stations.size === 0 && sawVehicles && trains.length === 0) {
+    throw new Error('mta-subway: station lookup unavailable — positions cannot be resolved this round')
   }
 
   return {
