@@ -211,6 +211,7 @@ export function SearchBar() {
       const command = isFinal ? tryVoiceCommand(transcript) : null
       if (command) {
         notify(`VOICE · ${command}`)
+        rec.onresult = null // stop() flushes one more final — never re-fire the verb
         rec.stop()
         return
       }

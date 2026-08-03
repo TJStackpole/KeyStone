@@ -153,7 +153,7 @@ export function DrawToolbar() {
         <button
           className="tool-btn"
           style={{ ['--tool-color' as string]: '#fbbf24' }}
-          disabled={!incident}
+          disabled={!incident || replayActive}
           onClick={() => void placeExposureLabels()}
           title="One press labels the building's four sides — Exposure 1 on the street side, 2-3-4 clockwise (FDNY convention)"
         >

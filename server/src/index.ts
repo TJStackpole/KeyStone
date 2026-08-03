@@ -57,6 +57,7 @@ import {
 import { ScenarioEngine } from './scenario/engine.js'
 import { DRILL_UID_PREFIX, isForeignSimUid, SIM_UID_PREFIX } from './sim/ns.js'
 import { FirstAlarmSimulator } from './sim/simulator.js'
+import { POST_LABEL } from './tak/shapes.js'
 import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
 import { CHAT_ROOMS, SimUnitChatter } from './simChat.js'
 import { doctrine, MIN_RELEVANT_SCORE } from './doctrine.js'
@@ -569,6 +570,11 @@ app.put('/api/shapes/:id', (req, res) => {
   }
   if (shape.kind === 'zone' && (!Array.isArray(shape.positions) || shape.positions.length < 3)) {
     return res.status(400).json({ error: 'zone needs >= 3 vertices' })
+  }
+  // The label fallback in shapeToCot no longer throws on unknown post kinds
+  // — validate here so a poisoned shape can't persist.
+  if (shape.kind === 'post' && !(shape.post in POST_LABEL)) {
+    return res.status(400).json({ error: `unknown post kind '${String(shape.post)}'` })
   }
   if (
     shape.kind === 'apparatus' &&

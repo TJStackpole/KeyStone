@@ -1353,6 +1353,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
  * local treatment as an operator search: fly-in, footprints, intel, focus.
  */
 export function adoptIncident(incident: Incident): void {
+  setAppState({ cadIncident: null, responsePacketOpen: false }) // stale CAD packet dies with the old board
   clearShapeUndo()
   if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
