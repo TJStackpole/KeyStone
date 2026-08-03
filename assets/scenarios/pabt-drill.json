@@ -38,6 +38,24 @@
  ],
  "events": [
   {
+   "t": 1,
+   "kind": "timeline",
+   "event": "sim.dispatched",
+   "payload": {
+    "fireFloor": 1,
+    "floors": 5,
+    "note": "Levels per PANYNJ Final EIS App. A floor plans: lower, gate/main, second, third, subway mezzanine"
+   }
+  },
+  {
+   "t": 3,
+   "kind": "timeline",
+   "event": "building.preplan",
+   "payload": {
+    "note": "Real terminal floor plans: PANYNJ Replacement Project Final EIS Appendix A (10 level-by-level figures, public document)"
+   }
+  },
+  {
    "t": 2,
    "kind": "unit_spawn",
    "unit": {

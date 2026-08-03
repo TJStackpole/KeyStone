@@ -257,6 +257,14 @@ function ScenariosMenu() {
             <b>{armedId === 'goldfire' ? 'REPLACES THE CURRENT BOARD — CLICK AGAIN' : 'FDNY FIRE'}</b>
             <i>Working fire, Box 0087 — 10-75, all-hands, MAYDAY + FAST deploy, exposures — pure FDNY flow</i>
           </button>
+          <button className="scenario-item" onClick={() => launch('fedhall', () => void loadScenario('federal-hall-fire'))}>
+            <b>{armedId === 'fedhall' ? 'REPLACES THE CURRENT BOARD — CLICK AGAIN' : 'FEDERAL HALL'}</b>
+            <i>Attic void fire at 26 Wall St — six-level HABS twin, spiral stairs, dome hazard</i>
+          </button>
+          <button className="scenario-item" onClick={() => launch('ellis', () => void loadScenario('ellis-island-search'))}>
+            <b>{armedId === 'ellis' ? 'REPLACES THE CURRENT BOARD — CLICK AGAIN' : 'ELLIS ISLAND'}</b>
+            <i>Hospital complex search — marine water supply, multi-building PAR, no hydrants</i>
+          </button>
           <button className="scenario-item drill" onClick={() => launch('drill', () => void loadScenario('pabt-drill'))}>
             <b>{armedId === 'drill' ? 'RESTARTS THE RUNNING DRILL — CLICK AGAIN' : (
               <>DRILL{scenario?.loaded && <em className="scn-running-chip">RUNNING</em>}</>

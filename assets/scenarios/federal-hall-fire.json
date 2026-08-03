@@ -1,0 +1,333 @@
+{
+ "name": "Federal Hall \u2014 Attic Void Fire (HABS twin)",
+ "drill": true,
+ "incident": {
+  "address": "26 WALL STREET \u2014 FEDERAL HALL (DRILL)",
+  "lat": 40.70737,
+  "lon": -74.01029,
+  "type": "Structural Fire"
+ },
+ "chapters": [
+  {
+   "id": "ch1",
+   "t": 0,
+   "title": "First Alarm"
+  },
+  {
+   "id": "ch2",
+   "t": 260,
+   "title": "Attic Void"
+  },
+  {
+   "id": "ch3",
+   "t": 560,
+   "title": "Under Control"
+  }
+ ],
+ "events": [
+  {
+   "t": 2,
+   "kind": "timeline",
+   "event": "sim.dispatched",
+   "payload": {
+    "fireFloor": 6,
+    "floors": 6,
+    "callsigns": [
+     "E-6",
+     "E-4",
+     "L-15",
+     "L-10",
+     "BC-1"
+    ]
+   }
+  },
+  {
+   "t": 6,
+   "kind": "timeline",
+   "event": "building.preplan",
+   "payload": {
+    "note": "HABS NY-470 twin: 6 levels sub-basement to attic \u2014 TWO spiral stairs + one straight stair, domed rotunda, attic light shafts + trap doors (drawn 1941, LOC public domain)"
+   }
+  },
+  {
+   "t": 8,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "Manhattan",
+   "text": "Box 0163, 26 Wall Street, Federal Hall National Memorial. Odor of smoke on the top floor. E-6, E-4, L-15, L-10, BC-1 assigned. Landmark building \u2014 preplan on your MDT."
+  },
+  {
+   "t": 14,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "BC-1",
+    "lat": 40.70705,
+    "lon": -74.0111,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 16,
+   "kind": "unit_move",
+   "callsign": "BC-1",
+   "path": [
+    [
+     -74.0111,
+     40.70705
+    ],
+    [
+     -74.0104,
+     40.7073
+    ]
+   ],
+   "durationS": 60,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 18,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-6",
+    "lat": 40.7086,
+    "lon": -74.0093,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 20,
+   "kind": "unit_move",
+   "callsign": "E-6",
+   "path": [
+    [
+     -74.0093,
+     40.7086
+    ],
+    [
+     -74.01015,
+     40.70745
+    ]
+   ],
+   "durationS": 85,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 22,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-15",
+    "lat": 40.706,
+    "lon": -74.0118,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 24,
+   "kind": "unit_move",
+   "callsign": "L-15",
+   "path": [
+    [
+     -74.0118,
+     40.706
+    ],
+    [
+     -74.01045,
+     40.70725
+    ]
+   ],
+   "durationS": 95,
+   "endStatus": "On Scene"
+  },
+  {
+   "t": 90,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "E-6",
+   "text": "E-6 10-84 Federal Hall. Light smoke pushing from the attic vents above the colonnade, Wall Street side."
+  },
+  {
+   "t": 108,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Battalion 1, 10-75 for the box. Per the preplan there is NO standpipe \u2014 E-6 stretch dry up the straight stair, L-15 take the north spiral stair to the attic. Watch the trap doors."
+  },
+  {
+   "t": 115,
+   "kind": "status_change",
+   "callsign": "E-6",
+   "status": "Operating"
+  },
+  {
+   "t": 120,
+   "kind": "status_change",
+   "callsign": "L-15",
+   "status": "Operating"
+  },
+  {
+   "t": 130,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-6/1",
+    "lat": 40.70737,
+    "lon": -74.01029,
+    "status": "Operating",
+    "floor": 3,
+    "role": "nozzle"
+   }
+  },
+  {
+   "t": 132,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-15/1",
+    "lat": 40.70737,
+    "lon": -74.01029,
+    "status": "Operating",
+    "floor": 4,
+    "role": "irons via spiral stair"
+   }
+  },
+  {
+   "t": 134,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-15/2",
+    "lat": 40.70737,
+    "lon": -74.01029,
+    "status": "Operating",
+    "floor": 5,
+    "role": "hooks"
+   }
+  },
+  {
+   "t": 150,
+   "kind": "annotation",
+   "shape": {
+    "id": "FH-HAZ-DOME",
+    "kind": "post",
+    "post": "hazard",
+    "lat": 40.70742,
+    "lon": -74.01022,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 154,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "All units: the rotunda dome is UNPROTECTED plaster on iron \u2014 nobody operates on top of the dome. Marked."
+  },
+  {
+   "t": 170,
+   "kind": "annotation",
+   "shape": {
+    "id": "FH-EXP1",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.70718,
+    "lon": -74.0105,
+    "createdAt": "",
+    "label": "EXP 1"
+   }
+  },
+  {
+   "t": 172,
+   "kind": "annotation",
+   "shape": {
+    "id": "FH-EXP2",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.70752,
+    "lon": -74.01,
+    "createdAt": "",
+    "label": "EXP 2"
+   }
+  },
+  {
+   "t": 174,
+   "kind": "annotation",
+   "shape": {
+    "id": "FH-EXP3",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.70758,
+    "lon": -74.01048,
+    "createdAt": "",
+    "label": "EXP 3"
+   }
+  },
+  {
+   "t": 176,
+   "kind": "annotation",
+   "shape": {
+    "id": "FH-EXP4",
+    "kind": "post",
+    "post": "exposure",
+    "lat": 40.70722,
+    "lon": -74.00998,
+    "createdAt": "",
+    "label": "EXP 4"
+   }
+  },
+  {
+   "t": 270,
+   "kind": "status_change",
+   "callsign": "L-15/1",
+   "floor": 6
+  },
+  {
+   "t": 275,
+   "kind": "status_change",
+   "callsign": "L-15/2",
+   "floor": 6
+  },
+  {
+   "t": 280,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "L-15",
+   "text": "We're in the attic off the spiral stair. Fire in the void between the dome and the roof, running the light shafts. Opening up."
+  },
+  {
+   "t": 300,
+   "kind": "alarm_level",
+   "level": "2nd"
+  },
+  {
+   "t": 304,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Manhattan transmit the all-hands \u2014 fire in a concealed attic void at a national landmark. Get me the salvage covers on the rotunda floor."
+  },
+  {
+   "t": 320,
+   "kind": "status_change",
+   "callsign": "E-6/1",
+   "floor": 6
+  },
+  {
+   "t": 430,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "E-6",
+   "text": "Line in operation in the attic. Knocking it down, checking the shafts floor by floor coming back down."
+  },
+  {
+   "t": 580,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Manhattan, Box 0163, fire is under control. Overhauling the void. Museum collection intact, salvage in place, K."
+  },
+  {
+   "t": 585,
+   "kind": "timeline",
+   "event": "fire.under-control",
+   "payload": {
+    "note": "Attic void knockdown \u2014 checked via light shafts per HABS sheet 6"
+   }
+  }
+ ]
+}

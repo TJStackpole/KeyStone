@@ -1,0 +1,262 @@
+{
+ "name": "Ellis Island \u2014 Hospital Complex Search (Marine Ops)",
+ "drill": true,
+ "incident": {
+  "address": "ELLIS ISLAND \u2014 CONTAGIOUS DISEASE HOSPITAL (DRILL)",
+  "lat": 40.69856,
+  "lon": -74.04159,
+  "type": "Structural Fire"
+ },
+ "chapters": [
+  {
+   "id": "ch1",
+   "t": 0,
+   "title": "Marine Response"
+  },
+  {
+   "id": "ch2",
+   "t": 300,
+   "title": "Multi-Building Search"
+  },
+  {
+   "id": "ch3",
+   "t": 620,
+   "title": "PAR + Takeup"
+  }
+ ],
+ "events": [
+  {
+   "t": 2,
+   "kind": "timeline",
+   "event": "sim.dispatched",
+   "payload": {
+    "fireFloor": 2,
+    "floors": 3,
+    "callsigns": [
+     "MARINE-1",
+     "E-10",
+     "L-10",
+     "BC-1",
+     "SQ-18"
+    ]
+   }
+  },
+  {
+   "t": 6,
+   "kind": "timeline",
+   "event": "building.preplan",
+   "payload": {
+    "note": "HABS twin set: ~30 interconnected structures on Islands 2+3, 3 floors each, covered passageways C7/C8 \u2014 148 measured sheets, LOC public domain. NO hydrant grid \u2014 marine supply only."
+   }
+  },
+  {
+   "t": 8,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "Manhattan",
+   "text": "Box 9999, Ellis Island south side, report of fire in the abandoned hospital complex. Marine 1 respond, E-10 and L-10 to the Battery for boat transport, Battalion 1."
+  },
+  {
+   "t": 14,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "MARINE-1",
+    "lat": 40.7005,
+    "lon": -74.0365,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 16,
+   "kind": "unit_move",
+   "callsign": "MARINE-1",
+   "path": [
+    [
+     -74.0365,
+     40.7005
+    ],
+    [
+     -74.041,
+     40.6988
+    ]
+   ],
+   "durationS": 180,
+   "endStatus": "Operating"
+  },
+  {
+   "t": 20,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "BC-1",
+    "lat": 40.6989,
+    "lon": -74.0408,
+    "status": "Enroute"
+   }
+  },
+  {
+   "t": 200,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "MARINE-1",
+   "text": "Marine 1 on scene, laying in from the ferry slip. We are the water supply \u2014 no hydrants on the island."
+  },
+  {
+   "t": 210,
+   "kind": "annotation",
+   "shape": {
+    "id": "EI-H2O-1",
+    "kind": "post",
+    "post": "water",
+    "lat": 40.69905,
+    "lon": -74.0407,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 214,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Marine 1 is our hydrant. Relay to the manifold at the passageway entrance."
+  },
+  {
+   "t": 230,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-10",
+    "lat": 40.699,
+    "lon": -74.0409,
+    "status": "Operating"
+   }
+  },
+  {
+   "t": 232,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-10",
+    "lat": 40.69895,
+    "lon": -74.0412,
+    "status": "Operating"
+   }
+  },
+  {
+   "t": 240,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "SQ-18",
+    "lat": 40.6988,
+    "lon": -74.041,
+    "status": "Staged"
+   }
+  },
+  {
+   "t": 244,
+   "kind": "annotation",
+   "shape": {
+    "id": "EI-FAST",
+    "kind": "post",
+    "post": "fast",
+    "lat": 40.6988,
+    "lon": -74.041,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 310,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Smoke showing measles ward G. Searches in pairs, building by building \u2014 mark each structure complete on the board. The passageways connect everything, watch your air."
+  },
+  {
+   "t": 320,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-10/1",
+    "lat": 40.69856,
+    "lon": -74.04159,
+    "status": "Operating",
+    "floor": 2,
+    "role": "search team 1"
+   }
+  },
+  {
+   "t": 322,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "L-10/2",
+    "lat": 40.69856,
+    "lon": -74.04159,
+    "status": "Operating",
+    "floor": 2,
+    "role": "search team 1"
+   }
+  },
+  {
+   "t": 324,
+   "kind": "unit_spawn",
+   "unit": {
+    "callsign": "E-10/1",
+    "lat": 40.6987,
+    "lon": -74.0419,
+    "status": "Operating",
+    "floor": 1,
+    "role": "search team 2"
+   }
+  },
+  {
+   "t": 340,
+   "kind": "annotation",
+   "shape": {
+    "id": "EI-HAZ-1",
+    "kind": "post",
+    "post": "hazard",
+    "lat": 40.6984,
+    "lon": -74.04175,
+    "createdAt": ""
+   }
+  },
+  {
+   "t": 344,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "L-10",
+   "text": "Structural hazard, collapsed floor section, isolation ward I \u2014 marked, do not enter from the south passageway."
+  },
+  {
+   "t": 420,
+   "kind": "status_change",
+   "callsign": "L-10/1",
+   "floor": 3
+  },
+  {
+   "t": 430,
+   "kind": "radio_tx",
+   "channel": "fdny-tac",
+   "from": "L-10",
+   "text": "Ward G second floor primary negative, moving to three. Fire is one room, knocking it down with the boat's supply."
+  },
+  {
+   "t": 640,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "All search teams PAR. Ward G under control. Nine structures searched and marked, all members accounted for."
+  },
+  {
+   "t": 645,
+   "kind": "timeline",
+   "event": "par.complete",
+   "payload": {
+    "note": "Multi-building PAR \u2014 9 structures, all teams accounted for"
+   }
+  },
+  {
+   "t": 700,
+   "kind": "radio_tx",
+   "channel": "fdny-cmd",
+   "from": "BC-1",
+   "text": "Manhattan, Box 9999 under control. Marine 1 remains for the watch line. Taking up by boat, K."
+  }
+ ]
+}
