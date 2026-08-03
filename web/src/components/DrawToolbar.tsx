@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMovable } from '../lib/movable'
 import { useNextStep } from '../lib/guidance'
-import { clearAllShapes, deleteSelectedShape, rotateSelectedApparatus, setDrawTool, undoShapeAction } from '../actions'
+import { useProfile } from '../profiles/manifest'
+import { clearAllShapes, deleteSelectedShape, placeExposureLabels, rotateSelectedApparatus, setDrawTool, undoShapeAction } from '../actions'
 import { POST_META, ZONE_STYLE } from '../cesium/shapes'
 import { setAppState, useAppSlice } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
@@ -9,7 +10,11 @@ import type { PostKind, ZoneKind } from '../types'
 // One editable outline replaces the old HOT/WARM/COLD trio; legacy zone
 // shapes still render, they just can't be drawn fresh.
 const ZONES: ZoneKind[] = ['perimeter']
-const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
+// The IC's marker set (Tablet Command / ATAK / FirstDue reference): command
+// post, staging, triage, transport, hazard, water supply, FAST truck.
+// MEDIA staging is a PIO/coordination marker — NYCEM only.
+const POSTS_FDNY: PostKind[] = ['icp', 'staging', 'triage', 'transport', 'hazard', 'water', 'fast']
+const POSTS_NYCEM: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport', 'hazard', 'water']
 
 /** STGE picker: choose the next-due company or a specific responding unit. */
 function StagingPicker() {
@@ -76,6 +81,7 @@ export function DrawToolbar() {
   }, [clearArmed])
   const placedCount = Object.keys(shapes).length
   const perimNext = useNextStep() === 'perimeter'
+  const profile = useProfile()
   const [collapsed, setCollapsed] = useState(false)
   if (!incident) return null
 
@@ -113,7 +119,7 @@ export function DrawToolbar() {
           </button>
         ))}
         <div className="tool-section-label">POSTS</div>
-        {POSTS.map((p) => (
+        {(profile === 'fdny' ? POSTS_FDNY : POSTS_NYCEM).map((p) => (
           <button
             key={p}
             className={`tool-btn${drawTool === p ? ' on' : ''}`}
@@ -143,6 +149,16 @@ export function DrawToolbar() {
         >
           <span className="tool-swatch zone" />
           CLPS
+        </button>
+        <button
+          className="tool-btn"
+          style={{ ['--tool-color' as string]: '#fbbf24' }}
+          disabled={!incident}
+          onClick={() => void placeExposureLabels()}
+          title="One press labels the building's four sides — Exposure 1 on the street side, 2-3-4 clockwise (FDNY convention)"
+        >
+          <span className="tool-swatch post" />
+          EXPO
         </button>
         <button
           className={`tool-btn${drawTool === 'apparatus' ? ' on' : ''}`}

@@ -19,6 +19,11 @@ export const POST_META: Record<PostKind, { label: string; glyph: string; css: st
   triage: { label: 'TRIAGE', glyph: 'TRI', css: '#ef4444' },
   media: { label: 'MEDIA POINT', glyph: 'MED', css: '#a78bfa' },
   transport: { label: 'EMS TRANSPORT CORRIDOR', glyph: 'TRN', css: '#4ade80' },
+  // IC additions (Tablet Command / ATAK / FirstDue reference set):
+  hazard: { label: 'HAZARD', glyph: 'HAZ', css: '#ef4444' },
+  water: { label: 'WATER SUPPLY', glyph: 'H2O', css: '#38bdf8' },
+  fast: { label: 'FAST / RIC', glyph: 'FST', css: '#f97316' },
+  exposure: { label: 'EXPOSURE', glyph: 'EXP', css: '#fbbf24' },
 }
 
 function postIcon(kind: PostKind): string {
@@ -163,7 +168,7 @@ export class ShapeLayer {
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
-        text: POST_META[shape.post].label,
+        text: shape.label ?? POST_META[shape.post].label,
         font: `600 10.5px 'JetBrains Mono', monospace`,
         fillColor: LABEL_FILL,
         showBackground: true,

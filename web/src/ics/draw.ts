@@ -7,7 +7,7 @@ import { getAppState, setAppState } from '../state/store'
 import type { IcsShape, PostKind, ZoneKind } from '../types'
 
 const ZONES: ZoneKind[] = ['hot', 'warm', 'cold', 'perimeter']
-const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport']
+const POSTS: PostKind[] = ['icp', 'staging', 'triage', 'media', 'transport', 'hazard', 'water', 'fast']
 
 function newShapeId(prefix: string): string {
   return `WT-ICS-${prefix}-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 36).toString(36).toUpperCase()}`

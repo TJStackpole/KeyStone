@@ -35,6 +35,10 @@ export const POST_LABEL: Record<PostShape['post'], string> = {
   triage: 'TRIAGE',
   media: 'MEDIA POINT',
   transport: 'EMS TRANSPORT CORRIDOR',
+  hazard: 'HAZARD',
+  water: 'WATER SUPPLY',
+  fast: 'FAST / RIC',
+  exposure: 'EXPOSURE',
 }
 
 function isoTimes(staleSeconds: number): string {
@@ -95,7 +99,7 @@ function postToCot(post: PostShape): string {
     `<event version="2.0" uid="${esc(post.id)}" type="b-m-p-s-m" how="h-g-i-g-o" ${isoTimes(SHAPE_STALE_S)}>` +
     `<point lat="${post.lat.toFixed(7)}" lon="${post.lon.toFixed(7)}" hae="0.0" ce="9999999.0" le="9999999.0"/>` +
     `<detail>` +
-    `<contact callsign="${esc(POST_LABEL[post.post])}"/>` +
+    `<contact callsign="${esc(post.label ?? POST_LABEL[post.post])}"/>` +
     `<status readiness="true"/>` +
     `<archive/>` +
     `</detail>` +

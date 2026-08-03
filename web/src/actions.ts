@@ -2319,6 +2319,50 @@ export async function clearAllShapes(): Promise<void> {
   if (failed) notify(`CLEAR ALL: ${failed} shape${failed === 1 ? '' : 's'} failed to delete on the server`, 'red')
 }
 
+/**
+ * One-press EXPOSURES: label the fire building's four sides the way FDNY
+ * talks about them — Exposure 1 is the address/street side, then 2-3-4
+ * clockwise. Markers sit just off each facade midpoint using the structure
+ * frame, so they are right even on Manhattan's rotated grid.
+ */
+export async function placeExposureLabels(): Promise<void> {
+  const s = getAppState()
+  const b = s.targetBounds
+  const inc = s.incident
+  if (!b || !inc) {
+    notify('EXPOSURES needs the fire building loaded first')
+    return
+  }
+  const angDist = (x: number, y: number) => Math.abs((((x - y) % 360) + 540) % 360 - 180)
+  const toXY = (latM: number) => 111_320 * Math.cos((b.centerLat * Math.PI) / 180) * latM
+  void toXY
+  // Bearing from footprint center to the address point = the street side.
+  const dLatM = (inc.lat - b.centerLat) * 111_320
+  const dLonM = (inc.lon - b.centerLon) * 111_320 * Math.cos((b.centerLat * Math.PI) / 180)
+  const toward = (Math.atan2(dLonM, dLatM) * 180) / Math.PI
+  const normals = [0, 1, 2, 3].map((i) => (((b.bearingA + i * 90) % 360) + 360) % 360)
+  let front = normals[0]
+  for (const n of normals) if (angDist(n, toward) < angDist(front, toward)) front = n
+  for (let e = 0; e < 4; e++) {
+    const bearing = (front + e * 90) % 360
+    const alongA = angDist(bearing, b.bearingA) < 45 || angDist(bearing, (b.bearingA + 180) % 360) < 45
+    const standoff = (alongA ? b.halfA : b.halfB) + 10
+    const rad = (bearing * Math.PI) / 180
+    const lat = b.centerLat + (standoff * Math.cos(rad)) / 111_320
+    const lon = b.centerLon + (standoff * Math.sin(rad)) / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+    await saveShape({
+      id: `WT-ICS-POST-EXP${e + 1}-${Date.now().toString(36).toUpperCase()}`,
+      kind: 'post',
+      post: 'exposure',
+      lat,
+      lon,
+      label: `EXP ${e + 1}`,
+      createdAt: new Date().toISOString(),
+    })
+  }
+  notify('EXPOSURES 1-4 placed — Exposure 1 is the street side')
+}
+
 export function setDrawTool(tool: ReturnType<typeof getAppState>['drawTool']): void {
   const current = getAppState().drawTool
   getDrawController()?.cancelDraft()

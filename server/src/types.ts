@@ -25,7 +25,7 @@ export interface TimelineEvent {
 // ------------------------------ ICS shapes (Phase 5) ------------------------
 
 export type ZoneKind = 'hot' | 'warm' | 'cold' | 'perimeter'
-export type PostKind = 'icp' | 'staging' | 'triage' | 'media' | 'transport'
+export type PostKind = 'icp' | 'staging' | 'triage' | 'media' | 'transport' | 'hazard' | 'water' | 'fast' | 'exposure'
 
 export interface ZoneShape {
   id: string
@@ -41,6 +41,8 @@ export interface PostShape {
   post: PostKind
   lat: number
   lon: number
+  /** Per-marker text override (e.g. EXP 1..4) — falls back to the kind label. */
+  label?: string
   createdAt: string
 }
 
