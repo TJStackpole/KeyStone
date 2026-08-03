@@ -60,7 +60,10 @@ export const CAPABILITIES: Record<string, Capability> = {
   'feeds.mta-subway': { profiles: 'both' },
   'feeds.dot-cameras': { profiles: 'both' },
   'feeds.noaa-water': { profiles: 'both' }, // nycem primary; fdny on coastal/flood types
-  'feeds.usgs-gages': { profiles: 'both' },
+  // Stream-gage hydrology is coordination/planning data (Coastal Storm Plan
+  // triggers). The fireground's water picture is the harbor chip, which
+  // self-gates to water-related incident types.
+  'feeds.usgs-gages': { profiles: ['nycem'] },
   'feeds.openfema': { profiles: ['nycem'] },
   'comms.transcripts': { profiles: 'both', visibilityScope: 'all_agencies', sensitivity: 'tactical_audio' },
   'chat.tak': { profiles: 'both' },
@@ -71,7 +74,11 @@ export const CAPABILITIES: Record<string, Capability> = {
   'roster.units': { profiles: 'both', visibilityScope: 'all_agencies', sensitivity: 'member_pii' },
   'bio.telemetry': { profiles: 'both', sensitivity: 'member_pii' },
   'floors.tracking': { profiles: 'both', sensitivity: 'member_pii' },
-  'admin.policy-editor': { profiles: 'both' }, // admin-only once identity exists
+  // Editing cross-agency data-sharing policy is an ADMINISTRATOR'S task —
+  // a chief/captain/LT monitoring a fireground must never be one mis-tap
+  // from changing what every agency can see. Lives on the NYCEM/facilitator
+  // side until real identity/roles exist.
+  'admin.policy-editor': { profiles: ['nycem'] },
 
   // ---- KEYSTONE FDNY (tactical command posture) ---------------------------
   'doctrine.manuals': {
