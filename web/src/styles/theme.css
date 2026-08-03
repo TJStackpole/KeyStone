@@ -2938,19 +2938,26 @@ body.panel-dragging * { cursor: grabbing !important; }
   }
 }
 
-/* Dashboard tabs — bottom center, above everything, glove-sized. */
+/* MANUAL — the dashboard switcher, tucked bottom-left out of the way. */
 .dash-tabs {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 12px;
   bottom: 8px;
   z-index: 72;
   display: flex;
+  align-items: center;
   gap: 4px;
-  padding: 4px;
+  padding: 4px 6px;
+}
+.dash-tabs-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--amber, #f59e0b);
+  margin-right: 4px;
+  cursor: default;
 }
 .dash-tab {
-  padding: 8px 18px;
+  padding: 7px 12px;
   background: rgba(34, 211, 238, 0.06);
   border: 1px solid rgba(34, 211, 238, 0.3);
   border-radius: 5px;

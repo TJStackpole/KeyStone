@@ -12,7 +12,7 @@ import { useAppSlice } from '../state/store'
 const PAGES: { id: 0 | 1 | 2; label: string; hint: string }[] = [
   { id: 0, label: 'MAP', hint: 'The 3D tactical picture' },
   { id: 1, label: 'BOARD', hint: 'Command board — tap units through ATTACK / SEARCH / VENT positions, the way the IC runs it' },
-  { id: 2, label: 'RIDING', hint: 'Riding lists + PAR — the paper board, digital. Works even if the map dies' },
+  { id: 2, label: 'RIDING LIST', hint: 'Riding lists + PAR — the paper board, digital. Works even if the map dies' },
 ]
 
 export function DashboardTabs() {
@@ -20,7 +20,10 @@ export function DashboardTabs() {
   const { page } = useAppSlice((s) => ({ page: s.dashboardPage }))
   if (!isFdny) return null
   return (
-    <nav className="dash-tabs glass" aria-label="Command dashboards — swipe from the screen edge or tap">
+    <nav className="dash-tabs glass" aria-label="Manual — Map, Board, or Riding List. Swipe from the screen edge or tap">
+      <span className="dash-tabs-label" title="The fallback set — every page here works even if the 3D map dies">
+        MANUAL
+      </span>
       {PAGES.map((p) => (
         <button
           key={p.id}
