@@ -1,6 +1,6 @@
 export type IncidentType = 'Structural Fire' | 'Hazmat' | 'Collapse' | 'Mass Casualty'
 
-export type AlarmLevel = '10-75' | 'all-hands' | '2nd' | '3rd'
+export type AlarmLevel = '10-75' | 'all-hands' | '2nd' | '3rd' | '4th' | '5th'
 
 export interface Incident {
   id: string
@@ -16,6 +16,17 @@ export interface Incident {
   createdAt: string
 }
 
+/**
+ * One row of the incident's immutable event log. `kind` is an open string;
+ * the vocabulary in play today:
+ *   incident.* / sim.* / shape.* / unit.track  — core pipelines (Phases 1-8)
+ *   alarm.* / alert.* / request.* / weather.*  — escalation + coordination
+ *   ops.duration-mark {minutes}                — OPS CLOCK 10-minute drumbeat
+ *   ops.par-due {sinceMin, intervalMin}        — PAR interval lapsed unanswered
+ *   ic.par-complete {units: string[]}          — a completed PAR (resets cycle)
+ *   ic.benchmark {code}                        — one-tap IC benchmark (ICS-214)
+ *   ic.note {text}                             — free-text IC log entry
+ */
 export interface TimelineEvent {
   t: string
   kind: string

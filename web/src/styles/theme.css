@@ -3022,3 +3022,38 @@ body.panel-dragging * { cursor: grabbing !important; }
   border-color: rgba(245, 158, 11, 0.6);
   color: var(--amber, #f59e0b);
 }
+
+/* OPS CLOCK chips + banner — amber discipline, never the mayday red. */
+.ops-mark { color: rgba(148, 163, 184, 0.85); font-size: 10px; }
+.par-chip {
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: var(--cyan, #22d3ee);
+  cursor: pointer;
+  font-size: 11px;
+}
+.par-chip.warn { color: var(--amber, #f59e0b); border-color: rgba(245, 158, 11, 0.55); }
+.par-chip.overdue {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.7);
+  animation: ks-pulse-hint 1s ease-in-out infinite;
+}
+.ops-banner {
+  position: fixed;
+  top: 96px;
+  left: 0;
+  right: 0;
+  z-index: 78; /* over pages, under mayday (80) */
+  padding: 10px 0;
+  text-align: center;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 15px;
+  letter-spacing: 0.15em;
+  color: var(--amber, #f59e0b);
+  background: rgba(10, 14, 20, 0.9);
+  border-top: 1px solid rgba(245, 158, 11, 0.5);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.5);
+}
+.ops-banner.due { animation: ks-pulse-hint 1.2s ease-in-out infinite; }

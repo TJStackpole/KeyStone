@@ -2,7 +2,7 @@ export type IncidentType = 'Structural Fire' | 'Hazmat' | 'Collapse' | 'Mass Cas
 
 export const INCIDENT_TYPES: IncidentType[] = ['Structural Fire', 'Hazmat', 'Collapse', 'Mass Casualty']
 
-export type AlarmLevel = '10-75' | 'all-hands' | '2nd' | '3rd'
+export type AlarmLevel = '10-75' | 'all-hands' | '2nd' | '3rd' | '4th' | '5th'
 
 export interface Incident {
   id: string

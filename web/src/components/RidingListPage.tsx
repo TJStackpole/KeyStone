@@ -66,13 +66,25 @@ function airTone(psi: number): string {
   return ''
 }
 
+/** A completed PAR is a COMMAND event: log it on the incident record (which
+ *  also resets the OPS CLOCK's PAR countdown server-side). */
+function postParComplete(units: string[]): void {
+  void fetch('/api/timeline', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ kind: 'ic.par-complete', payload: { units } }),
+  }).catch((err) => console.error('[par] log failed:', err))
+}
+
 function stampPar(callsign: string): void {
   setAppState((s) => ({ parChecks: { ...s.parChecks, [callsign]: Date.now() } }))
+  postParComplete([callsign])
 }
 
 function stampParAll(callsigns: string[]): void {
   if (callsigns.length === 0) return
   const t = Date.now()
+  postParComplete(callsigns)
   setAppState((s) => {
     const next = { ...s.parChecks }
     for (const c of callsigns) next[c] = t

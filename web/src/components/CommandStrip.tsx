@@ -66,9 +66,64 @@ function ReplayStrip({ playing, duration }: { playing: boolean; duration: number
   )
 }
 
+const PAR_PRESETS = [10, 15, 20, 30]
+
+/** OPS CLOCK chips: the 10-minute drumbeat countdown and the PAR cycle.
+ *  Interval default 20 min — VALIDATE—SME (FDNY's real cadence TBC); the
+ *  preference persists locally and mirrors to the server clock. */
+function OpsChips({ incident, timeline }: { incident: { createdAt: string }; timeline: { t: string; kind: string }[] }) {
+  const [parMin, setParMin] = useState(() => {
+    const v = Number(localStorage.getItem('ks-par-interval'))
+    return PAR_PRESETS.includes(v) ? v : 20
+  })
+  useEffect(() => {
+    void fetch('/api/ops/par-interval', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ minutes: parMin }),
+    }).catch(() => {})
+  }, [parMin])
+
+  const started = Date.parse(incident.createdAt)
+  let lastPar = started
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    if (timeline[i].kind === 'ic.par-complete') {
+      lastPar = Date.parse(timeline[i].t)
+      break
+    }
+  }
+  const now = Date.now()
+  const parLeft = lastPar + parMin * 60_000 - now
+  const parTone = parLeft <= 0 ? ' overdue' : parLeft <= 120_000 ? ' warn' : ''
+  const nextMark = (Math.floor((now - started) / 600_000) + 1) * 10
+
+  return (
+    <>
+      <span className="strip-mono ops-mark" title={`Next duration mark: ${nextMark} minutes on the box`}>
+        MK{nextMark} {fmtElapsed(started + nextMark * 60_000 - now)}
+      </span>
+      <button
+        className={`strip-mono par-chip${parTone}`}
+        onClick={() => {
+          const next = PAR_PRESETS[(PAR_PRESETS.indexOf(parMin) + 1) % PAR_PRESETS.length]
+          setParMin(next)
+          try {
+            localStorage.setItem('ks-par-interval', String(next))
+          } catch {
+            // storage blocked — session-only preference
+          }
+        }}
+        title={`PAR cycle: every ${parMin} min (VALIDATE—SME — confirm FDNY cadence). Complete a PAR on the RIDING LIST to reset. Click to change the interval.`}
+      >
+        PAR {parLeft <= 0 ? `+${fmtElapsed(-parLeft)}` : fmtElapsed(parLeft)}
+      </button>
+    </>
+  )
+}
+
 /** Phase 8 command header: elapsed clock, on-scene counts, alarm level, replay. */
 export function CommandStrip() {
-  const { incident, units, replay } = useAppSlice((s) => ({ incident: s.incident, units: s.units, replay: s.replay }))
+  const { incident, units, replay, timeline } = useAppSlice((s) => ({ incident: s.incident, units: s.units, replay: s.replay, timeline: s.timeline }))
   const [collapsed, setCollapsed] = useState(false)
   const [, forceTick] = useState(0)
   useEffect(() => {
@@ -116,6 +171,7 @@ export function CommandStrip() {
         ▴
       </button>
       <span className="strip-mono elapsed">T+{fmtElapsed(elapsed)}</span>
+      <OpsChips incident={incident} timeline={timeline} />
       <span className="strip-counts">
         {AGENCIES.filter((a) => counts[a].total > 0).map((a) => (
           <span key={a} className="count-chip">

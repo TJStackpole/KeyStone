@@ -37,6 +37,7 @@ import {
   type TickerEvent,
   type TriggerRule,
 } from './nycem.js'
+import { OpsClock } from './opsClock.js'
 import { POLICY_SCHEMA, setVisibilityPolicy, visibilityPolicy } from './policy.js'
 import { WeatherWatch, type TriggerSuggestion } from './weather.js'
 import { allFeedHealth, clearAllFeedMocks, feedData, pushableFeedData, registerFeed, setFeedMock, startFeeds } from './feeds/registry.js'
@@ -531,8 +532,8 @@ app.get('/api/staging/next', async (_req, res) => {
 
 app.post('/api/alarm', async (req, res) => {
   const { level } = req.body as { level?: string }
-  if (!level || !['10-75', 'all-hands', '2nd', '3rd'].includes(level)) {
-    return res.status(400).json({ error: 'level must be 10-75 | all-hands | 2nd | 3rd' })
+  if (!level || !['10-75', 'all-hands', '2nd', '3rd', '4th', '5th'].includes(level)) {
+    return res.status(400).json({ error: 'level must be 10-75 | all-hands | 2nd | 3rd | 4th | 5th' })
   }
   const state = getState()
   if (!state.incident) return res.status(400).json({ error: 'no active incident' })
@@ -1249,6 +1250,29 @@ app.patch('/api/incident', (req, res) => {
       .catch((err) => console.error('[sim] re-dispatch after relocation failed:', err))
   }
   res.json(updated)
+})
+
+// ---------------------------------------------------------------------------
+// OPS CLOCK (server-authoritative elapsed-time + PAR discipline): duration
+// marks + PAR-due nags derive from the persisted timeline every tick, so
+// restarts never double-emit and END clears everything with the incident.
+// ---------------------------------------------------------------------------
+const opsClock = new OpsClock({
+  getIncident: () => getState().incident,
+  getTimeline: () => getState().timeline,
+  emit: (kind, payload) => {
+    const ev = appendTimeline(kind, payload)
+    broadcast({ type: 'timeline', event: ev })
+  },
+})
+opsClock.start()
+
+app.post('/api/ops/par-interval', (req, res) => {
+  const { minutes } = req.body as { minutes?: number }
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes)) {
+    return res.status(400).json({ error: 'minutes required' })
+  }
+  res.json({ minutes: opsClock.setParIntervalMin(minutes) })
 })
 
 app.post('/api/timeline', (req, res) => {
