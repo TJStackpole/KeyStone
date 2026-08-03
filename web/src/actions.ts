@@ -713,7 +713,9 @@ async function applyTacticalModel(on: boolean): Promise<void> {
       const p = (ev.payload ?? {}) as { fireFloor?: number; floors?: number; incidentId?: string }
       // Belt-and-suspenders with the timeline resets: never let another
       // incident's dispatch paint a fabricated fire floor on this building.
-      if (p.incidentId !== inc.id) break
+      // Scenario-scripted dispatches can't know the runtime incident id —
+      // only reject an EXPLICIT mismatch (another incident's dispatch).
+      if (p.incidentId && p.incidentId !== inc.id) break
       floors = p.floors
       fireFloor = p.fireFloor
       break

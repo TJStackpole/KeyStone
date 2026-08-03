@@ -43,7 +43,6 @@ import { hasCapability, useCapability } from './profiles/manifest'
 import { applyOverlayLod } from './cesium/overlayLod'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
-import { WhatChangedStrip } from './components/WhatChangedStrip'
 import { PracticeTour } from './components/PracticeTour'
 import { ResponsePacket } from './components/ResponsePacket'
 
@@ -186,7 +185,6 @@ export default function App() {
       <GroundHeightControl />
       <ScenarioBar />
       <FeedHealthPanel />
-      <WhatChangedStrip />
       <PracticeTour />
       <ResponsePacket />
       <MaydayAlert />
