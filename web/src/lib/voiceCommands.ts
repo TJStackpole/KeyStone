@@ -63,8 +63,7 @@ export function tryVoiceCommand(raw: string): string | null {
     return null
   }
   if (/^(brief|situation brief|give me the brief)$/.test(t)) {
-    openBrief()
-    return 'BRIEF OPENED'
+    return openBrief() ? 'BRIEF OPENED' : null // blocked popup already notified in red
   }
   return null
 }

@@ -205,8 +205,10 @@ export function SearchBar() {
       const transcript = Array.from(e.results, (r) => r[0]?.transcript ?? '').join(' ').trim()
       if (!transcript) return
       // Voice VERBS first ("isolate", "north side", "floor four", "undo",
-      // "brief") — a matched command executes and never pollutes the search.
-      const command = tryVoiceCommand(transcript)
+      // "brief") — but only on a FINAL result: interim fragments like
+      // "north" mid-sentence must never fire a camera command.
+      const isFinal = Array.from(e.results as ArrayLike<{ isFinal?: boolean }>).every((r) => r.isFinal !== false)
+      const command = isFinal ? tryVoiceCommand(transcript) : null
       if (command) {
         notify(`VOICE · ${command}`)
         rec.stop()

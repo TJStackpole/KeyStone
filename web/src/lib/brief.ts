@@ -15,7 +15,7 @@ function line(label: string, value: string): string {
   return `<tr><td class="l">${esc(label)}</td><td>${esc(value)}</td></tr>`
 }
 
-export function openBrief(): void {
+export function openBrief(): boolean {
   const s = getAppState()
   const now = new Date()
   const rows: string[] = []
@@ -71,7 +71,7 @@ export function openBrief(): void {
   const w = window.open('', '_blank', 'width=760,height=900')
   if (!w) {
     notify('POP-UP BLOCKED — allow pop-ups for this site to open the brief', 'red')
-    return
+    return false
   }
   w.document.write(`<!doctype html><html><head><title>KeyStone Brief — ${esc(now.toLocaleString())}</title>
 <style>
@@ -92,4 +92,5 @@ ${drill ? '<div class="drill">DRILL — EVERYTHING IN THIS BRIEF IS SIMULATED EX
 <button class="print" onclick="window.print()">Print / save as PDF</button>
 </body></html>`)
   w.document.close()
+  return true
 }

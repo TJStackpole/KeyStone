@@ -65,6 +65,9 @@ function newIncidentId(): string {
  * footprints with the target building highlighted, persistence to the server.
  */
 export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structural Fire'): Promise<void> {
+  // A new incident stood up by ANY path invalidates the previous box's CAD
+  // packet — focusFeedIncident re-sets these right after when CAD-sourced.
+  setAppState({ cadIncident: null, responsePacketOpen: false })
   clearShapeUndo()
   const incident: Incident = {
     id: newIncidentId(),
@@ -831,6 +834,12 @@ export async function restoreIncident(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export function setProfile(next: 'fdny' | 'nycem'): void {
+  // FDNY loses the menu items for coordination POIs — persisted ON toggles
+  // must not keep painting layers the workspace can no longer control.
+  if (next === 'fdny') {
+    setAppState((s) => ({ layerToggles: { ...s.layerToggles, poiPrecincts: false, poiNycem: false } }))
+    for (const kind of ['poiPrecincts', 'poiNycem'] as const) void getPoiLayer()?.setEnabled(kind, false).catch(() => {})
+  }
   const prev = getAppState().profile
   if (next === prev) return
   localStorage.setItem('ks-profile', next)
@@ -2326,6 +2335,7 @@ export async function clearAllShapes(): Promise<void> {
  * frame, so they are right even on Manhattan's rotated grid.
  */
 export async function placeExposureLabels(): Promise<void> {
+  if (getAppState().replay.active) return // history is not a drafting surface
   const s = getAppState()
   const b = s.targetBounds
   const inc = s.incident
@@ -2343,6 +2353,7 @@ export async function placeExposureLabels(): Promise<void> {
   const normals = [0, 1, 2, 3].map((i) => (((b.bearingA + i * 90) % 360) + 360) % 360)
   let front = normals[0]
   for (const n of normals) if (angDist(n, toward) < angDist(front, toward)) front = n
+  const placed: IcsShape[] = []
   for (let e = 0; e < 4; e++) {
     const bearing = (front + e * 90) % 360
     const alongA = angDist(bearing, b.bearingA) < 45 || angDist(bearing, (b.bearingA + 180) % 360) < 45
@@ -2350,7 +2361,7 @@ export async function placeExposureLabels(): Promise<void> {
     const rad = (bearing * Math.PI) / 180
     const lat = b.centerLat + (standoff * Math.cos(rad)) / 111_320
     const lon = b.centerLon + (standoff * Math.sin(rad)) / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
-    await saveShape({
+    placed.push({
       id: `WT-ICS-POST-EXP${e + 1}-${Date.now().toString(36).toUpperCase()}`,
       kind: 'post',
       post: 'exposure',
@@ -2360,6 +2371,15 @@ export async function placeExposureLabels(): Promise<void> {
       createdAt: new Date().toISOString(),
     })
   }
+  // ONE undo entry removes the whole set — four ↩ presses for one press
+  // of EXPO would read as broken.
+  pushShapeUndo({
+    label: 'exposures (4)',
+    apply: async () => {
+      await Promise.allSettled(placed.map((sh) => removeShapeSilent(sh.id)))
+    },
+  })
+  for (const sh of placed) await persistShape(sh)
   notify('EXPOSURES 1-4 placed — Exposure 1 is the street side')
 }
 
