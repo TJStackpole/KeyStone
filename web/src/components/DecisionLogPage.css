@@ -69,3 +69,9 @@
   letter-spacing: 0.08em;
   color: #f87171;
 }
+
+.dl-print.dim {
+  color: var(--text-dim, #94a3b8);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: none;
+}

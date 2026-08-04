@@ -27,6 +27,11 @@ const LOG_BENCHMARKS = [
 ]
 
 const LOG_KINDS = new Set(['ic.benchmark', 'ic.note', 'ic.par-complete', 'ops.duration-mark', 'ops.par-due', 'alert.mayday'])
+// The 10-minute drumbeat is one row every 10 min — on a long box it drowns
+// the IC's actual entries (a 14-hour incident carries ~85 of them). Hidden
+// by default on screen, excluded from the printed ICS-214 entirely; PAR
+// lapses stay everywhere — those are the accountability record.
+const NOISE_KINDS = new Set(['ops.duration-mark'])
 
 async function post(kind: string, payload: Record<string, unknown>): Promise<boolean> {
   try {
@@ -89,9 +94,13 @@ export function DecisionLogPage() {
   }))
   const [note, setNote] = useState('')
   const [noteFailed, setNoteFailed] = useState(false)
+  const [showMarks, setShowMarks] = useState(false)
   if (page !== 3) return null
 
-  const rows = timeline.filter((ev) => LOG_KINDS.has(ev.kind)).slice(-200).reverse()
+  const rows = timeline
+    .filter((ev) => LOG_KINDS.has(ev.kind) && (showMarks || !NOISE_KINDS.has(ev.kind)))
+    .slice(-200)
+    .reverse()
 
   const sendNote = async () => {
     const text = note.trim()
@@ -116,7 +125,18 @@ export function DecisionLogPage() {
           <h1>DECISION LOG</h1>
           <div className="dl-sub">{incident ? incident.address : 'NO ACTIVE INCIDENT — entries need a live box'}</div>
         </div>
-        <button className="dl-print" onClick={() => printIcs214(incident, [...rows].reverse())} title="ICS-214 activity log, print or save as PDF">
+        <button
+          className={`dl-print${showMarks ? '' : ' dim'}`}
+          onClick={() => setShowMarks((v) => !v)}
+          title="Show the OPS CLOCK's 10-minute duration marks in the log (they never appear on the printed ICS-214 — PAR lapses always do)"
+        >
+          {showMarks ? '10-MIN MARKS ✓' : '10-MIN MARKS'}
+        </button>
+        <button
+          className="dl-print"
+          onClick={() => printIcs214(incident, timeline.filter((ev) => LOG_KINDS.has(ev.kind) && !NOISE_KINDS.has(ev.kind)))}
+          title="ICS-214 activity log, print or save as PDF — decisions, benchmarks, notes and PAR lapses; the 10-minute drumbeat is omitted"
+        >
           PRINT ICS-214
         </button>
       </header>

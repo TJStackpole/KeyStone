@@ -2912,6 +2912,24 @@ body.panel-dragging * { cursor: grabbing !important; }
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Desktop lane insets (left 434 / right 340) assume three columns of
+     panels; at tablet width they compute NEGATIVE — the comms panel's
+     min-width then shoved it half off-screen right. Full-width at the
+     bottom, lifted clear of the MANUAL tabs (bottom-left, z72). */
+  .comms-panel {
+    left: 92px; /* clear of the floating home/compass rail at the left edge */
+    right: 10px;
+    min-width: 0;
+    bottom: 56px;
+    height: 170px;
+  }
+  .comms-collapsed {
+    bottom: 56px; /* the centered chip lands on the MANUAL tabs at 768 */
+  }
+  .utility-dock {
+    right: 10px;
+    width: min(440px, calc(100vw - 20px));
+  }
   .scenarios-menu,
   .incidents-menu,
   .overlays-menu,
