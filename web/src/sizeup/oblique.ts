@@ -73,7 +73,8 @@ export const NYS_VINTAGE = 'NYS ORTHO · LATEST (2023-24)'
  *  data URL sized for the strip. */
 export async function nysOrthoFace(frame: TargetFrame, face: FaceView, w = 640, h = 400): Promise<string> {
   const { x, y } = merc(frame.centerLat, frame.centerLon)
-  const half = Math.max(frame.halfA, frame.halfB) * 2.4 + 50
+  // Ground meters -> web-mercator meters (inflated by 1/cos(lat) at 40.7°N).
+  const half = ((Math.max(frame.halfA, frame.halfB) * 2.4 + 50) / Math.cos((frame.centerLat * Math.PI) / 180))
   const url =
     'https://orthos.its.ny.gov/arcgis/rest/services/wms/Latest/MapServer/export' +
     `?bbox=${x - half},${y - half},${x + half},${y + half}` +

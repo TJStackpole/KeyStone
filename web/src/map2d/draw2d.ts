@@ -1,5 +1,6 @@
 import type * as maplibregl from 'maplibre-gl'
 import { saveShape } from '../actions'
+import { registerDraw2DCancel } from './controller'
 import { notify } from '../components/NoticeChip'
 import { getAppState, setAppState } from '../state/store'
 import type { IcsShape, PostKind, ZoneKind } from '../types'
@@ -48,20 +49,27 @@ export function attachDraw2D(map: maplibregl.Map): () => void {
   const cancelDraft = () => {
     draft = null
     setDraft([])
+    map.doubleClickZoom.enable()
   }
 
   const closeDraft = () => {
     if (!draft || draft.points.length < 3) return
     const zone = draft.zone
     const positions = draft.points.map(([lon, lat]) => ({ lat, lon }))
-    cancelDraft()
+    cancelDraft() // also re-enables double-click zoom
     setAppState({ drawTool: null })
     void saveShape({ id: shapeId(`ZONE-${zone.toUpperCase()}`), kind: 'zone', zone, positions, createdAt: new Date().toISOString() } as IcsShape)
   }
 
   const onClick = (e: maplibregl.MapMouseEvent) => {
     const tool = getAppState().drawTool
-    if (!tool) return
+    if (!tool) {
+      // Selection: tap a post/zone to arm ✕ DEL, tap empty map to clear.
+      const hits = map.queryRenderedFeatures(e.point, { layers: ['post-dot', 'post-label', 'zone-line', 'zone-fill'] })
+      const id = hits.find((h) => h.properties?.shapeId)?.properties?.shapeId as string | undefined
+      setAppState({ selectedShapeId: id ?? null })
+      return
+    }
     const { lat, lng } = e.lngLat
 
     if (POST_KINDS.has(tool)) {
@@ -78,7 +86,10 @@ export function attachDraw2D(map: maplibregl.Map): () => void {
     }
 
     if (ZONE_KINDS.has(tool)) {
-      if (!draft || draft.zone !== tool) draft = { zone: tool as ZoneKind, points: [] }
+      if (!draft || draft.zone !== tool) {
+        draft = { zone: tool as ZoneKind, points: [] }
+        map.doubleClickZoom.disable() // dblclick closes the draft, not zooms
+      }
       draft.points.push([lng, lat])
       setDraft(draft.points)
       return
@@ -112,6 +123,8 @@ export function attachDraw2D(map: maplibregl.Map): () => void {
 
   const onKey = (e: KeyboardEvent) => {
     if (!draft) return
+    const t = e.target as HTMLElement | null
+    if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return
     if (e.key === 'Enter') closeDraft()
     if (e.key === 'Escape') {
       cancelDraft()
@@ -122,9 +135,11 @@ export function attachDraw2D(map: maplibregl.Map): () => void {
   map.on('click', onClick)
   map.on('dblclick', onDblClick)
   window.addEventListener('keydown', onKey)
+  registerDraw2DCancel(cancelDraft)
   return () => {
     map.off('click', onClick)
     map.off('dblclick', onDblClick)
     window.removeEventListener('keydown', onKey)
+    registerDraw2DCancel(null)
   }
 }

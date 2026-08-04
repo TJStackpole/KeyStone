@@ -41,6 +41,7 @@ import {
 import { replayEngine } from './replay'
 import { hasCapability } from './profiles/manifest'
 import { crewCompositionAllowed } from './profiles/policy'
+import { cancelDraw2DDraft, flyTo2D, map2dActive } from './map2d/controller'
 import { notify } from './components/NoticeChip'
 import { applyOverlayLod, overlayLodAllows } from './cesium/overlayLod'
 import { getAppState, setAppState, setLayerStatus } from './state/store'
@@ -2160,8 +2161,14 @@ export async function refreshTraffic(): Promise<void> {
   }
 }
 
-/** Close-in look at a single intel feature (hydrant / firehouse row click). */
+/** Close-in look at a single intel feature (hydrant / firehouse row click).
+ *  On the 2D tactical view this drives the 2D camera — including the MAYDAY
+ *  snap, which must never be a silent no-op. */
 export function flyToFeature(lat: number, lon: number): void {
+  if (getAppState().mapMode === '2d' && map2dActive()) {
+    flyTo2D(lat, lon, 17.6)
+    return
+  }
   const scene = getScene()
   if (!scene) return
   const altitude = 220
@@ -2381,6 +2388,7 @@ export async function clearAllShapes(): Promise<void> {
   // Half-drawn drafts and the selected shape's vertex handles live in the
   // DrawController's own sources — clear them too or they orphan on screen.
   getDrawController()?.cancelDraft()
+  cancelDraw2DDraft()
   getDrawController()?.renderHandles()
   const results = await Promise.allSettled(
     prior.map((s) => fetch(`/api/shapes/${encodeURIComponent(s.id)}`, { method: 'DELETE' })),
@@ -2477,6 +2485,7 @@ export async function transmitAlarm(level: import('./types').AlarmLevel): Promis
 export function setDrawTool(tool: ReturnType<typeof getAppState>['drawTool']): void {
   const current = getAppState().drawTool
   getDrawController()?.cancelDraft()
+  cancelDraw2DDraft()
   setAppState({ drawTool: current === tool ? null : tool, selectedShapeId: null })
   getDrawController()?.renderHandles()
 }

@@ -55,7 +55,9 @@ export function MiniModel({ target, centerLat, centerLon }: { target: Footprint;
       const proj = (x: number, y: number, z: number): [number, number, number] => {
         const rx = x * cyaw - y * syaw
         const ry = x * syaw + y * cyaw
-        return [w / 2 + rx * s, hh / 2 + (ry * cp - z * sp) * s * -1 + (h * sp * s) / 2, ry]
+        // canvas +y is DOWN: height subtracts, and the recentre term lifts the
+        // whole solid so base+roof stay framed.
+        return [w / 2 + rx * s, hh / 2 - ry * cp * s - z * sp * s + (h * sp * s) / 2, ry]
       }
       // Walls, painter-sorted far-to-near by mid-depth.
       interface Face { d: number; poly: [number, number][]; wall: boolean }
@@ -70,9 +72,9 @@ export function MiniModel({ target, centerLat, centerLon }: { target: Footprint;
           const b1 = proj(x2, y2, h)
           faces.push({ d: (a0[2] + b0[2]) / 2, poly: [[a0[0], a0[1]], [b0[0], b0[1]], [b1[0], b1[1]], [a1[0], a1[1]]], wall: true })
         }
-        faces.push({ d: -1e9, poly: ring.map(([x, y]) => { const p = proj(x, y, h); return [p[0], p[1]] as [number, number] }), wall: false })
+        faces.push({ d: -1e9 /* last under descending sort — roof caps the walls */, poly: ring.map(([x, y]) => { const p = proj(x, y, h); return [p[0], p[1]] as [number, number] }), wall: false })
       }
-      faces.sort((a, b) => a.d - b.d)
+      faces.sort((a, b) => b.d - a.d)
       for (const f of faces) {
         ctx.beginPath()
         f.poly.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)))
@@ -106,12 +108,14 @@ export function MiniModel({ target, centerLat, centerLon }: { target: Footprint;
     canvas.addEventListener('pointerdown', down)
     canvas.addEventListener('pointermove', move)
     canvas.addEventListener('pointerup', up)
+    canvas.addEventListener('pointercancel', up)
     return () => {
       canvas.removeEventListener('pointerdown', down)
       canvas.removeEventListener('pointermove', move)
       canvas.removeEventListener('pointerup', up)
+      canvas.removeEventListener('pointercancel', up)
     }
   }, [target, centerLat, centerLon])
 
-  return <canvas ref={canvasRef} width={296} height={210} className="sizeup-model" />
+  return <canvas ref={canvasRef} width={296 * (window.devicePixelRatio > 1 ? 2 : 1)} height={190 * (window.devicePixelRatio > 1 ? 2 : 1)} className="sizeup-model" />
 }

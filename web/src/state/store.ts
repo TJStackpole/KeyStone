@@ -221,6 +221,8 @@ export interface AppState {
   viewMode: '3d' | 'topdown'
   /** Prompt 14: which tactical renderer owns the incident view. */
   mapMode: '2d' | '3d'
+  /** True once the 2D map's style has loaded (boot veil gate). */
+  map2dReady: boolean
   /** Renderer-neutral footprint geometry for the 2D map (same fetch the 3D
    *  layer draws from; published by actions when footprints resolve). */
   footprintsGeo: { feats: import('../lib/footprints').Footprint[]; targetBin: string | null } | null
@@ -407,6 +409,7 @@ const initial: AppState = {
   // Prompt 14: 2D-first. The manifest keeps this meaningful only for FDNY;
   // ISOLATE flips to '3d' for the building views and back on exit.
   mapMode: '2d',
+  map2dReady: false,
   footprintsGeo: null,
   groundViewActive: false,
   groundViewFt: 6,

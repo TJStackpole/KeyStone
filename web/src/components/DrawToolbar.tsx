@@ -117,6 +117,7 @@ export function DrawToolbar() {
             key={z}
             className={`tool-btn${perimNext ? ' pulse-hint' : ''}${drawTool === z ? ' on' : ''}`}
             style={{ ['--tool-color' as string]: ZONE_STYLE[z].css }}
+            disabled={replayActive}
             onClick={() => setDrawTool(z)}
             title="Draw an editable perimeter outline — click vertices, Enter or double-click to close, then drag points to adjust"
           >
@@ -130,6 +131,7 @@ export function DrawToolbar() {
             key={p}
             className={`tool-btn${drawTool === p ? ' on' : ''}`}
             style={{ ['--tool-color' as string]: POST_META[p].css }}
+            disabled={replayActive}
             onClick={() => setDrawTool(p)}
             title={`Place ${POST_META[p].label}`}
           >
@@ -152,6 +154,7 @@ export function DrawToolbar() {
         <button
           className={`tool-btn${drawTool === 'collapse' ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#ef4444' }}
+          disabled={replayActive}
           onClick={() => setDrawTool('collapse')}
           title="Collapse zone: 1.5× building height around the incident building (one click)"
         >

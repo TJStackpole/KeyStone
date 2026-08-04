@@ -18,10 +18,11 @@ import './SizeUpStrip.css'
 type Tab = 'oblique' | 'street' | 'model'
 
 export function SizeUpStrip() {
-  const { incident, targetBounds, footprintsGeo } = useAppSlice((s) => ({
+  const { incident, targetBounds, footprintsGeo, shapes } = useAppSlice((s) => ({
     incident: s.incident,
     targetBounds: s.targetBounds,
     footprintsGeo: s.footprintsGeo,
+    shapes: s.shapes,
   }))
   const [open, setOpen] = useState(true)
   const [tab, setTab] = useState<Tab>('oblique')
@@ -32,7 +33,8 @@ export function SizeUpStrip() {
   const [err, setErr] = useState<string | null>(null)
 
   const frame: TargetFrame | null = targetBounds
-  const faces: FaceView[] = useMemo(() => (frame ? faceViews(frame) : []), [frame])
+  // shapes in the deps: pressing EXPO re-maps 1-4 to the REAL street side.
+  const faces: FaceView[] = useMemo(() => (frame ? faceViews(frame) : []), [frame, shapes])
   const face = faces[faceIdx % 4] ?? null
 
   // OBLIQUE (keyless NYS path): fetch + rotate + burn, per face, tab-lazy.

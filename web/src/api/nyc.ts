@@ -185,8 +185,8 @@ export async function fetchBuildingSafety(bin: string, signal?: AbortSignal): Pr
           $order: 'issue_date DESC',
           $limit: '4',
         })}`,
-        { signal },
-      ),
+        { ...sodaInit(), signal },
+        ),
     ])
   const recentRows = recentRes.ok
     ? ((await recentRes.json()) as { issue_date?: string; violation_type?: string; description?: string }[])

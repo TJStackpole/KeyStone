@@ -126,6 +126,7 @@ class ReplayEngine {
     const t = Math.min(this.currentT + TICK_MS * SPEED, replay.duration)
     this.setT(t) // fast path: scrub-bar listeners only, no store write
     this.applyRange(t)
+    this.pushStore(performance.now())
     if (t >= replay.duration) this.setPlaying(false)
   }
 
@@ -151,24 +152,55 @@ class ReplayEngine {
       else if (ev.kind === 'shape.removed') shapes.delete(String((ev.payload as { id?: string }).id))
       else if (ev.kind === 'unit.track') tracks.set(String(ev.payload.uid), ev.payload)
     }
+    this.pendingShapes = new Map(shapes)
+    this.pendingUnits = new Map()
     for (const s of shapes.values()) getShapeLayer()?.upsert(s)
     for (const p of tracks.values()) {
       // Historical dots honor the SAME visibility policy as live ones — the
       // GPS master switch and the interior-FF-only member rule hold in replay.
       const u = trackToUnit(p)
       getUnitLayer()?.upsert(u, unitMapVisible(u))
+      if (unitMapVisible(u)) this.pendingUnits.set(u.uid, u)
     }
+    this.storeDirty = true
+    this.pushStore(performance.now(), true)
     this.cursor = this.events.findIndex((e) => e.tm > cutoff)
     if (this.cursor === -1) this.cursor = this.events.length
   }
 
   private applyEvent(ev: ReplayEvent): void {
-    if (ev.kind === 'shape.upserted') getShapeLayer()?.upsert(ev.payload as unknown as IcsShape)
-    else if (ev.kind === 'shape.removed') getShapeLayer()?.remove(String((ev.payload as { id?: string }).id))
-    else if (ev.kind === 'unit.track') {
+    if (ev.kind === 'shape.upserted') {
+      getShapeLayer()?.upsert(ev.payload as unknown as IcsShape)
+      const s = ev.payload as unknown as IcsShape
+      this.pendingShapes.set(s.id, s)
+    } else if (ev.kind === 'shape.removed') {
+      const id = String((ev.payload as { id?: string }).id)
+      getShapeLayer()?.remove(id)
+      this.pendingShapes.delete(id)
+    } else if (ev.kind === 'unit.track') {
       const u = trackToUnit(ev.payload)
       getUnitLayer()?.upsert(u, unitMapVisible(u))
+      if (unitMapVisible(u)) this.pendingUnits.set(u.uid, u)
     }
+    this.storeDirty = true
+  }
+
+  // Prompt 14: the 2D tactical map renders from the STORE, not the cesium
+  // layers — replay pushes its picture there too (throttled to ~4 Hz so 40
+  // units at 8 Hz playback don't re-render the world every frame).
+  private pendingUnits = new Map<string, Unit>()
+  private pendingShapes = new Map<string, IcsShape>()
+  private storeDirty = false
+  private lastStorePush = 0
+
+  private pushStore(now: number, force = false): void {
+    if (!this.storeDirty && !force) return
+    if (!force && now - this.lastStorePush < 250) return
+    this.lastStorePush = now
+    this.storeDirty = false
+    const units = Object.fromEntries(this.pendingUnits)
+    const shapes = Object.fromEntries(this.pendingShapes)
+    setAppState({ units, shapes })
   }
 
   /** Leaving replay: restore the live picture from the server. */

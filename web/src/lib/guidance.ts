@@ -35,10 +35,16 @@ export function computeNextStep(s: AppState): NextStepId | null {
   }
   if (s.replay.active || s.watchCommand) return null
   if (!s.incident) return s.inspected ? 'active-incident' : 'search'
-  if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode) return 'isolate'
-  if (s.isolateMode && !Object.values(s.shapes).some((sh) => sh.kind === 'zone' && sh.zone === 'perimeter')) {
-    return 'perimeter'
+  const hasPerimeter = Object.values(s.shapes).some((sh) => sh.kind === 'zone' && sh.zone === 'perimeter')
+  if (s.mapMode === '2d') {
+    // 2D-first order: the perimeter is drawn RIGHT HERE on the tactical map;
+    // ISOLATE (the 3D building study) is the step after it.
+    if (!hasPerimeter) return 'perimeter'
+    if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode) return 'isolate'
+    return null
   }
+  if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode) return 'isolate'
+  if (s.isolateMode && !hasPerimeter) return 'perimeter'
   return null
 }
 

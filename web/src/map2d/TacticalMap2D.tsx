@@ -4,10 +4,11 @@ import type { Feature, FeatureCollection } from 'geojson'
 import { useEffect, useRef, useState } from 'react'
 import { registerMap2D } from './controller'
 import { attachDraw2D } from './draw2d'
+import { syncStaticOverlays, syncViewportOverlays } from './overlays'
 import type { Footprint } from '../lib/footprints'
 import { UNIT_ICON, registerUnitSprites } from './sprites'
 import { useCapability } from '../profiles/manifest'
-import { useAppSlice } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { IcsShape, Unit } from '../types'
 import './TacticalMap2D.css'
 
@@ -22,6 +23,11 @@ import './TacticalMap2D.css'
 // ---------------------------------------------------------------------------
 
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+// Clean dark tactical base (CARTO Dark Matter, keyless w/ attribution) — the
+// DEFAULT. Standard OSM carto is a consumer map: subway entrances, shop
+// icons, transit glyphs — "random shit" on a command console. It stays
+// available as the OSM base option for when that detail is wanted.
+const CARTO_DARK_TILES = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
 // NYS Digital Orthoimagery Program, latest statewide mosaic (public, keyless).
 // The service is a DYNAMIC MapServer (no tile cache — /tile/{z}/{y}/{x} 404s),
 // so we consume it through the ArcGIS export endpoint with MapLibre's
@@ -106,7 +112,7 @@ function zonesFC(shapes: Record<string, IcsShape>): FC {
     ring.push(ring[0])
     features.push({
       type: 'Feature',
-      properties: { color: ZONE_COLOR[s.zone] ?? '#22d3ee', fillable: s.zone === 'perimeter' ? 0 : 1 },
+      properties: { shapeId: s.id, color: ZONE_COLOR[s.zone] ?? '#22d3ee', fillable: s.zone === 'perimeter' ? 0 : 1 },
       geometry: { type: 'Polygon', coordinates: [ring] },
     })
   }
@@ -120,6 +126,7 @@ function postsFC(shapes: Record<string, IcsShape>): FC {
       features.push({
         type: 'Feature',
         properties: {
+          shapeId: s.id,
           label: s.label ?? POST_LABEL[s.post] ?? s.post.toUpperCase(),
           color: POST_COLOR[s.post] ?? '#22d3ee',
         },
@@ -128,7 +135,7 @@ function postsFC(shapes: Record<string, IcsShape>): FC {
     } else if (s.kind === 'apparatus') {
       features.push({
         type: 'Feature',
-        properties: { label: `⌗ ${s.callsign}`, color: '#f59e0b' },
+        properties: { shapeId: s.id, label: `⌗ ${s.callsign}`, color: '#f59e0b' },
         geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
       })
     }
@@ -149,8 +156,9 @@ function hydrantsFC(hydrants: { id: string; lat: number; lon: number }[]): FC {
 
 export function TacticalMap2D() {
   const canMap2d = useCapability('view.map2d')
-  const { mode2d, incident, units, shapes, hydrants, footprintsGeo } = useAppSlice((s) => ({
+  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles } = useAppSlice((s) => ({
     mode2d: s.mapMode === '2d',
+    layerToggles: s.layerToggles,
     incident: s.incident,
     units: s.units,
     shapes: s.shapes,
@@ -162,12 +170,8 @@ export function TacticalMap2D() {
   const active = canMap2d && mode2d
   const divRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
-  const readyRef = useRef(false)
-  const [ortho, setOrtho] = useState(false)
-  // Bumped by the map's async 'load' — the data-sync effect only runs on
-  // renders, and without this the sources would stay EMPTY until the next
-  // unrelated store change.
-  const [, setLoadTick] = useState(0)
+  const [ready, setReady] = useState(false)
+  const [base, setBase] = useState<'dark' | 'osm' | 'sat'>('dark')
 
   // Create the map once, on first activation — never for pure-3D sessions.
   useEffect(() => {
@@ -189,6 +193,7 @@ export function TacticalMap2D() {
           // NOTE: the ortho source is added LAZILY on first SAT toggle — a
           // raster source declared with a hidden layer never reports loaded,
           // which wedges map.loaded() forever (bisected against 6.1.0).
+          carto: { type: 'raster', tiles: [CARTO_DARK_TILES], tileSize: 512, attribution: '© OpenStreetMap contributors © CARTO' },
           osm: { type: 'raster', tiles: [OSM_TILES], tileSize: 256, attribution: '© OpenStreetMap contributors' },
           footprints: { type: 'geojson', data: EMPTY },
           target: { type: 'geojson', data: EMPTY },
@@ -199,7 +204,8 @@ export function TacticalMap2D() {
           draft: { type: 'geojson', data: EMPTY },
         },
         layers: [
-          { id: 'base-osm', type: 'raster', source: 'osm' },
+          { id: 'base-carto', type: 'raster', source: 'carto' },
+          { id: 'base-osm', type: 'raster', source: 'osm', layout: { visibility: 'none' } },
           { id: 'fp-fill', type: 'fill', source: 'footprints', paint: { 'fill-color': '#334155', 'fill-opacity': 0.32 } },
           { id: 'fp-line', type: 'line', source: 'footprints', paint: { 'line-color': '#64748b', 'line-width': 1 } },
           { id: 'target-fill', type: 'fill', source: 'target', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.4 } },
@@ -265,63 +271,99 @@ export function TacticalMap2D() {
     map.on('error', (e) => console.warn('[map2d]', e.error?.message ?? e))
     map.on('load', () => {
       registerUnitSprites(map)
-      readyRef.current = true
-      setLoadTick((n) => n + 1) // re-render -> sync effect pushes store data
+      setReady(true) // re-render -> sync effect pushes store data
+      setAppState({ map2dReady: true }) // boot veil holds until first paintable state
     })
-    map.doubleClickZoom.disable() // dblclick closes zone drafts instead
     registerMap2D(map)
+    map.on('moveend', () => {
+      void syncViewportOverlays(map, mapTogglesRef.current as unknown as Record<string, boolean>)
+    })
     const detachDraw = attachDraw2D(map)
     void detachDraw // map lives for the session; torn down with the page
     mapRef.current = map
     return undefined // map persists across 2D/3D flips — cheap, keeps camera
   }, [active, incident])
 
-  // Data sync: store slices -> GeoJSON sources. MapLibre only repaints when
-  // something actually changed; idle cost is zero.
+  // Data sync: store slices -> GeoJSON sources, pushed ONLY when the slice
+  // object identity changed — units tick ~5x/sec and re-serializing six
+  // unchanged collections per tick would burn worker+GPU for nothing.
+  const pushed = useRef<{ fp?: unknown; shapes?: unknown; hydrants?: unknown; units?: unknown }>({})
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !readyRef.current) return
+    if (!map || !ready) return
     const set = (id: string, data: FC) => (map.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data)
-    const feats = footprintsGeo?.feats ?? []
-    const targetBin = footprintsGeo?.targetBin ?? null
-    set('footprints', footprintFC(feats, targetBin, 'neighbors'))
-    set('target', footprintFC(feats, targetBin, 'target'))
-    set('zones', zonesFC(shapes))
-    set('posts', postsFC(shapes))
-    set('hydrants', hydrantsFC(hydrants))
-    set('units', unitsFC(units))
+    if (pushed.current.fp !== footprintsGeo) {
+      pushed.current.fp = footprintsGeo
+      const feats = footprintsGeo?.feats ?? []
+      const targetBin = footprintsGeo?.targetBin ?? null
+      set('footprints', footprintFC(feats, targetBin, 'neighbors'))
+      set('target', footprintFC(feats, targetBin, 'target'))
+    }
+    if (pushed.current.shapes !== shapes) {
+      pushed.current.shapes = shapes
+      set('zones', zonesFC(shapes))
+      set('posts', postsFC(shapes))
+    }
+    if (pushed.current.hydrants !== hydrants) {
+      pushed.current.hydrants = hydrants
+      set('hydrants', hydrantsFC(hydrants))
+    }
+    if (pushed.current.units !== units) {
+      pushed.current.units = units
+      set('units', unitsFC(units))
+    }
+    // SITE INTEL chips apply here exactly as on the 3D scene — hydrants,
+    // neighbor buildings, and the fire-building highlight are all checkable.
+    const t = layerToggles as unknown as Record<string, boolean>
+    const vis = (id: string, on: boolean) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none')
+    vis('hydrant-dot', t.hydrants !== false)
+    vis('fp-fill', t.footprints !== false)
+    vis('fp-line', t.footprints !== false)
+    vis('target-fill', t.targetbox !== false)
+    vis('target-line', t.targetbox !== false)
+    syncStaticOverlays(map, t)
   })
 
-  // Fly to a newly stood-up incident.
-  const lastIncidentId = useRef<string | null>(null)
+  // OVERLAYS menu -> 2D layers (kept in the every-render sync below so the
+  // first pass after the map's async 'load' can't be missed; all calls are
+  // idempotent — fetch-once guards, visibility flips only).
+  const mapTogglesRef = useRef(layerToggles)
+  mapTogglesRef.current = layerToggles
+
+  // Fly to a newly stood-up incident — keyed on POSITION too, so an address
+  // correction (same id, new coords) moves the camera with the footprints.
+  const lastIncidentKey = useRef<string | null>(null)
   useEffect(() => {
     const map = mapRef.current
+    const key = incident ? `${incident.id}|${incident.lat.toFixed(5)},${incident.lon.toFixed(5)}` : null
     if (!map || !incident) {
-      lastIncidentId.current = incident?.id ?? null
+      lastIncidentKey.current = key
       return
     }
-    if (incident.id !== lastIncidentId.current) {
-      lastIncidentId.current = incident.id
+    if (key !== lastIncidentKey.current) {
+      lastIncidentKey.current = key
       map.flyTo({ center: [incident.lon, incident.lat], zoom: 16.8, duration: 1200 })
     }
   }, [incident])
 
-  // Basemap toggle — the ortho source/layer are created on FIRST use only.
+  // Basemap picker: DARK (default) / OSM detail / SAT. The ortho source is
+  // still created on FIRST use only (declared-hidden rasters wedge loading).
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !readyRef.current) return
-    if (ortho && !map.getSource('ortho')) {
+    if (!map || !ready) return
+    if (base === 'sat' && !map.getSource('ortho')) {
       map.addSource('ortho', {
         type: 'raster',
         tiles: [NYS_ORTHO_EXPORT],
         tileSize: 256,
         attribution: 'NYS ITS GIS Program Office',
       })
-      map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, 'fp-fill')
+      map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, 'base-osm')
     }
-    if (map.getLayer('base-ortho')) map.setLayoutProperty('base-ortho', 'visibility', ortho ? 'visible' : 'none')
-    map.setLayoutProperty('base-osm', 'visibility', ortho ? 'none' : 'visible')
-  }, [ortho])
+    map.setLayoutProperty('base-carto', 'visibility', base === 'dark' ? 'visible' : 'none')
+    map.setLayoutProperty('base-osm', 'visibility', base === 'osm' ? 'visible' : 'none')
+    if (map.getLayer('base-ortho')) map.setLayoutProperty('base-ortho', 'visibility', base === 'sat' ? 'visible' : 'none')
+  }, [base, ready])
 
   // The container must STAY MOUNTED across 2D/3D flips — unmounting it would
   // strand the persistent map instance on a dead element (blank on return).
@@ -336,10 +378,14 @@ export function TacticalMap2D() {
       <div className="map2d-north" title="North is up — the map never rotates">
         N<span>▲</span>
       </div>
-      <button className="map2d-base" onClick={() => setOrtho((v) => !v)} title="Toggle the satellite basemap (NYS orthoimagery, keyless)">
-        {ortho ? 'MAP' : 'SAT'}
+      <button
+        className="map2d-base"
+        onClick={() => setBase((v) => (v === 'dark' ? 'osm' : v === 'osm' ? 'sat' : 'dark'))}
+        title="Basemap: DARK tactical (clean) → OSM streets (full detail) → SAT (NYS orthoimagery). Tap to cycle."
+      >
+        {base === 'dark' ? 'DARK' : base === 'osm' ? 'OSM' : 'SAT'}
       </button>
-      {ortho && <div className="map2d-vintage">{ORTHO_VINTAGE}</div>}
+      {base === 'sat' && <div className="map2d-vintage">{ORTHO_VINTAGE}</div>}
     </div>
   )
 }

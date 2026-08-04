@@ -49,7 +49,7 @@ export function Compass() {
       )}
       <button
         className="home-btn glass"
-        onClick={() => (on2d ? flyTo2D(40.7127, -74.006, 12) : goHome())}
+        onClick={() => (on2d ? flyTo2D(40.6875, -74.0085, 11.8) /* same anchor as 3D HOME_VIEW */ : goHome())}
         title="Return to your current location — where the platform is open (city view if location is unavailable)"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="#e2e8f0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
