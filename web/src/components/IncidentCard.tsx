@@ -1,3 +1,4 @@
+import { SizeUpStrip } from '../sizeup/SizeUpStrip'
 import { fmtWallClock } from '../lib/time'
 import { useEffect, useRef, useState } from 'react'
 import { useMovable } from '../lib/movable'
@@ -199,6 +200,7 @@ export function IncidentCard() {
           </button>
         ))}
       </div>
+      <SizeUpStrip />
     </section>
   )
 }
