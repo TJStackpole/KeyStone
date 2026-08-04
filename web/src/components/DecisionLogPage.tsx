@@ -3,6 +3,7 @@ import './DecisionLogPage.css'
 import { transmitAlarm } from '../actions'
 import { ALARM_LADDER, alarmRank } from '../lib/alarms'
 import { setDashboardPage } from '../lib/layouts'
+import { escapeHtml, openPrintable } from '../lib/printDoc'
 import { fmtWallClock } from '../lib/time'
 import { useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
@@ -63,31 +64,20 @@ function rowText(ev: TimelineEvent): string {
   }
 }
 
-/** ICS-214-styled printable activity log (AarPanel print→PDF pattern). */
+/** ICS-214-styled printable activity log — pop-up-blocker-proof via the
+ *  shared printDoc path (blocked window → direct system print dialog). */
 function printIcs214(incident: { address: string; createdAt: string } | null, rows: TimelineEvent[]): void {
-  const w = window.open('', '_blank', 'width=760,height=900')
-  if (!w) return
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const body = rows
-    .map((ev) => `<tr><td class="t">${esc(fmtWallClock(ev.t))}</td><td>${esc(rowText(ev))}</td></tr>`)
+    .map((ev) => `<tr><td class="t">${escapeHtml(fmtWallClock(ev.t))}</td><td>${escapeHtml(rowText(ev))}</td></tr>`)
     .join('')
-  w.document.write(`<!doctype html><html><head><title>ICS-214 Activity Log</title><style>
-    body { font: 13px/1.5 Georgia, serif; color: #111; margin: 40px; }
-    h1 { font-size: 17px; margin: 0; } .sub { color: #555; font-size: 12px; margin-bottom: 16px; }
-    table { border-collapse: collapse; width: 100%; }
-    td { padding: 6px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
-    td.t { width: 90px; font-family: monospace; }
-    .print { margin-top: 20px; padding: 8px 16px; cursor: pointer; }
-    @media print { .print { display: none; } }
-  </style></head><body>
-  <h1>ACTIVITY LOG (ICS 214)</h1>
-  <div class="sub">Incident: ${esc(incident?.address ?? '—')} · Operational period from ${esc(
-    incident ? new Date(incident.createdAt).toLocaleString() : '—',
-  )} · Prepared ${esc(new Date().toLocaleString())} — KeyStone FDNY</div>
-  <table>${body}</table>
-  <button class="print" onclick="window.print()">Print / save as PDF</button>
-  </body></html>`)
-  w.document.close()
+  openPrintable({
+    title: 'ICS-214 Activity Log',
+    heading: 'ACTIVITY LOG (ICS 214)',
+    sub: `Incident: ${incident?.address ?? '—'} · Operational period from ${
+      incident ? new Date(incident.createdAt).toLocaleString() : '—'
+    } · Prepared ${new Date().toLocaleString()} — KeyStone FDNY`,
+    bodyHtml: `<table>${body}</table>`,
+  })
 }
 
 export function DecisionLogPage() {

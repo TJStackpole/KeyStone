@@ -63,7 +63,9 @@ export function tryVoiceCommand(raw: string): string | null {
     return null
   }
   if (/^(brief|situation brief|give me the brief)$/.test(t)) {
-    return openBrief() ? 'BRIEF OPENED' : null // blocked popup already notified in red
+    // openBrief always reaches the operator now — a blocked pop-up falls
+    // back to the direct system print dialog (see lib/printDoc.ts).
+    return openBrief() ? 'BRIEF OPENED' : null
   }
   return null
 }
