@@ -709,8 +709,24 @@ export function TopBar() {
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
+  // The bar wraps to 2-4 rows on narrow screens (iPad portrait). Publish its
+  // REAL height as --topbar-h so every surface anchored beneath it (docks,
+  // tool rail, strips, sheet menus) moves down instead of colliding with the
+  // wrapped rows — fixed tops assumed a one-row bar and buried the incident
+  // card under chips at 768px.
+  const barRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    const el = barRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const apply = () =>
+      document.documentElement.style.setProperty('--topbar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`)
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   return (
-    <header className="topbar glass">
+    <header className="topbar glass" ref={barRef}>
       <ProfileSwitcher />
       <SearchBar />
       <ScenariosMenu />
