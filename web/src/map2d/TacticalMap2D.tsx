@@ -193,8 +193,11 @@ export function TacticalMap2D() {
           // NOTE: the ortho source is added LAZILY on first SAT toggle — a
           // raster source declared with a hidden layer never reports loaded,
           // which wedges map.loaded() forever (bisected against 6.1.0).
+          // ONLY the visible base ships in the initial style: a raster
+          // source declared with a hidden layer wedges map.loaded() forever
+          // (bisected on 4.7 AND 6.1) — OSM and the NYS ortho both attach
+          // lazily on first selection.
           carto: { type: 'raster', tiles: [CARTO_DARK_TILES], tileSize: 512, attribution: '© OpenStreetMap contributors © CARTO' },
-          osm: { type: 'raster', tiles: [OSM_TILES], tileSize: 256, attribution: '© OpenStreetMap contributors' },
           footprints: { type: 'geojson', data: EMPTY },
           target: { type: 'geojson', data: EMPTY },
           zones: { type: 'geojson', data: EMPTY },
@@ -205,7 +208,6 @@ export function TacticalMap2D() {
         },
         layers: [
           { id: 'base-carto', type: 'raster', source: 'carto' },
-          { id: 'base-osm', type: 'raster', source: 'osm', layout: { visibility: 'none' } },
           { id: 'fp-fill', type: 'fill', source: 'footprints', paint: { 'fill-color': '#334155', 'fill-opacity': 0.32 } },
           { id: 'fp-line', type: 'line', source: 'footprints', paint: { 'line-color': '#64748b', 'line-width': 1 } },
           { id: 'target-fill', type: 'fill', source: 'target', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.4 } },
@@ -351,6 +353,10 @@ export function TacticalMap2D() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
+    if (base === 'osm' && !map.getSource('osm')) {
+      map.addSource('osm', { type: 'raster', tiles: [OSM_TILES], tileSize: 256, attribution: '© OpenStreetMap contributors' })
+      map.addLayer({ id: 'base-osm', type: 'raster', source: 'osm' }, 'fp-fill')
+    }
     if (base === 'sat' && !map.getSource('ortho')) {
       map.addSource('ortho', {
         type: 'raster',
@@ -358,10 +364,10 @@ export function TacticalMap2D() {
         tileSize: 256,
         attribution: 'NYS ITS GIS Program Office',
       })
-      map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, 'base-osm')
+      map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, 'fp-fill')
     }
     map.setLayoutProperty('base-carto', 'visibility', base === 'dark' ? 'visible' : 'none')
-    map.setLayoutProperty('base-osm', 'visibility', base === 'osm' ? 'visible' : 'none')
+    if (map.getLayer('base-osm')) map.setLayoutProperty('base-osm', 'visibility', base === 'osm' ? 'visible' : 'none')
     if (map.getLayer('base-ortho')) map.setLayoutProperty('base-ortho', 'visibility', base === 'sat' ? 'visible' : 'none')
   }, [base, ready])
 
