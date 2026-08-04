@@ -70,6 +70,12 @@ export const CAPABILITIES: Record<string, Capability> = {
   'video.panels': { profiles: 'both', sensitivity: 'tactical_audio' },
   'sitrep.summary': { profiles: 'both' },
   'streetview.panel': { profiles: 'both' },
+  // Prompt 14: the 2D-first tactical map (Phase A). FDNY gets the toggle
+  // now; the default flips to 2D when A3 lands the bundle split.
+  'view.map2d': { profiles: ['fdny'] },
+  // The citywide 3D engine, demoted — default-off everywhere, dev-flag only
+  // (?city3d=1). Config demotion, not deletion: flip this list to restore.
+  'legacy_city3d': { profiles: [] },
   'alerts.mayday-banner': { profiles: 'both' }, // life-safety: NEVER filtered
   'roster.units': { profiles: 'both', visibilityScope: 'all_agencies', sensitivity: 'member_pii' },
   'bio.telemetry': { profiles: 'both', sensitivity: 'member_pii' },

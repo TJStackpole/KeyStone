@@ -219,6 +219,11 @@ export interface AppState {
   inspectedModelOn: boolean
   /** Camera mode: tactical 3D or straight-down satellite-style view. */
   viewMode: '3d' | 'topdown'
+  /** Prompt 14: which tactical renderer owns the incident view. */
+  mapMode: '2d' | '3d'
+  /** Renderer-neutral footprint geometry for the 2D map (same fetch the 3D
+   *  layer draws from; published by actions when footprints resolve). */
+  footprintsGeo: { feats: import('../lib/footprints').Footprint[]; targetBin: string | null } | null
   /** Street-level camera dropped by the GND tool. */
   groundViewActive: boolean
   /** Photographic Street View panel (Google embed, key-gated). */
@@ -399,6 +404,8 @@ const initial: AppState = {
   floorRef: null,
   inspectedModelOn: false,
   viewMode: '3d',
+  mapMode: '3d',
+  footprintsGeo: null,
   groundViewActive: false,
   groundViewFt: 6,
   streetViewOpen: false,

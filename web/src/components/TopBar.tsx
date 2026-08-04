@@ -700,8 +700,9 @@ function WatchCmdChip({ watchCommand }: { watchCommand: boolean }) {
 }
 
 export function TopBar() {
-  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand, viewLock } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand, viewLock: s.viewLock }))
+  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand, viewLock, mapMode } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand, viewLock: s.viewLock, mapMode: s.mapMode }))
   const canManuals = useCapability('doctrine.manuals')
+  const canMap2d = useCapability('view.map2d')
   const nextStepId = useNextStep()
   const canTactics = useCapability('tactics.engine')
   const canWatch = useCapability('watchcommand.portfolio')
@@ -794,6 +795,15 @@ export function TopBar() {
         >
           <span className="dot" /> BRIEF
         </button>
+        {canMap2d && (
+          <button
+            className={`chip chip-btn${mapMode === '2d' ? ' active' : ''}`}
+            onClick={() => setAppState((s) => ({ mapMode: s.mapMode === '2d' ? '3d' : '2d' }))}
+            title={mapMode === '2d' ? 'Back to the 3D scene' : '2D tactical map — top-down footprints, exposures, hydrants, units (Prompt 14 field view)'}
+          >
+            <span className="dot" /> {mapMode === '2d' ? '3D SCENE' : '2D MAP'}
+          </button>
+        )}
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && viewLock === 'off' && (
           // Hidden (not just disabled) while the battle-view rail owns the

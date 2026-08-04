@@ -1,0 +1,78 @@
+/* Prompt 14 — 2D tactical map. Sits in the globe's layer slot: above the
+   Cesium canvas, below every panel (panels start ~z20). */
+.map2d-root {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: #0a0e14;
+}
+.map2d-canvas {
+  position: absolute;
+  inset: 0;
+}
+.map2d-canvas .maplibregl-ctrl-attrib {
+  background: rgba(10, 14, 20, 0.7);
+  color: #94a3b8;
+  font-size: 9px;
+}
+.map2d-canvas .maplibregl-ctrl-attrib a {
+  color: #94a3b8;
+}
+.map2d-north {
+  position: absolute;
+  right: 344px; /* left of the SITE INTEL dock (320px + margins) */
+  top: calc(var(--topbar-h, 52px) + 22px);
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  border-radius: 50%;
+  background: rgba(10, 14, 20, 0.85);
+  color: #22d3ee;
+  font: 700 12px var(--mono, monospace);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  pointer-events: none;
+  z-index: 9;
+}
+.map2d-north span {
+  font-size: 10px;
+  line-height: 0.7;
+}
+.map2d-base {
+  position: absolute;
+  right: 344px;
+  top: calc(var(--topbar-h, 52px) + 76px);
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.85);
+  color: #22d3ee;
+  font: 700 11px var(--mono, monospace);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  z-index: 9;
+}
+.map2d-base:hover {
+  border-color: #22d3ee;
+}
+.map2d-vintage {
+  position: absolute;
+  right: 344px;
+  top: calc(var(--topbar-h, 52px) + 128px);
+  padding: 3px 8px;
+  background: rgba(10, 14, 20, 0.85);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 4px;
+  color: #f59e0b;
+  font: 600 9px var(--mono, monospace);
+  letter-spacing: 0.1em;
+  z-index: 9;
+}
+
+.map2d-root.map2d-hidden {
+  display: none;
+}

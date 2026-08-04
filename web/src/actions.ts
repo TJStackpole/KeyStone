@@ -100,6 +100,7 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   resetIsolate()
   hideInspectedModel()
   lastFootprints = null
+  setAppState({ footprintsGeo: null })
   getTrafficLayer()?.clear() // stale polylines from the previous location
   getHazardLayer()?.clear() // old site's wind arrow + collapse zones
   getUnitLayer()?.setInteriorBounds(null) // old footprint must not snap members
@@ -239,6 +240,7 @@ export function relocateIncidentSite(incident: Incident): void {
   resetIsolate()
   hideInspectedModel()
   lastFootprints = null
+  setAppState({ footprintsGeo: null })
   getTrafficLayer()?.clear()
   getHazardLayer()?.clear()
   getUnitLayer()?.setInteriorBounds(null)
@@ -266,9 +268,11 @@ export async function changeIncidentType(type: IncidentType): Promise<void> {
 let lastFootprints: { incidentId: string; feats: Footprint[]; targetBin?: string } | null = null
 
 async function loadFootprints(incident: Incident): Promise<void> {
+  // Prompt 14: the FETCH half is renderer-neutral — it must run (and publish
+  // to the store for the 2D map) whether or not the 3D scene exists. Only
+  // the render calls below are gated on the scene.
   const scene = getScene()
   const layer = getFootprintLayer()
-  if (!scene || !layer) return
   setLayerStatus('footprints', 'loading')
   try {
     const feats = await fetchFootprints(incident.lat, incident.lon, 250)
@@ -280,7 +284,9 @@ async function loadFootprints(incident: Incident): Promise<void> {
         ? incident.bin
         : footprintContaining(incident.lon, incident.lat, feats)?.bin
     lastFootprints = { incidentId: incident.id, feats, targetBin }
-    void layer.render(feats, targetBin, scene.extrudeFootprints && !getAppState().isolateMode)
+    // Same geometry, renderer-neutral: the 2D tactical map draws from this.
+    setAppState({ footprintsGeo: { feats, targetBin: targetBin ?? null } })
+    if (scene && layer) void layer.render(feats, targetBin, scene.extrudeFootprints && !getAppState().isolateMode)
     // Remember the target's height — it drives the collapse-zone tool (1.5x rule).
     const target = feats.find((f) => f.bin === targetBin)
     setAppState({ targetHeightM: target?.heightM ?? null })
@@ -342,7 +348,7 @@ async function loadFootprints(incident: Incident): Promise<void> {
       }
       setAppState({ targetBounds: frame })
       void (async () => {
-        const base = (await layer.targetBase()) ?? 0
+        const base = (await layer?.targetBase()) ?? 0
         const now = getAppState()
         if (now.incident?.id !== incident.id) return
         const floors = now.intel.pluto?.numFloors ?? Math.max(1, Math.round(target.heightM / 3.2))
@@ -364,8 +370,9 @@ async function loadFootprints(incident: Incident): Promise<void> {
     console.error('[footprints] layer unavailable:', err)
     if (getAppState().incident?.id !== incident.id) return
     lastFootprints = null
+    setAppState({ footprintsGeo: null })
     resetIsolate() // a clip against vanished data is worse than no clip
-    layer.clear()
+    layer?.clear()
     getUnitLayer()?.setInteriorBounds(null)
     setAppState({ floorRef: null })
     setLayerStatus('footprints', 'unavailable')
@@ -1394,6 +1401,7 @@ export function adoptIncident(incident: Incident): void {
   resetIsolate()
   hideInspectedModel()
   lastFootprints = null
+  setAppState({ footprintsGeo: null })
   getTrafficLayer()?.clear() // stale polylines from the previous location
   try {
     localStorage.removeItem('ks-board') // a drill must not inherit last box's board
@@ -1524,6 +1532,7 @@ export function clearLocalIncident(): void {
   if (getAppState().replay.active) replayEngine.stop()
   resetIsolate()
   lastFootprints = null
+  setAppState({ footprintsGeo: null })
   try {
     localStorage.removeItem('ks-board') // persisted board dies with the box
   } catch {

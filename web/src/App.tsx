@@ -1,3 +1,4 @@
+import { TacticalMap2D } from './map2d/TacticalMap2D'
 import { useEffect, useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import { initScene } from './cesium/providers'
@@ -191,6 +192,7 @@ export default function App() {
       <ScenarioBar />
       <FeedHealthPanel />
       <PracticeTour />
+      <TacticalMap2D />
       <OpsBanner />
       <CommandBoardPage />
       <RidingListPage />
