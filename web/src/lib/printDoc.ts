@@ -57,11 +57,18 @@ ${d.bodyHtml}
  */
 export function openPrintable(d: PrintableDoc): boolean {
   const html = docHtml(d)
-  const w = window.open('', '_blank', 'width=760,height=900')
-  if (w) {
-    w.document.write(html)
-    w.document.close()
-    return true
+  // Some blockers return a truthy-but-neutered window instead of null —
+  // writing to it throws. Treat any failure here as "blocked" and fall
+  // through to the iframe path rather than dying inside the click handler.
+  try {
+    const w = window.open('', '_blank', 'width=760,height=900')
+    if (w && !w.closed) {
+      w.document.write(html)
+      w.document.close()
+      return true
+    }
+  } catch {
+    // fall through to the iframe fallback below
   }
   // Blocked: same-origin hidden iframe → system print dialog. The iframe is
   // removed after printing (afterprint where supported, timeout as backstop).

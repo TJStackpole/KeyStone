@@ -51,15 +51,20 @@ function OpsChips({ incident, timeline }: { incident: { createdAt: string }; tim
     const v = Number(localStorage.getItem('ks-par-interval'))
     return PAR_PRESETS.includes(v) ? v : 20
   })
-  // The server clock is authoritative: adopt its interval on mount instead of
-  // pushing ours — two stations with different local prefs must not fight
-  // over the incident-wide PAR cycle. POST happens only on an explicit tap.
+  // The server clock is authoritative: adopt its interval AND its anchors on
+  // mount. The client's timeline window is truncated (~600 events) — on a
+  // long box the last mark/PAR can fall out of it, which would pin the MK
+  // chip at a past mark and show a false PAR-overdue. Anchors only move
+  // forward, so max(client-derived, server snapshot) is always right.
+  const [anchors, setAnchors] = useState<{ lastMark: number; lastParAt: number }>({ lastMark: 0, lastParAt: 0 })
   useEffect(() => {
     let dead = false
     fetch('/api/ops/par-interval')
       .then((r) => (r.ok ? r.json() : null))
-      .then((p: { minutes?: number } | null) => {
-        if (!dead && p && PAR_PRESETS.includes(Number(p.minutes))) setParMin(Number(p.minutes))
+      .then((p: { minutes?: number; lastMark?: number; lastParAt?: number } | null) => {
+        if (dead || !p) return
+        if (PAR_PRESETS.includes(Number(p.minutes))) setParMin(Number(p.minutes))
+        setAnchors({ lastMark: Number(p.lastMark) || 0, lastParAt: Number(p.lastParAt) || 0 })
       })
       .catch(() => {})
     return () => {
@@ -68,8 +73,8 @@ function OpsChips({ incident, timeline }: { incident: { createdAt: string }; tim
   }, [])
 
   const started = Date.parse(incident.createdAt)
-  let lastPar = started
-  let lastMark = 0
+  let lastPar = Math.max(started, anchors.lastParAt || 0)
+  let lastMark = anchors.lastMark
   for (const ev of timeline) {
     if (ev.kind === 'ic.par-complete') {
       const t = Date.parse(ev.t)

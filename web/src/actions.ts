@@ -2436,17 +2436,28 @@ export async function placeExposureLabels(): Promise<void> {
 }
 
 /** THE alarm path: every caller (command strip chips, decision-log
- *  benchmarks) escalates AND logs through POST /api/alarm — the server
- *  appends the ic.benchmark row on the same request. */
+ *  benchmarks, resource-ledger ESCALATE) escalates AND logs through
+ *  POST /api/alarm — the server appends the ic.benchmark row on the same
+ *  request. Failures are VISIBLE: a silent 409 after a re-tap reads as
+ *  "the alarm never went out", the opposite of the truth. */
 export async function transmitAlarm(level: import('./types').AlarmLevel): Promise<void> {
   try {
-    await fetch('/api/alarm', {
+    const res = await fetch('/api/alarm', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ level }),
     })
+    if (!res.ok) {
+      notify(
+        res.status === 409
+          ? 'ALARM ALREADY AT OR ABOVE THIS LEVEL — alarms only climb'
+          : 'ALARM DID NOT REACH DISPATCH — check the link and try again',
+        'red',
+      )
+    }
   } catch (err) {
     console.error('[alarm] failed:', err)
+    notify('ALARM DID NOT REACH DISPATCH — check the link and try again', 'red')
   }
 }
 

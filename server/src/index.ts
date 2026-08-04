@@ -575,7 +575,7 @@ app.post('/api/alarm', async (req, res) => {
   // the other.
   const benchEv = appendTimeline('ic.benchmark', { code: ALARM_CODE[level] ?? level.toUpperCase() })
   broadcast({ type: 'timeline', event: benchEv })
-  ticker('alarm', `Alarm level ${level.toUpperCase()} — ${updated.incident?.address ?? ''}`, {
+  ticker('alarm', `Alarm level ${ALARM_CODE[level] ?? level.toUpperCase()} — ${updated.incident?.address ?? ''}`, {
     incidentId: updated.incident?.id,
     severity: ALARM_SEVERITY[level] ?? 2,
   })
@@ -1304,7 +1304,22 @@ const opsClock = new OpsClock({
 opsClock.start()
 
 app.get('/api/ops/par-interval', (_req, res) => {
-  res.json({ minutes: opsClock.getParIntervalMin() })
+  // Anchors derive from the FULL server timeline — the client's window is
+  // truncated (~600 events) and a long box can push the last mark/PAR out
+  // of it, which would false-alarm the strip chips.
+  const inc = getState().incident
+  let lastMark = 0
+  let lastParAt = inc ? Date.parse(inc.createdAt) : 0
+  for (const ev of getState().timeline) {
+    if (ev.kind === 'ops.duration-mark') {
+      const m = Number((ev.payload as { minutes?: number } | undefined)?.minutes)
+      if (Number.isFinite(m) && m > lastMark) lastMark = m
+    } else if (ev.kind === 'ic.par-complete') {
+      const t = Date.parse(ev.t)
+      if (Number.isFinite(t) && t > lastParAt) lastParAt = t
+    }
+  }
+  res.json({ minutes: opsClock.getParIntervalMin(), lastMark, lastParAt })
 })
 
 app.post('/api/ops/par-interval', (req, res) => {
@@ -1368,7 +1383,12 @@ const scenario = new ScenarioEngine({
     // Rewind replays restore the board's alarm level but must not re-announce
     // it — each scrub would otherwise add another "Alarm level 2ND" ticker row.
     if (!replay) {
-      ticker('alarm', `Alarm level ${String(level).toUpperCase()} (drill) — ${updated.incident?.address ?? ''}`, {
+      // Drill alarms belong on the ICS-214 too: without this row a drill's
+      // DECISION LOG carries zero alarm benchmarks, and the disabled-when-
+      // reached ladder means the IC can never backfill them.
+      const benchEv = appendTimeline('ic.benchmark', { code: ALARM_CODE[level ?? ''] ?? String(level).toUpperCase() })
+      broadcast({ type: 'timeline', event: benchEv })
+      ticker('alarm', `Alarm level ${ALARM_CODE[level ?? ''] ?? String(level).toUpperCase()} (drill) — ${updated.incident?.address ?? ''}`, {
         incidentId: updated.incident?.id,
         severity: ALARM_SEVERITY[level ?? '10-75'] ?? 2,
         sim: true,

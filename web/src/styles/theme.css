@@ -2912,23 +2912,17 @@ body.panel-dragging * { cursor: grabbing !important; }
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* Desktop lane insets (left 434 / right 340) assume three columns of
-     panels; at tablet width they compute NEGATIVE — the comms panel's
-     min-width then shoved it half off-screen right. Full-width at the
-     bottom, lifted clear of the MANUAL tabs (bottom-left, z72). */
-  .comms-panel {
-    left: 92px; /* clear of the floating home/compass rail at the left edge */
+  /* Watch Command panes: wc-strip's desktop insets (380/450) go negative
+     here, and wc-left/right overlap by ~40px at 768. */
+  .wc-strip {
+    left: 10px;
     right: 10px;
-    min-width: 0;
-    bottom: 56px;
-    height: 170px;
   }
-  .comms-collapsed {
-    bottom: 56px; /* the centered chip lands on the MANUAL tabs at 768 */
+  .wc-left {
+    width: 300px;
   }
-  .utility-dock {
-    right: 10px;
-    width: min(440px, calc(100vw - 20px));
+  .wc-right {
+    width: min(430px, calc(100vw - 320px));
   }
   .scenarios-menu,
   .incidents-menu,
@@ -2939,11 +2933,11 @@ body.panel-dragging * { cursor: grabbing !important; }
     position: fixed;
     left: 10px;
     right: 10px;
-    top: calc(var(--topbar-h, 52px) + 8px);
+    top: calc(var(--topbar-h, 52px) + 18px); /* bar spans 10px..10px+var */
     width: auto;
     min-width: 0;
     max-width: none;
-    max-height: calc(100vh - var(--topbar-h, 52px) - 20px);
+    max-height: calc(100vh - var(--topbar-h, 52px) - 30px);
     z-index: 60;
   }
 }
@@ -3067,3 +3061,23 @@ body.panel-dragging * { cursor: grabbing !important; }
   border-bottom: 1px solid rgba(245, 158, 11, 0.5);
 }
 .ops-banner.due { animation: ks-pulse-hint 1.2s ease-in-out infinite; }
+
+/* iPad landscape and squeezed panes (≤1200px): the desktop three-column
+   lane insets (comms left 434 / right 340, dock right 340) stop fitting
+   long before the 900px sheet-mode breakpoint. */
+@media (max-width: 1200px) {
+  .comms-panel {
+    left: 92px; /* clear of the floating home/compass rail at the left edge */
+    right: 10px;
+    min-width: 0;
+    bottom: 56px; /* above the MANUAL tabs (bottom-left, z72) */
+    height: 170px;
+  }
+  .comms-collapsed {
+    bottom: 56px; /* the centered chip lands on the MANUAL tabs */
+  }
+  .utility-dock {
+    right: 10px;
+    width: min(440px, calc(100vw - 20px));
+  }
+}

@@ -1,3 +1,4 @@
+import { notify } from './NoticeChip'
 import { useEffect, useMemo, useState } from 'react'
 import { isApparatus } from '../lib/crews'
 import { setDashboardPage } from '../lib/layouts'
@@ -64,7 +65,7 @@ function airClass(psi: number): string {
 
 /** A completed PAR is a COMMAND event: log it on the incident record (which
  *  also resets the OPS CLOCK's PAR countdown server-side). Returns whether
- *  the record actually took it. */
+ *  the record actually took it; failure is VISIBLE, never console-only. */
 async function postParComplete(units: string[]): Promise<boolean> {
   try {
     const res = await fetch('/api/timeline', {
@@ -72,33 +73,47 @@ async function postParComplete(units: string[]): Promise<boolean> {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ kind: 'ic.par-complete', payload: { units } }),
     })
+    if (!res.ok) notify('PAR DID NOT REACH THE RECORD — check the link and stamp again', 'red')
     return res.ok
   } catch (err) {
     console.error('[par] log failed:', err)
+    notify('PAR DID NOT REACH THE RECORD — check the link and stamp again', 'red')
     return false
   }
 }
+
+// In-flight guard: the stamp lands only after the round trip, so a second
+// tap on a laggy tablet would otherwise post a DUPLICATE ic.par-complete
+// (inflating the AAR's "N PAR events observed").
+const parInFlight = new Set<string>()
 
 /** Stamp cards only AFTER the record takes the PAR — a green "JUST NOW"
  *  with nothing on the record would be the exact lie this board exists to
  *  prevent. */
 function stampPar(callsign: string): void {
-  void postParComplete([callsign]).then((ok) => {
-    if (ok) setAppState((s) => ({ parChecks: { ...s.parChecks, [callsign]: Date.now() } }))
-  })
+  if (parInFlight.has(callsign)) return
+  parInFlight.add(callsign)
+  void postParComplete([callsign])
+    .then((ok) => {
+      if (ok) setAppState((s) => ({ parChecks: { ...s.parChecks, [callsign]: Date.now() } }))
+    })
+    .finally(() => parInFlight.delete(callsign))
 }
 
 function stampParAll(callsigns: string[]): void {
-  if (callsigns.length === 0) return
-  void postParComplete(callsigns).then((ok) => {
-    if (!ok) return
-    const t = Date.now()
-    setAppState((s) => {
-      const next = { ...s.parChecks }
-      for (const c of callsigns) next[c] = t
-      return { parChecks: next }
+  if (callsigns.length === 0 || parInFlight.has('*')) return
+  parInFlight.add('*')
+  void postParComplete(callsigns)
+    .then((ok) => {
+      if (!ok) return
+      const t = Date.now()
+      setAppState((s) => {
+        const next = { ...s.parChecks }
+        for (const c of callsigns) next[c] = t
+        return { parChecks: next }
+      })
     })
-  })
+    .finally(() => parInFlight.delete('*'))
 }
 
 function ApparatusCard({ card, par, now, membersAllowed }: { card: Card; par: number | undefined; now: number; membersAllowed: boolean }) {

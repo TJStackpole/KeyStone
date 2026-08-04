@@ -23,11 +23,12 @@ type Bucket = (typeof BUCKETS)[number]
 function bucketOf(u: Unit): Bucket {
   const s = (u.status ?? '').toLowerCase()
   if (s.includes('rehab')) return 'REHAB'
-  if (s === 'operating') return 'OPERATING'
+  if (s === 'operating' || s === 'mayday') return 'OPERATING'
   if (s === 'staged') return 'STAGED'
-  if (s === 'enroute' || s === 'en route') return 'ENROUTE'
-  if (s === 'on scene' || s === 'onscene') return 'ON SCENE'
-  // Unknown vocabulary (a real ATAK EUD can send anything) files as ASSIGNED,
+  if (s === 'enroute' || s === 'en route' || s === 'dispatched' || s === 'responding') return 'ENROUTE'
+  // Scenario/EUD vocabulary that means "this rig is at the box":
+  if (s === 'on scene' || s === 'onscene' || s === 'arrived' || s === 'command' || s === 'released') return 'ON SCENE'
+  // Anything else (a real ATAK EUD can send any word) files as ASSIGNED,
   // never as ON SCENE — accountability must not overstate who's arrived.
   return 'ASSIGNED'
 }
@@ -58,7 +59,10 @@ export function ResourceLedgerPage() {
     firehouses: s.intel.firehouses,
     alarmLevel: s.incident?.alarmLevel ?? null,
   }))
-  const [preview, setPreview] = useState<Preview | null>(null)
+  // Tri-state: undefined = loading, null = fetch failed, object = answer.
+  // Collapsing failure into "no next level" would render "Top of the
+  // ladder" on a box sitting at 10-75.
+  const [preview, setPreview] = useState<Preview | null | undefined>(undefined)
   const apparatus = Object.values(units).filter(isApparatus)
   // Apparatus count (not raw unit count — crew members spawn constantly) in
   // the deps: an escalation raises the alarm level ~2s before the rigs
@@ -67,7 +71,7 @@ export function ResourceLedgerPage() {
   const apparatusCount = apparatus.length
   useEffect(() => {
     if (page !== 4 || !incident) {
-      setPreview(null) // a dead box must not keep a live ESCALATE row
+      setPreview(undefined) // a dead box must not keep a live ESCALATE row
       return
     }
     let dead = false
@@ -76,7 +80,9 @@ export function ResourceLedgerPage() {
       .then((p: Preview | null) => {
         if (!dead) setPreview(p)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!dead) setPreview(null)
+      })
     return () => {
       dead = true
     }
@@ -194,7 +200,15 @@ export function ResourceLedgerPage() {
             </button>
           </div>
         ) : (
-          <div className="rl-empty">{incident ? 'Top of the ladder — no further alarm level.' : 'NO ACTIVE INCIDENT — the preview needs a live box.'}</div>
+          <div className="rl-empty">
+            {!incident
+              ? 'NO ACTIVE INCIDENT — the preview needs a live box.'
+              : preview === undefined
+                ? 'Fetching the next-alarm preview…'
+                : preview === null
+                  ? 'PREVIEW UNAVAILABLE — check the link; escalation itself still works from the strip or the LOG.'
+                  : 'Top of the ladder — no further alarm level.'}
+          </div>
         )}
       </section>
 

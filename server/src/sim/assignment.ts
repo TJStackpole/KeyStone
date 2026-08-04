@@ -127,9 +127,13 @@ export const ESCALATION_PLAN: Record<'all-hands' | '2nd' | '3rd' | '4th' | '5th'
 
 const ALARM_LADDER = ['10-75', 'all-hands', '2nd', '3rd', '4th', '5th'] as const
 
-/** The next rung above the current alarm level (null at the top). */
+/** The next rung above the current alarm level (null at the top). A box with
+ *  NO alarm on record climbs to 10-75 first — skipping it would leave the
+ *  mandatory first FDNY benchmark permanently off the ICS-214, because the
+ *  no-downgrade guard then refuses it forever. */
 export function nextAlarmLevel(current: string | undefined): (typeof ALARM_LADDER)[number] | null {
-  const idx = ALARM_LADDER.indexOf((current ?? '10-75') as (typeof ALARM_LADDER)[number])
+  if (!current) return ALARM_LADDER[0]
+  const idx = ALARM_LADDER.indexOf(current as (typeof ALARM_LADDER)[number])
   return idx >= 0 && idx < ALARM_LADDER.length - 1 ? ALARM_LADDER[idx + 1] : null
 }
 

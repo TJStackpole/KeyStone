@@ -9,7 +9,7 @@ import { FirstAlarmSimulator } from './sim/simulator.js'
 // the determinism of the reinforcement builder itself.
 
 test('alarm ladder climbs 10-75 → all-hands → 2nd..5th and tops out', () => {
-  assert.equal(nextAlarmLevel(undefined), 'all-hands')
+  assert.equal(nextAlarmLevel(undefined), '10-75', 'a box with no alarm climbs to 10-75 first')
   assert.equal(nextAlarmLevel('10-75'), 'all-hands')
   assert.equal(nextAlarmLevel('all-hands'), '2nd')
   assert.equal(nextAlarmLevel('2nd'), '3rd')
