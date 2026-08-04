@@ -2,8 +2,11 @@ import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Feature, FeatureCollection } from 'geojson'
 import { useEffect, useRef, useState } from 'react'
+import { registerMap2D } from './controller'
+import { attachDraw2D } from './draw2d'
 import type { Footprint } from '../lib/footprints'
 import { UNIT_ICON, registerUnitSprites } from './sprites'
+import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'
 import type { IcsShape, Unit } from '../types'
 import './TacticalMap2D.css'
@@ -145,14 +148,18 @@ function hydrantsFC(hydrants: { id: string; lat: number; lon: number }[]): FC {
 }
 
 export function TacticalMap2D() {
-  const { active, incident, units, shapes, hydrants, footprintsGeo } = useAppSlice((s) => ({
-    active: s.mapMode === '2d',
+  const canMap2d = useCapability('view.map2d')
+  const { mode2d, incident, units, shapes, hydrants, footprintsGeo } = useAppSlice((s) => ({
+    mode2d: s.mapMode === '2d',
     incident: s.incident,
     units: s.units,
     shapes: s.shapes,
     hydrants: s.intel.hydrants,
     footprintsGeo: s.footprintsGeo,
   }))
+  // 2D is the tactical view ONLY where the manifest grants it (FDNY) — the
+  // NYCEM profile keeps its citywide globe untouched.
+  const active = canMap2d && mode2d
   const divRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const readyRef = useRef(false)
@@ -189,6 +196,7 @@ export function TacticalMap2D() {
           posts: { type: 'geojson', data: EMPTY },
           hydrants: { type: 'geojson', data: EMPTY },
           units: { type: 'geojson', data: EMPTY },
+          draft: { type: 'geojson', data: EMPTY },
         },
         layers: [
           { id: 'base-osm', type: 'raster', source: 'osm' },
@@ -226,6 +234,12 @@ export function TacticalMap2D() {
             paint: { 'text-color': ['get', 'color'], 'text-halo-color': '#0a0e14', 'text-halo-width': 1.4 },
           },
           {
+            id: 'draft-line',
+            type: 'line',
+            source: 'draft',
+            paint: { 'line-color': '#22d3ee', 'line-width': 2, 'line-dasharray': [1, 1] },
+          },
+          {
             id: 'unit-icon',
             type: 'symbol',
             source: 'units',
@@ -254,6 +268,10 @@ export function TacticalMap2D() {
       readyRef.current = true
       setLoadTick((n) => n + 1) // re-render -> sync effect pushes store data
     })
+    map.doubleClickZoom.disable() // dblclick closes zone drafts instead
+    registerMap2D(map)
+    const detachDraw = attachDraw2D(map)
+    void detachDraw // map lives for the session; torn down with the page
     mapRef.current = map
     return undefined // map persists across 2D/3D flips — cheap, keeps camera
   }, [active, incident])

@@ -1,3 +1,4 @@
+import { useCapability } from '../profiles/manifest'
 import { useEffect, useState } from 'react'
 import { useMovable } from '../lib/movable'
 import { useNextStep } from '../lib/guidance'
@@ -59,6 +60,11 @@ function StagingPicker() {
 }
 
 export function DrawToolbar() {
+  const dtCanMap2d = useCapability('view.map2d')
+  const { mapMode: dtMapMode } = useAppSlice((s) => ({ mapMode: s.mapMode }))
+  // Prompt 14: measure / staging / ground drive the 3D scene — on the 2D
+  // tactical map they hide; ISOLATE (which flips to 3D) brings them back.
+  const on2d = dtCanMap2d && dtMapMode === '2d'
   const mvDrawtoolbar = useMovable('draw-toolbar')
   const { drawTool, selectedShapeId, incident, streetViewOpen, shapes, undoDepth, undoLabel, replayActive } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes, undoDepth: s.undoDepth, undoLabel: s.undoLabel, replayActive: s.replay.active }))
   useEffect(() => {
@@ -132,6 +138,7 @@ export function DrawToolbar() {
           </button>
         ))}
         <div className="tool-section-label">CHIEF</div>
+        {!on2d && (
         <button
           className={`tool-btn${drawTool === 'measure' ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#22d3ee' }}
@@ -141,6 +148,7 @@ export function DrawToolbar() {
           <span className="tool-swatch post" />
           MEAS
         </button>
+        )}
         <button
           className={`tool-btn${drawTool === 'collapse' ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#ef4444' }}
@@ -160,6 +168,7 @@ export function DrawToolbar() {
           <span className="tool-swatch post" />
           EXPO
         </button>
+        {!on2d && (
         <button
           className={`tool-btn${drawTool === 'apparatus' ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#dc2626' }}
@@ -169,7 +178,9 @@ export function DrawToolbar() {
           <span className="tool-swatch zone" />
           STGE
         </button>
+        )}
         <div className="tool-section-label">VIEW</div>
+        {!on2d && (
         <button
           className={`tool-btn${drawTool === 'ground' ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#22d3ee' }}
@@ -179,6 +190,7 @@ export function DrawToolbar() {
           <span className="tool-swatch post" />
           GND
         </button>
+        )}
         <button
           className={`tool-btn${streetViewOpen ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#22d3ee' }}

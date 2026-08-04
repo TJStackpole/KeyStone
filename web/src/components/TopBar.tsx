@@ -795,17 +795,8 @@ export function TopBar() {
         >
           <span className="dot" /> BRIEF
         </button>
-        {canMap2d && (
-          <button
-            className={`chip chip-btn${mapMode === '2d' ? ' active' : ''}`}
-            onClick={() => setAppState((s) => ({ mapMode: s.mapMode === '2d' ? '3d' : '2d' }))}
-            title={mapMode === '2d' ? 'Back to the 3D scene' : '2D tactical map — top-down footprints, exposures, hydrants, units (Prompt 14 field view)'}
-          >
-            <span className="dot" /> {mapMode === '2d' ? '3D SCENE' : '2D MAP'}
-          </button>
-        )}
         <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
-        {providerMode && viewLock === 'off' && (
+        {providerMode && viewLock === 'off' && !(canMap2d && mapMode === '2d') && (
           // Hidden (not just disabled) while the battle-view rail owns the
           // camera — a dead chip that duplicates the rail's TOP is clutter.
           <button

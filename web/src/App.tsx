@@ -106,9 +106,12 @@ function GroundHeightControl() {
  * renders once and each panel subscribes independently.
  */
 function BootVeil({ msg }: { msg: string }) {
-  const { sceneReady } = useAppState()
+  const { sceneReady, mapMode, profile } = useAppState()
+  // Prompt 14: on the FDNY 2D view the map paints long before Cesium's
+  // first frame — holding the veil for the 3D scene would fake a slow boot.
+  const lifted = sceneReady || (profile === 'fdny' && mapMode === '2d')
   return (
-    <div className={`scene-veil${sceneReady ? ' hidden' : ''}`}>
+    <div className={`scene-veil${lifted ? ' hidden' : ''}`}>
       <div className="mark">KEYSTONE</div>
       <div className="status">{msg}</div>
     </div>

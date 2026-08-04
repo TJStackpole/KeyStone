@@ -404,7 +404,9 @@ const initial: AppState = {
   floorRef: null,
   inspectedModelOn: false,
   viewMode: '3d',
-  mapMode: '3d',
+  // Prompt 14: 2D-first. The manifest keeps this meaningful only for FDNY;
+  // ISOLATE flips to '3d' for the building views and back on exit.
+  mapMode: '2d',
   footprintsGeo: null,
   groundViewActive: false,
   groundViewFt: 6,

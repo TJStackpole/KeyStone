@@ -412,6 +412,9 @@ export function toggleIsolateMode(): void {
     setAppState({ viewMode: '3d' })
     void setTopDown(scene, false)
   }
+  // Prompt 14: on the FDNY profile the 3D scene exists ONLY for ISOLATE —
+  // entering reveals it, leaving returns to the 2D tactical map.
+  if (getAppState().profile === 'fdny') setAppState({ mapMode: on ? '3d' : '2d' })
   setAppState({ isolateMode: on })
   applyIsolate(on, { frame: on })
 }
@@ -811,6 +814,7 @@ export function reconcileProviderUpgrade(): void {
 export function resetIsolate(): void {
   if (!getAppState().isolateMode) return
   setAppState({ isolateMode: false })
+  if (getAppState().profile === 'fdny') setAppState({ mapMode: '2d' })
   applyIsolate(false)
 }
 

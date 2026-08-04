@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { goHome, goToIncident, reorientNorth } from '../actions'
 import { getScene } from '../cesium/scene'
+import { flyTo2D } from '../map2d/controller'
+import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'
 
 /**
@@ -8,7 +10,9 @@ import { useAppSlice } from '../state/store'
  * back to north (rotating about the view center, not the camera).
  */
 export function Compass() {
-  const { sceneReady, incident } = useAppSlice((s) => ({ sceneReady: s.sceneReady, incident: s.incident }))
+  const { sceneReady, incident, mapMode } = useAppSlice((s) => ({ sceneReady: s.sceneReady, incident: s.incident, mapMode: s.mapMode }))
+  const canMap2d = useCapability('view.map2d')
+  const on2d = canMap2d && mapMode === '2d'
   const [headingDeg, setHeadingDeg] = useState(0)
 
   useEffect(() => {
@@ -27,10 +31,11 @@ export function Compass() {
     }
   }, [sceneReady])
 
-  if (!sceneReady) return null
+  if (!sceneReady && !on2d) return null
 
   return (
     <>
+      {!on2d && (
       <button className="compass glass" onClick={reorientNorth} title="Reorient the map north">
         <svg viewBox="0 0 40 40" style={{ transform: `rotate(${-headingDeg}deg)` }}>
           <circle cx="20" cy="20" r="18" fill="rgba(7,12,20,0.4)" stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
@@ -41,9 +46,10 @@ export function Compass() {
           </text>
         </svg>
       </button>
+      )}
       <button
         className="home-btn glass"
-        onClick={goHome}
+        onClick={() => (on2d ? flyTo2D(40.7127, -74.006, 12) : goHome())}
         title="Return to your current location — where the platform is open (city view if location is unavailable)"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="#e2e8f0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -53,7 +59,11 @@ export function Compass() {
         </svg>
       </button>
       {incident && (
-        <button className="incident-btn glass" onClick={goToIncident} title="Fly to the active incident you are responding to">
+        <button
+          className="incident-btn glass"
+          onClick={() => (on2d && incident ? flyTo2D(incident.lat, incident.lon, 16.8) : goToIncident())}
+          title="Fly to the active incident you are responding to"
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2.5c1 3-3.5 5-3.5 9a5.5 5.5 0 0 0 11 0c0-2.5-1.5-4.5-2.8-6-.4 1.3-1.2 2-2.2 2.5.3-2-.5-4.5-2.5-5.5Z" fill="rgba(245,158,11,0.25)" />
             <path d="M12 21.5a3 3 0 0 1-3-3c0-1.8 1.8-2.6 3-4.5 1.2 1.9 3 2.7 3 4.5a3 3 0 0 1-3 3Z" fill="#f59e0b" stroke="none" />
