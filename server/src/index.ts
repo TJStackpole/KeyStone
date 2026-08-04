@@ -538,7 +538,7 @@ app.get('/api/alarm/preview', async (_req, res) => {
   if (!state.incident) return res.status(400).json({ error: 'no active incident' })
   const next = nextAlarmLevel(state.incident.alarmLevel)
   if (!next) return res.json({ nextLevel: null, adds: [] })
-  if (next === '10-75') return res.json({ nextLevel: next, adds: [] }) // level change only
+  if (next === '10-75') return res.json({ nextLevel: next, adds: [], simActive: simulator.active }) // level change only
   const adds = await simulator.previewEscalation(next)
   res.json({ nextLevel: next, adds, simActive: simulator.active })
 })
