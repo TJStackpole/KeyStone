@@ -1,3 +1,4 @@
+import { sodaInit } from './soda'
 import { feetToMeters, pointInRing } from './geo'
 import { maybeFailNyc } from './failNyc'
 
@@ -33,7 +34,7 @@ export async function fetchFootprints(lat: number, lon: number, radiusM = 250): 
     $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
     $limit: '900',
   })
-  const res = await fetch(`${SODA_FOOTPRINTS}?${params}`)
+  const res = await fetch(`${SODA_FOOTPRINTS}?${params}`, sodaInit())
   if (!res.ok) throw new Error(`footprints SODA ${res.status}`)
   const rows = (await res.json()) as SodaFootprintRow[]
   return rows

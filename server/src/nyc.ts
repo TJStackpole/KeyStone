@@ -1,5 +1,11 @@
 import { haversineMeters, Polyline, type PathPoint } from './lib/geo.js'
 
+// Free NYC Open Data app token — moves us off the throttled anonymous pool.
+// Absent = keyless path, identical behavior (CLAUDE.md rule).
+const SODA_TOKEN = process.env.SOCRATA_APP_TOKEN ?? ''
+const sodaHeaders = (): Record<string, string> => (SODA_TOKEN ? { 'X-App-Token': SODA_TOKEN } : {})
+
+
 // FDNY Firehouse Listing (NYC Open Data, keyless) — the simulator dispatches
 // the real nearest companies from their real houses.
 const FIREHOUSES = 'https://data.cityofnewyork.us/resource/hc8x-tcnd.json'
@@ -34,7 +40,7 @@ export async function isLand(lat: number, lon: number, radiusM = LAND_RADIUS_M):
       $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
       $limit: '1',
     })
-    const res = await fetch(`${FOOTPRINTS}?${params}`, { signal: AbortSignal.timeout(5000) })
+    const res = await fetch(`${FOOTPRINTS}?${params}`, { headers: sodaHeaders(), signal: AbortSignal.timeout(5000) })
     if (!res.ok) throw new Error(`footprints SODA ${res.status}`)
     const rows = (await res.json()) as unknown[]
     const land = rows.length > 0
@@ -101,7 +107,7 @@ export async function fetchFirehousesNear(lat: number, lon: number): Promise<Fir
       $select: 'facilityname,facilityaddress,latitude,longitude',
       $limit: '400',
     })
-    const res = await fetch(`${FIREHOUSES}?${params}`, { signal: AbortSignal.timeout(8000) })
+    const res = await fetch(`${FIREHOUSES}?${params}`, { headers: sodaHeaders(), signal: AbortSignal.timeout(8000) })
     if (!res.ok) throw new Error(`firehouses SODA ${res.status}`)
     rows = (await res.json()) as FirehouseRow[]
     firehouseCache = { rows, at: Date.now() }

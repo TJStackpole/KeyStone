@@ -1,3 +1,4 @@
+import { sodaInit } from '../lib/soda'
 import { maybeFailNyc } from '../lib/failNyc'
 import { haversineMeters } from '../lib/geo'
 
@@ -63,7 +64,7 @@ export async function fetchPluto(bbl: string, signal?: AbortSignal): Promise<Plu
     $where: `bbl = ${Number(bbl)}`,
     $limit: '1',
   })
-  const res = await fetch(`${PLUTO}?${params}`, { signal })
+  const res = await fetch(`${PLUTO}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`PLUTO SODA ${res.status}`)
   const rows = (await res.json()) as PlutoRow[]
   if (!rows.length) return null
@@ -105,7 +106,7 @@ export async function fetchHydrants(
     $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
     $limit: '200',
   })
-  const res = await fetch(`${HYDRANTS}?${params}`, { signal })
+  const res = await fetch(`${HYDRANTS}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`hydrants SODA ${res.status}`)
   const rows = (await res.json()) as HydrantRow[]
   return rows
@@ -147,7 +148,7 @@ export interface BuildingSafety {
 
 async function sodaCount(base: string, where: string, signal?: AbortSignal): Promise<number> {
   const params = new URLSearchParams({ $select: 'count(*) as c', $where: where })
-  const res = await fetch(`${base}?${params}`, { signal })
+  const res = await fetch(`${base}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`SODA count ${res.status}`)
   const rows = (await res.json()) as { c?: string }[]
   return Number(rows[0]?.c ?? 0)
@@ -246,7 +247,7 @@ export async function fetchFirehouses(lat: number, lon: number, signal?: AbortSi
     $select: 'facilityname,facilityaddress,latitude,longitude',
     $limit: '400',
   })
-  const res = await fetch(`${FIREHOUSES}?${params}`, { signal })
+  const res = await fetch(`${FIREHOUSES}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`firehouses SODA ${res.status}`)
   const rows = (await res.json()) as FirehouseRow[]
   return rows
@@ -296,7 +297,7 @@ export async function fetchStreetLabels(
     $where: `within_circle(the_geom, ${lat}, ${lon}, ${radiusM})`,
     $limit: '600',
   })
-  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { signal })
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
   const rows = (await res.json()) as CenterlineRow[]
 
@@ -370,7 +371,7 @@ export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficLi
     $order: 'data_as_of DESC',
     $limit: '1500',
   })
-  const res = await fetch(`${TRAFFIC_SPEEDS}?${params}`, { signal })
+  const res = await fetch(`${TRAFFIC_SPEEDS}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`traffic SODA ${res.status}`)
   const rows = (await res.json()) as TrafficRow[]
   const seen = new Set<string>()
@@ -444,7 +445,7 @@ export async function fetchCertificatesOfOccupancy(bin: string, signal?: AbortSi
     $order: 'c_o_issue_date DESC',
     $limit: '6',
   })
-  const res = await fetch(`${COFO}?${params}`, { signal })
+  const res = await fetch(`${COFO}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`C of O SODA ${res.status}`)
   const rows = (await res.json()) as CofoRow[]
   return rows.map((r) => ({
@@ -486,7 +487,7 @@ export async function fetchTaxLots(lat: number, lon: number, radiusM: number, si
     $order: 'bbl',
     $limit: '4000',
   })
-  const res = await fetch(`${TAX_LOTS}?${params}`, { signal })
+  const res = await fetch(`${TAX_LOTS}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`tax lots SODA ${res.status}`)
   const rows = (await res.json()) as TaxLotRow[]
   if (rows.length === 4000) console.warn('[lots] grid truncated at 4000 lots — zoom in for full coverage')
@@ -523,7 +524,7 @@ export async function fetchFacilities(where: string, signal?: AbortSignal): Prom
     $where: `(${where}) AND latitude IS NOT NULL`,
     $limit: '500',
   })
-  const res = await fetch(`${FACDB}?${params}`, { signal })
+  const res = await fetch(`${FACDB}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`FacDB SODA ${res.status}`)
   const rows = (await res.json()) as FacilityRow[]
   return rows
@@ -565,7 +566,7 @@ export async function fetchRoadSegments(
     $order: 'objectid',
     $limit: '3000',
   })
-  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { signal })
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
   const rows = (await res.json()) as CenterlineGeomRow[]
   return rows
@@ -585,7 +586,7 @@ export async function fetchTunnels(signal?: AbortSignal): Promise<RoadSegment[]>
     $where: `rw_type='4'`,
     $limit: '400',
   })
-  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { signal })
+  const res = await fetch(`${STREET_CENTERLINE}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`centerline SODA ${res.status}`)
   const rows = (await res.json()) as CenterlineGeomRow[]
   return rows

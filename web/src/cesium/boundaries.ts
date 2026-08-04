@@ -1,3 +1,4 @@
+import { sodaInit } from '../lib/soda'
 import * as Cesium from 'cesium'
 import { maybeFailNyc } from '../lib/failNyc'
 
@@ -77,7 +78,7 @@ export class BoundaryLayer {
   private async load(kind: BoundaryKind): Promise<void> {
     maybeFailNyc()
     const style = STYLE[kind]
-    const res = await fetch(style.url)
+    const res = await fetch(style.url, sodaInit())
     if (!res.ok) throw new Error(`${kind} SODA ${res.status}`)
     const rows = (await res.json()) as BoundaryRow[]
 
