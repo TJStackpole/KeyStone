@@ -294,7 +294,7 @@ export function SizeUpStrip() {
                 <button
                   className={`bv-lock${orbitPaused ? ' free' : ''}`}
                   onClick={() => vl?.setOrbitPaused(!orbitPaused)}
-                  title={orbitPaused ? 'Orbit paused — zoom is yours; press to resume the lap' : 'Slow lap around the structure — press to pause and look'}
+                  title={orbitPaused ? 'Orbit paused — press to resume the lap' : 'Slow lap around the structure — press to pause and look'}
                 >
                   {orbitPaused ? '▶ RESUME ORBIT' : '⏸ PAUSE ORBIT'}
                 </button>
@@ -348,7 +348,7 @@ export function SizeUpStrip() {
                   )}
                 </div>
               )}
-              <div className="sizeup-views-hints">{viewLock === 'orbit' ? 'AUTO-ORBITING · ⏸ TO PAUSE AND LOOK · N/E/S/W ENTER AT STREET LEVEL' : 'O orbit · T·N·E·S·W keys · ↑↓ floors · scroll zooms'}</div>
+              <div className="sizeup-views-hints">{viewLock === 'orbit' ? 'AUTO-ORBITING (ZOOM LOCKED) · ⏸ TO PAUSE · N/E/S/W ENTER AT STREET LEVEL' : 'O orbit · T·N·E·S·W keys · ↑↓ floors · scroll zooms'}</div>
             </div>
           )}
           <div className="sizeup-media" style={tab === 'views' ? { display: 'none' } : undefined}>

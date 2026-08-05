@@ -155,7 +155,10 @@ function lockController(mode: Exclude<ViewLockMode, 'off'>): void {
   // drift and re-center over the building. Facade views stay fully pinned.
   ctl.enableTranslate = mode === 'top'
   ctl.enableLook = false
-  ctl.enableZoom = true // zoom stays live in every locked mode
+  // Zoom fights the orbit's per-frame camera writes (the wheel animates the
+  // camera between frames, the lap snaps it back — visible judder). Locked
+  // out for the lap; every other mode keeps it live.
+  ctl.enableZoom = mode !== 'orbit'
   const { heightM } = buildingRef()
   if (mode === 'top') {
     ctl.minimumZoomDistance = heightM + 40 // never dive through the roof
@@ -294,7 +297,8 @@ function fullFrameStandoffM(side: SideMode): number {
 
 // ------------------------------- Auto-orbit ---------------------------------
 
-let orbitTimer: ReturnType<typeof setInterval> | null = null
+let orbitTickCb: (() => void) | null = null
+let orbitLastMs = 0
 let orbitTheta = 0
 
 /** Orbit radius: the whole structure in frame from any bearing. */
@@ -325,27 +329,36 @@ function applyOrbitCamera(): void {
 }
 
 function stopOrbitTick(): void {
-  if (orbitTimer) {
-    clearInterval(orbitTimer)
-    orbitTimer = null
-  }
+  const scene = getScene()
+  if (orbitTickCb && scene) scene.viewer.scene.preUpdate.removeEventListener(orbitTickCb)
+  orbitTickCb = null
 }
 
 function startOrbit(): void {
   stopOrbitTick()
+  const scene = getScene()
+  if (!scene) return
   applyOrbitCamera()
-  // ~6°/s — one lap a minute. setView per tick (no tween), so the lap keeps
-  // moving even in throttled panes and never fights the flight system.
-  orbitTimer = setInterval(() => {
+  orbitLastMs = performance.now()
+  // Per-FRAME, not per-timer: the lap advances by real elapsed time inside
+  // the scene's own update loop, so the camera moves exactly once per
+  // rendered frame — no 20 Hz timer stepping against a 60 Hz render, no
+  // aliasing judder. ~6°/s — one lap a minute.
+  const cb = () => {
     const s = getAppState()
     if (s.viewLock !== 'orbit') {
       stopOrbitTick()
       return
     }
+    const now = performance.now()
+    const dt = Math.min(0.25, (now - orbitLastMs) / 1000) // clamp long hidden-pane gaps
+    orbitLastMs = now
     if (s.viewLockOrbitPaused) return
-    orbitTheta = (orbitTheta + 0.3) % 360
+    orbitTheta = (orbitTheta + 6 * dt) % 360
     applyOrbitCamera()
-  }, 50)
+  }
+  orbitTickCb = cb
+  scene.viewer.scene.preUpdate.addEventListener(cb)
 }
 
 /** ⏸/▶ on the LIVE VIEWS panel. Zoom works while paused — the orbit stops
