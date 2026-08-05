@@ -1,5 +1,5 @@
 import type * as maplibregl from 'maplibre-gl'
-import { saveShape } from '../actions'
+import { inspectBuildingAt, saveShape } from '../actions'
 import { registerDraw2DCancel } from './controller'
 import { notify } from '../components/NoticeChip'
 import { getAppState, setAppState } from '../state/store'
@@ -68,6 +68,13 @@ export function attachDraw2D(map: maplibregl.Map): () => void {
       const hits = map.queryRenderedFeatures(e.point, { layers: ['post-dot', 'post-label', 'zone-line', 'zone-fill'] })
       const id = hits.find((h) => h.properties?.shapeId)?.properties?.shapeId as string | undefined
       setAppState({ selectedShapeId: id ?? null })
+      if (id) return
+      // Unit markers mean the unit, not the ground under it — no address card.
+      if (map.getLayer('unit-icon') && map.queryRenderedFeatures(e.point, { layers: ['unit-icon'] }).length) return
+      // Tap an address → the building card comes up (same flow as the 3D
+      // scene: lot-authoritative address, PLUTO/DOB intel, search prefilled
+      // one Enter from standing up the incident there).
+      void inspectBuildingAt(e.lngLat.lat, e.lngLat.lng)
       return
     }
     const { lat, lng } = e.lngLat
