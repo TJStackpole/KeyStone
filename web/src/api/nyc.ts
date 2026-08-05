@@ -371,24 +371,75 @@ export interface TrafficFetch {
   ageMin: number | null
 }
 
-export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficFetch> {
-  maybeFailNyc()
+// data_as_of is a FLOATING Eastern-local timestamp — no zone suffix. Naive
+// Date.parse reads it in the CLIENT's zone: right on an Eastern machine by
+// luck, four-plus hours wrong on a UTC-configured field tablet (every reading
+// then looks future-dated → "fresh" forever, stale speeds painted as live).
+// Convert explicitly through America/New_York, DST-aware.
+const ET_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+function etParts(atMs: number): Record<string, string> {
+  return Object.fromEntries(ET_FMT.formatToParts(atMs).map((p) => [p.type, p.value]))
+}
+function etOffsetMs(atMs: number): number {
+  const p = etParts(atMs)
+  const wall = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second)
+  return wall - atMs
+}
+function parseEasternMs(ts: string): number {
+  const wall = Date.parse(ts.replace(/(\.\d+)?(Z|[+-]\d\d:?\d\d)?$/, '') + 'Z')
+  if (!Number.isFinite(wall)) return NaN
+  // Two passes so a reading near a DST boundary lands on the right side.
+  let ms = wall - etOffsetMs(wall)
+  ms = wall - etOffsetMs(ms)
+  return ms
+}
+/** Now minus deltaMs, rendered as a floating ET string for $where clauses. */
+function etFloating(atMs: number): string {
+  const p = etParts(atMs)
+  return `${p.year}-${p.month}-${p.day}T${p.hour === '24' ? '00' : p.hour}:${p.minute}:${p.second}`
+}
+
+const TRAFFIC_SELECT = 'link_id,speed,status,link_points,link_name,data_as_of'
+
+async function trafficRows(where: string | null, signal?: AbortSignal): Promise<TrafficRow[]> {
   const params = new URLSearchParams({
-    $select: 'link_id,speed,status,link_points,link_name,data_as_of',
+    $select: TRAFFIC_SELECT,
     $order: 'data_as_of DESC',
     $limit: '1500',
   })
+  if (where) params.set('$where', where)
   const res = await fetch(`${TRAFFIC_SPEEDS}?${params}`, { ...sodaInit(), signal })
   if (!res.ok) throw new Error(`traffic SODA ${res.status}`)
-  const rows = (await res.json()) as TrafficRow[]
+  return (await res.json()) as TrafficRow[]
+}
+
+export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficFetch> {
+  maybeFailNyc()
+  // FRESH-FIRST: ask for the last 45 minutes by name. When the mirror is
+  // healthy this is the whole answer (and a smaller download); when it
+  // resumes after a stall, this query sees the recovery on the next cycle —
+  // the bare head query kept riding a stale cached ordering. Only when the
+  // window is EMPTY (mirror stalled) fall back to the newest the mirror has,
+  // labeled with its age.
+  let rows = await trafficRows(`data_as_of > '${etFloating(Date.now() - 45 * 60_000)}'`, signal)
+  if (rows.length === 0) rows = await trafficRows(null, signal)
   const seen = new Set<string>()
   const out: TrafficLink[] = []
   const now = Date.now()
   // Freshness is judged RELATIVE TO THE FEED HEAD, not the wall clock: the
-  // mirror itself lags (observed 60 min behind), and a wall-clock cutoff
+  // mirror itself lags (observed 60-115 min behind), and a wall-clock cutoff
   // silently blanked the whole layer. Halted sensors still drop (their
   // last reading trails the head), and a head older than 2 h is unusable.
-  const newestMs = Date.parse(rows[0]?.data_as_of ?? '')
+  const newestMs = parseEasternMs(rows[0]?.data_as_of ?? '')
   const ageMin = Number.isFinite(newestMs) ? Math.max(0, Math.round((now - newestMs) / 60_000)) : null
   if (ageMin !== null && ageMin > 120) return { links: [], ageMin }
   const cutoffMs = 15 * 60 * 1000
@@ -396,7 +447,7 @@ export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficFe
     const linkId = r.link_id ?? r.link_name ?? ''
     if (seen.has(linkId)) continue // rows are newest-first; keep the latest per link
     seen.add(linkId)
-    const asOf = Date.parse(r.data_as_of ?? '')
+    const asOf = parseEasternMs(r.data_as_of ?? '')
     if (Number.isFinite(asOf) && Number.isFinite(newestMs) && newestMs - asOf > cutoffMs) continue
     const speed = Number(r.speed)
     if (!Number.isFinite(speed) || speed <= 0 || Number(r.status ?? 0) < 0) continue
