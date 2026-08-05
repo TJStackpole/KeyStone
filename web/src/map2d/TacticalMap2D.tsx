@@ -184,6 +184,15 @@ export function TacticalMap2D() {
       zoom: incident ? 16.6 : 12,
       bearing: 0,
       pitch: 0,
+      // FLAT AND NORTH-UP, PERIOD. Right-drag rotate/pitch and touch
+      // rotate/pitch are all off — a skewed "2D" map reads as a broken 3D
+      // view and costs orientation while scrolling building to building.
+      // ISOLATE's 3D camera is a separate (Cesium) surface and keeps all
+      // of its views; this only pins the tactical map.
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      maxPitch: 0,
       attributionControl: { compact: true },
       style: {
         version: 8,
@@ -283,6 +292,10 @@ export function TacticalMap2D() {
     // map through this; no production behavior depends on it.
     ;(window as unknown as { __map2d?: maplibregl.Map }).__map2d = map
     map.on('error', (e) => console.warn('[map2d]', e.error?.message ?? e))
+    // dragRotate:false covers right-drag; pinch-rotate and shift+arrow
+    // rotate live on separate handlers and need their own switches.
+    map.touchZoomRotate.disableRotation()
+    ;(map.keyboard as unknown as { disableRotation?: () => void }).disableRotation?.()
     map.on('load', () => {
       registerUnitSprites(map)
       setReady(true) // re-render -> sync effect pushes store data
