@@ -225,24 +225,10 @@ export function applyViewLockCamera(durationS = 0.6): void {
     syncFocusFloor()
     return
   }
-  // TRUE ELEVATION of the chosen face: camera on the facade's own normal
-  // axis through the footprint center, level pitch, at the SAME fixed
-  // whole-building standoff every height/floor command uses — one stable
-  // sight picture from engage onward.
-  const { normal } = facadeFor(s.viewLock)
-  const pos = offsetDeg(centerLat, centerLon, normal, fullFrameStandoffM(s.viewLock))
-  setAppState({ viewLockHeightM: floorAglM(s.viewLockFloor) })
-  scene.viewer.camera.flyTo({
-    // Level with the TRACKED floor, not mid-building — the facade view rides
-    // the floor the operator is working (engage lands on the fire floor).
-    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, floorCenterZ(s.viewLockFloor)),
-    orientation: {
-      heading: Cesium.Math.toRadians((normal + 180) % 360),
-      pitch: 0,
-      roll: 0,
-    },
-    duration: durationS,
-  })
+  // TRUE ELEVATION of the chosen face: eye at the TRACKED floor (engage
+  // lands on the fire floor), camera aimed at the structure — one flight
+  // path shared with the floor stepper.
+  flyFacadeTo(floorCenterZ(s.viewLockFloor), durationS)
   syncFocusFloor()
 }
 
@@ -270,26 +256,10 @@ function floorCenterZ(floor: number): number {
   return buildingRef().z0 + floorAglM(floor)
 }
 
-/** The height gauge's 5 ft minimum, in meters. */
-const MIN_EYE_M = 1.524
-
-/** Everything the on-screen height gauge needs, one call. */
-export function viewLockGaugeInfo(): {
-  minM: number
-  maxM: number
-  storeyM: number
-  floors: number
-  fireFloor: number | null
-} {
-  const { heightM, storeyM, floors } = buildingRef()
-  return { minM: MIN_EYE_M, maxM: Math.max(heightM, MIN_EYE_M + 1), storeyM, floors, fireFloor: battleFireFloor() }
-}
-
-/** The FIXED standoff off a facade: far enough that the WHOLE building —
- *  grade to roof, full width — stays in frame at level pitch from ANY gauge
- *  height (a 5 ft eye still sees the roof). Every height/floor command
- *  returns the camera to this same position off the building, so the sight
- *  picture is stable: only the eye height slides. */
+/** The FIXED standoff off a facade: the whole structure — grade to roof,
+ *  full width — fits in frame with the camera AIMED AT ITS CENTER. One
+ *  distance per facade; every floor command returns the camera to it, so
+ *  the sight picture never drifts off the building. */
 function fullFrameStandoffM(side: SideMode): number {
   const { heightM } = buildingRef()
   const { depth, width } = facadeFor(side)
@@ -298,9 +268,7 @@ function fullFrameStandoffM(side: SideMode): number {
     (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
   const aspect = (frustum instanceof Cesium.PerspectiveFrustum ? frustum.aspectRatio : undefined) || 1.6
   const fovx = 2 * Math.atan(Math.tan(fovy / 2) * aspect)
-  // Vertical term covers grade→roof from the worst-case LOW eye (not from
-  // mid-height): heightM of wall must fit above a 5 ft camera at pitch 0.
-  return depth + Math.max(30, (heightM + 8) / Math.tan(fovy / 2), (width + 10) / Math.tan(fovx / 2))
+  return depth + Math.max(30, (heightM / 2 + 8) / Math.tan(fovy / 2), (width + 10) / Math.tan(fovx / 2))
 }
 
 /** Facade flight to an absolute elevation, re-latching a FREE camera and
@@ -318,12 +286,19 @@ function flyFacadeTo(zAbs: number, durationS: number): void {
     setAppState({ viewLockSuspended: false })
     lockController(s.viewLock)
   }
-  const { centerLat, centerLon } = buildingRef()
+  const { centerLat, centerLon, z0, heightM } = buildingRef()
   const { normal } = facadeFor(s.viewLock)
-  const pos = offsetDeg(centerLat, centerLon, normal, fullFrameStandoffM(s.viewLock))
+  const standoffM = fullFrameStandoffM(s.viewLock)
+  const pos = offsetDeg(centerLat, centerLon, normal, standoffM)
+  // LOCKED MEANS LOCKED ON THE BUILDING: the camera pitches from its eye
+  // height to the structure's mid-height, so the building sits dead center
+  // whatever floor the eye rides — never a horizon shot of dirt and sky
+  // with a squat building lost in the band between.
+  const midZ = z0 + heightM / 2
+  const pitch = Math.atan2(midZ - zAbs, standoffM)
   scene.viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, zAbs),
-    orientation: { heading: Cesium.Math.toRadians((normal + 180) % 360), pitch: 0, roll: 0 },
+    orientation: { heading: Cesium.Math.toRadians((normal + 180) % 360), pitch, roll: 0 },
     duration: durationS,
   })
 }
@@ -339,24 +314,10 @@ export function jumpViewLockFloor(floor: number): void {
   // Same floor while still latched = nothing to do; suspended, the command
   // still re-latches and levels the camera.
   if (next === s.viewLockFloor && !s.viewLockSuspended) return
-  setAppState({ viewLockFloor: next, viewLockHeightM: floorAglM(next) })
+  setAppState({ viewLockFloor: next })
   syncFocusFloor()
   if (s.viewLock === 'top') return // plan view has no eye level
   flyFacadeTo(floorCenterZ(next), 0.5)
-}
-
-/** The height gauge: put the eye hM meters off the ground on this facade
- *  (clamped 5 ft → roof). Continuous — scrub-friendly — with the floor
- *  highlight following whatever storey that height is on. */
-export function setViewLockHeightM(hM: number): void {
-  const s = getAppState()
-  if (s.viewLock === 'off' || s.viewLock === 'top') return
-  const { z0, storeyM, floors, heightM } = buildingRef()
-  const clamped = Math.max(MIN_EYE_M, Math.min(Math.max(heightM, MIN_EYE_M + 1), hM))
-  const floor = Math.max(1, Math.min(floors, Math.floor(clamped / Math.max(0.1, storeyM)) + 1))
-  setAppState(floor === s.viewLockFloor ? { viewLockHeightM: clamped } : { viewLockHeightM: clamped, viewLockFloor: floor })
-  syncFocusFloor()
-  flyFacadeTo(z0 + clamped, 0.3)
 }
 
 let hintShown = false

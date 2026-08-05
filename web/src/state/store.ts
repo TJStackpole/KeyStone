@@ -135,8 +135,6 @@ export interface AppState {
   boardAssignments: Record<string, string>
   /** Command board diagram: unit uid -> normalized {x,y} on the building. */
   boardPlacements: Record<string, { x: number; y: number }>
-  /** Facade view: camera eye height above ground, meters (the height gauge). */
-  viewLockHeightM: number
   /** Riding-list PAR checks: unit callsign -> ms epoch of last PAR. */
   parChecks: Record<string, number>
   /** The CAD feed entry the officer pressed to respond (SIMULATED FireCAD). */
@@ -345,7 +343,6 @@ const initial: AppState = {
       return {}
     }
   })(),
-  viewLockHeightM: 1.6,
   boardPlacements: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board-xy') ?? '{}') as Record<string, { x: number; y: number }>
