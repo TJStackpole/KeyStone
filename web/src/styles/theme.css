@@ -1137,25 +1137,38 @@ html, body {
    above used to push it visually far from the name). */
 .brand-row { display: flex; align-items: center; gap: 10px; }
 .incidents-wrap { position: relative; }
-.incidents-menu {
-  /* Fixed + flush to the screen edge: anchored to the chip it opened 67px
-     in, slicing the incident card beneath into stray word fragments
-     ("UNITS ON TH…", half a RUN button) that read as text overlap. The
-     glass top bar is this fixed box's containing block, so 0/left lands at
-     the bar's own left edge — flush over the panel column, covering it
-     whole. Top offsets from the published bar height, so a wrapped bar
-     can't leave the menu floating mid-row. */
+.incidents-wrap .incidents-menu {
+  /* The chief's situational panel: the citywide dispatch feed owns the FULL
+     LEFT SIDE of the screen while open — big enough to read every box and
+     grab units in an escalating emergency. Fixed + flush to the edge (the
+     glass top bar is this fixed box's containing block); top rides the
+     published bar height, bottom pins to the screen edge. The
+     higher-specificity selector beats the grouped dropdown containment
+     caps (max-width 420 / max-height) that size the ordinary menus. */
   position: fixed;
   top: calc(var(--topbar-h, 52px) + 8px);
+  /* height, not bottom: the glass top bar is the containing block for this
+     fixed box, so `bottom` would pin against the BAR — vh units are immune. */
+  height: calc(100vh - var(--topbar-h, 52px) - 22px);
   left: 2px;
-  width: min(420px, calc(100vw - 24px));
-  max-height: 62vh;
+  width: min(560px, calc(100vw - 24px));
+  max-width: none;
+  max-height: none;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: 12px 14px;
   z-index: 80;
   border: 1px solid var(--border);
   border-radius: 10px;
 }
+/* Situational-awareness type scale — readable from a step back. */
+.incidents-wrap .incidents-menu .incidents-head { font-size: 10.5px; }
+.incidents-wrap .incidents-menu .feed-division-head { font-size: 12px; }
+.incidents-wrap .incidents-menu .feed-battalion-head { font-size: 10px; }
+.incidents-wrap .incidents-menu .feed-row { min-height: 48px; gap: 10px; }
+.incidents-wrap .incidents-menu .feed-src { font-size: 9px; }
+.incidents-wrap .incidents-menu .feed-main b { font-size: 13.5px; }
+.incidents-wrap .incidents-menu .feed-main i { font-size: 10.5px; }
+.incidents-wrap .incidents-menu .feed-meta { font-size: 9.5px; }
 .incidents-head {
   font-family: var(--mono);
   font-size: 9.5px;
@@ -3140,13 +3153,11 @@ body.panel-dragging * { cursor: grabbing !important; }
 }
 .fg-now {
   position: absolute;
-  left: -5px;
-  right: -5px;
+  left: -7px;
+  right: -7px;
   transform: translateY(50%);
-  padding: 2px 0;
+  padding: 2px 0 3px;
   text-align: center;
-  font-size: 8.5px;
-  font-weight: 700;
   letter-spacing: 0.04em;
   color: #0a0e14;
   background: var(--cyan);
@@ -3154,3 +3165,8 @@ body.panel-dragging * { cursor: grabbing !important; }
   box-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
   pointer-events: none;
 }
+.fg-now b { display: block; font-size: 10px; font-weight: 700; }
+.fg-now i { display: block; font-style: normal; font-size: 7.5px; font-weight: 600; opacity: 0.85; }
+/* The SITE INTEL dock owns the right edge when it's expanded — the gauge
+   steps left of it instead of floating on top of the building card. */
+body:has(.intel-panel:not(.collapsed)) .floor-gauge { right: 352px; }

@@ -2,29 +2,32 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
-// FLOOR GAUGE — while the ISOLATE lock looks at a facade (N/E/S/W), a slim
-// vertical bar on the right edge shows the travel range for the view: grade
-// to roof, floors ticked, the current camera floor and the fire floor
-// marked. Tap anywhere on the track to jump the camera to that floor. Hidden
-// for TOP (plan view has no up/down) and whenever the lock is off.
+// HEIGHT GAUGE — while the ISOLATE lock looks at a facade (N/E/S/W), a slim
+// vertical bar on the right edge reads HOW FAR OFF THE GROUND the view sits:
+// 5 FT at the bottom, the full building at the top. Tap or drag anywhere on
+// the track and the camera flies to that height, eye level, squared to the
+// facade — the floor highlight (and member count) follow whatever storey
+// that height lands on. Hidden for TOP (plan view) and when the lock is off.
 // ---------------------------------------------------------------------------
 
 type ViewLockApi = typeof import('../cesium/viewLock')
 
 const SIDES = new Set(['north', 'east', 'south', 'west'])
 
-/** Floor under the pointer — the track maps bottom→FL 1, top→top floor. */
-function floorAt(e: React.PointerEvent<HTMLDivElement>, floors: number): number {
+const FT = 3.28084
+
+/** Height under the pointer — the track maps bottom→minM, top→maxM. */
+function heightAt(e: React.PointerEvent<HTMLDivElement>, minM: number, maxM: number): number {
   const r = e.currentTarget.getBoundingClientRect()
   const frac = 1 - (e.clientY - r.top) / r.height
-  return Math.min(floors, Math.max(1, Math.ceil(frac * floors)))
+  return minM + Math.max(0, Math.min(1, frac)) * (maxM - minM)
 }
 
 export function FloorGauge() {
-  const { viewLock, viewLockFloor, targetHeightM, units } = useAppSlice((s) => ({
+  const { viewLock, viewLockFloor, viewLockHeightM, units } = useAppSlice((s) => ({
     viewLock: s.viewLock,
     viewLockFloor: s.viewLockFloor,
-    targetHeightM: s.targetHeightM,
+    viewLockHeightM: s.viewLockHeightM,
     units: s.units,
   }))
   const active = SIDES.has(viewLock)
@@ -37,28 +40,27 @@ export function FloorGauge() {
   }, [active, vl])
   if (!active || !vl) return null
 
-  const floors = Math.max(1, vl.viewLockFloors())
-  const fire = vl.battleFireFloor()
-  const roofFt = targetHeightM ? Math.round(targetHeightM * 3.281) : null
-  // Center of a floor's band on the track, as a bottom-% offset.
-  const pct = (fl: number) => ((fl - 0.5) / floors) * 100
+  const { minM, maxM, storeyM, floors, fireFloor } = vl.viewLockGaugeInfo()
+  const span = Math.max(0.1, maxM - minM)
+  const pct = (m: number) => Math.max(0, Math.min(100, ((m - minM) / span) * 100))
+  const hM = Math.max(minM, Math.min(maxM, viewLockHeightM))
   const mbr = Object.values(units).filter(
     (u) => (u.category === 'ff' || u.category === 'officer') && (u.floor ?? 0) === viewLockFloor,
   ).length
-  // Per-floor ticks read fine to ~36 floors; towers get every 5th only.
+  // Graduations at floor boundaries (storey ladder); thin out on towers.
   const step = floors > 36 ? 5 : 1
   const ticks: number[] = []
-  for (let f = step; f < floors; f += step) ticks.push(f)
+  for (let f = step; f < floors; f += step) ticks.push(f * storeyM)
 
   return (
-    <aside className="floor-gauge" aria-label="Facade view travel range — grade to roof">
+    <aside className="floor-gauge" aria-label="Eye height above the ground — 5 feet up to the full building">
       <div className="fg-cap">
-        <b>FL {floors}</b>
-        <i>{roofFt ? `ROOF ~${roofFt} FT` : 'ROOF'}</i>
+        <b>{Math.round(maxM * FT)} FT</b>
+        <i>ROOF</i>
       </div>
       <div
         className="fg-track"
-        title="Grade to roof — tap a spot (or drag the bar) and the camera flies eye-level with that floor. ↑↓ steps one at a time."
+        title="How far off the ground the view sits — 5 FT minimum up to the full building. Tap or drag and the camera flies to that height, eye level with the facade (↑↓ still steps whole floors)."
         onPointerDown={(e) => {
           scrubbing.current = true
           try {
@@ -66,10 +68,12 @@ export function FloorGauge() {
           } catch {
             // capture is an assist, not a requirement — scrub still works
           }
-          vl.jumpViewLockFloor(floorAt(e, floors))
+          vl.setViewLockHeightM(heightAt(e, minM, maxM))
         }}
         onPointerMove={(e) => {
-          if (scrubbing.current) vl.jumpViewLockFloor(floorAt(e, floors))
+          // buttons check: if the press ended off-element without capture,
+          // a hover must not keep flying the camera around.
+          if (scrubbing.current && e.buttons !== 0) vl.setViewLockHeightM(heightAt(e, minM, maxM))
         }}
         onPointerUp={() => {
           scrubbing.current = false
@@ -78,19 +82,22 @@ export function FloorGauge() {
           scrubbing.current = false
         }}
       >
-        {ticks.map((f) => (
-          <span key={f} className={`fg-tick${step > 1 ? ' major' : ''}`} style={{ bottom: `${(f / floors) * 100}%` }} />
+        {ticks.map((m) => (
+          <span key={m} className={`fg-tick${step > 1 ? ' major' : ''}`} style={{ bottom: `${pct(m)}%` }} />
         ))}
-        {fire !== null && fire >= 1 && fire <= floors && (
-          <span className="fg-fire" style={{ bottom: `${pct(fire)}%` }} />
+        {fireFloor !== null && fireFloor >= 1 && fireFloor <= floors && (
+          <span className="fg-fire" style={{ bottom: `${pct((fireFloor - 0.5) * storeyM)}%` }} />
         )}
-        <span className="fg-now" style={{ bottom: `${pct(Math.min(viewLockFloor, floors))}%` }}>
-          FL {viewLockFloor}
-          {mbr > 0 ? ` · ${mbr}MBR` : ''}
+        <span className="fg-now" style={{ bottom: `${pct(hM)}%` }}>
+          <b>{Math.round(hM * FT)} FT</b>
+          <i>
+            FL {viewLockFloor}
+            {mbr > 0 ? ` · ${mbr}MBR` : ''}
+          </i>
         </span>
       </div>
       <div className="fg-cap">
-        <b>FL 1</b>
+        <b>5 FT</b>
         <i>GRADE</i>
       </div>
     </aside>

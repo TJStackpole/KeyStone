@@ -242,6 +242,7 @@ export function applyViewLockCamera(durationS = 0.6): void {
   )
   const standoffM = depth + fit
   const pos = offsetDeg(centerLat, centerLon, normal, standoffM)
+  setAppState({ viewLockHeightM: floorAglM(s.viewLockFloor) })
   scene.viewer.camera.flyTo({
     // Level with the TRACKED floor, not mid-building — the facade view rides
     // the floor the operator is working (engage lands on the fire floor).
@@ -268,38 +269,44 @@ export function stepViewLockFloor(delta: number): void {
   jumpViewLockFloor(getAppState().viewLockFloor + delta)
 }
 
-/** True eye level on a floor — the SAME ladder the schematic's floor bands
- *  use (z0 + n·storeyM, z0 sampled from real ground), so the camera levels
- *  exactly with the highlighted band. Dividing roof height by floor count
- *  drifted meters off the band whenever PLUTO's count × storey ≠ measured
- *  roof height. */
-function floorCenterZ(floor: number): number {
-  const { z0, storeyM, floors } = buildingRef()
-  const f = Math.max(1, Math.min(floors, floor))
-  return z0 + (f - 0.5) * storeyM
+/** Meters above ground of a floor's eye level — the SAME ladder the
+ *  schematic's floor bands use ((n − ½)·storeyM over sampled ground), so the
+ *  camera levels exactly with the highlighted band. */
+function floorAglM(floor: number): number {
+  const { storeyM, floors } = buildingRef()
+  return (Math.max(1, Math.min(floors, floor)) - 0.5) * storeyM
 }
 
-/** Direct floor set (fire-floor quick jump, stepper, arrows, floor gauge).
- *  The VIEW rides the floor: the camera flies to level with the selected
- *  floor AND — when it is still parked at the whole-facade distance — dives
- *  in to a working standoff that frames a handful of floors, so stepping
- *  floors reads as real travel up and down the wall. An operator who has
- *  zoomed tighter keeps their own distance (we only ever move IN, never
- *  yank back out). */
-export function jumpViewLockFloor(floor: number): void {
+function floorCenterZ(floor: number): number {
+  return buildingRef().z0 + floorAglM(floor)
+}
+
+/** The height gauge's 5 ft minimum, in meters. */
+const MIN_EYE_M = 1.524
+
+/** Everything the on-screen height gauge needs, one call. */
+export function viewLockGaugeInfo(): {
+  minM: number
+  maxM: number
+  storeyM: number
+  floors: number
+  fireFloor: number | null
+} {
+  const { heightM, storeyM, floors } = buildingRef()
+  return { minM: MIN_EYE_M, maxM: Math.max(heightM, MIN_EYE_M + 1), storeyM, floors, fireFloor: battleFireFloor() }
+}
+
+/** Facade flight to an absolute elevation, re-latching a FREE camera and
+ *  keeping (or tightening to) the working standoff — the camera flies to
+ *  level with zAbs, squared to the facade. Shared by floor jumps and the
+ *  continuous height gauge. */
+function flyFacadeTo(zAbs: number, durationS: number): void {
   const s = getAppState()
-  if (s.viewLock === 'off') return
-  // TOP view steps the PLAN floor (blueprint cutaway) — no camera motion.
-  if (s.viewLock === 'top' && !s.isolateMode) return
-  const next = Math.max(1, Math.min(viewLockFloors(), Math.round(floor)))
-  if (next === s.viewLockFloor) return
-  setAppState({ viewLockFloor: next })
-  syncFocusFloor()
-  if (s.viewLock === 'top') return // plan view has no eye level
+  if (s.viewLock === 'off' || s.viewLock === 'top') return
   const scene = getScene()
   if (!scene) return
-  // An explicit floor command means "put me level with THIS floor" — it
-  // re-latches a FREE camera rather than moving only the chip.
+  // An explicit height/floor command means "put me level with THIS" — it
+  // re-latches a FREE camera rather than moving only the readout.
   if (s.viewLockSuspended) {
     setAppState({ viewLockSuspended: false })
     lockController(s.viewLock)
@@ -324,10 +331,41 @@ export function jumpViewLockFloor(floor: number): void {
   // camera can start from anywhere, including inside the footprint.
   const pos = offsetDeg(centerLat, centerLon, normal, Math.max(depth + 10, Math.min(curDist, workDist)))
   scene.viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, floorCenterZ(next)),
+    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, zAbs),
     orientation: { heading: Cesium.Math.toRadians((normal + 180) % 360), pitch: 0, roll: 0 },
-    duration: 0.5,
+    duration: durationS,
   })
+}
+
+/** Direct floor set (fire-floor quick jump, stepper, arrows). The VIEW rides
+ *  the floor: the camera flies to eye level with it. */
+export function jumpViewLockFloor(floor: number): void {
+  const s = getAppState()
+  if (s.viewLock === 'off') return
+  // TOP view steps the PLAN floor (blueprint cutaway) — no camera motion.
+  if (s.viewLock === 'top' && !s.isolateMode) return
+  const next = Math.max(1, Math.min(viewLockFloors(), Math.round(floor)))
+  // Same floor while still latched = nothing to do; suspended, the command
+  // still re-latches and levels the camera.
+  if (next === s.viewLockFloor && !s.viewLockSuspended) return
+  setAppState({ viewLockFloor: next, viewLockHeightM: floorAglM(next) })
+  syncFocusFloor()
+  if (s.viewLock === 'top') return // plan view has no eye level
+  flyFacadeTo(floorCenterZ(next), 0.5)
+}
+
+/** The height gauge: put the eye hM meters off the ground on this facade
+ *  (clamped 5 ft → roof). Continuous — scrub-friendly — with the floor
+ *  highlight following whatever storey that height is on. */
+export function setViewLockHeightM(hM: number): void {
+  const s = getAppState()
+  if (s.viewLock === 'off' || s.viewLock === 'top') return
+  const { z0, storeyM, floors, heightM } = buildingRef()
+  const clamped = Math.max(MIN_EYE_M, Math.min(Math.max(heightM, MIN_EYE_M + 1), hM))
+  const floor = Math.max(1, Math.min(floors, Math.floor(clamped / Math.max(0.1, storeyM)) + 1))
+  setAppState(floor === s.viewLockFloor ? { viewLockHeightM: clamped } : { viewLockHeightM: clamped, viewLockFloor: floor })
+  syncFocusFloor()
+  flyFacadeTo(z0 + clamped, 0.3)
 }
 
 let hintShown = false
