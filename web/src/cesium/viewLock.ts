@@ -268,11 +268,15 @@ export function stepViewLockFloor(delta: number): void {
   jumpViewLockFloor(getAppState().viewLockFloor + delta)
 }
 
-/** True elevation of a floor's center — where a facade camera levels with it. */
+/** True eye level on a floor — the SAME ladder the schematic's floor bands
+ *  use (z0 + n·storeyM, z0 sampled from real ground), so the camera levels
+ *  exactly with the highlighted band. Dividing roof height by floor count
+ *  drifted meters off the band whenever PLUTO's count × storey ≠ measured
+ *  roof height. */
 function floorCenterZ(floor: number): number {
-  const { z0, heightM, floors } = buildingRef()
+  const { z0, storeyM, floors } = buildingRef()
   const f = Math.max(1, Math.min(floors, floor))
-  return z0 + ((f - 0.5) / Math.max(1, floors)) * heightM
+  return z0 + (f - 0.5) * storeyM
 }
 
 /** Direct floor set (fire-floor quick jump, stepper, arrows, floor gauge).
@@ -291,11 +295,15 @@ export function jumpViewLockFloor(floor: number): void {
   if (next === s.viewLockFloor) return
   setAppState({ viewLockFloor: next })
   syncFocusFloor()
-  // Camera tracks the floor in pinned facade views only — TOP has no
-  // up/down and a FREE (suspended) camera belongs to the operator.
-  if (s.viewLock === 'top' || s.viewLockSuspended) return
+  if (s.viewLock === 'top') return // plan view has no eye level
   const scene = getScene()
   if (!scene) return
+  // An explicit floor command means "put me level with THIS floor" — it
+  // re-latches a FREE camera rather than moving only the chip.
+  if (s.viewLockSuspended) {
+    setAppState({ viewLockSuspended: false })
+    lockController(s.viewLock)
+  }
   const { heightM, floors, centerLat, centerLon } = buildingRef()
   const { normal, depth } = facadeFor(s.viewLock)
   const cam = scene.viewer.camera
@@ -312,7 +320,9 @@ export function jumpViewLockFloor(floor: number): void {
     (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
   const floorH = heightM / Math.max(1, floors)
   const workDist = depth + Math.max(24, (floorH * 2 + 4) / Math.tan(fovy / 2))
-  const pos = offsetDeg(centerLat, centerLon, normal, Math.min(curDist, workDist))
+  // Never tighter than the wall + a working margin — a re-latched FREE
+  // camera can start from anywhere, including inside the footprint.
+  const pos = offsetDeg(centerLat, centerLon, normal, Math.max(depth + 10, Math.min(curDist, workDist)))
   scene.viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, floorCenterZ(next)),
     orientation: { heading: Cesium.Math.toRadians((normal + 180) % 360), pitch: 0, roll: 0 },

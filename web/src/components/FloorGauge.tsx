@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppSlice } from '../state/store'
 
 // ---------------------------------------------------------------------------
@@ -13,6 +13,13 @@ type ViewLockApi = typeof import('../cesium/viewLock')
 
 const SIDES = new Set(['north', 'east', 'south', 'west'])
 
+/** Floor under the pointer — the track maps bottom→FL 1, top→top floor. */
+function floorAt(e: React.PointerEvent<HTMLDivElement>, floors: number): number {
+  const r = e.currentTarget.getBoundingClientRect()
+  const frac = 1 - (e.clientY - r.top) / r.height
+  return Math.min(floors, Math.max(1, Math.ceil(frac * floors)))
+}
+
 export function FloorGauge() {
   const { viewLock, viewLockFloor, targetHeightM, units } = useAppSlice((s) => ({
     viewLock: s.viewLock,
@@ -24,6 +31,7 @@ export function FloorGauge() {
   // Same lazy pattern as the SIZE-UP strip: the camera API loads with first
   // use so this component keeps Cesium out of its static graph.
   const [vl, setVl] = useState<ViewLockApi | null>(null)
+  const scrubbing = useRef(false)
   useEffect(() => {
     if (active && !vl) void import('../cesium/viewLock').then(setVl)
   }, [active, vl])
@@ -50,11 +58,24 @@ export function FloorGauge() {
       </div>
       <div
         className="fg-track"
-        title="Travel range for this facade view — grade to roof. Tap a spot to jump the camera to that floor (↑↓ steps one at a time)."
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect()
-          const frac = 1 - (e.clientY - r.top) / r.height
-          vl.jumpViewLockFloor(Math.min(floors, Math.max(1, Math.ceil(frac * floors))))
+        title="Grade to roof — tap a spot (or drag the bar) and the camera flies eye-level with that floor. ↑↓ steps one at a time."
+        onPointerDown={(e) => {
+          scrubbing.current = true
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId)
+          } catch {
+            // capture is an assist, not a requirement — scrub still works
+          }
+          vl.jumpViewLockFloor(floorAt(e, floors))
+        }}
+        onPointerMove={(e) => {
+          if (scrubbing.current) vl.jumpViewLockFloor(floorAt(e, floors))
+        }}
+        onPointerUp={() => {
+          scrubbing.current = false
+        }}
+        onPointerCancel={() => {
+          scrubbing.current = false
         }}
       >
         {ticks.map((f) => (
