@@ -198,7 +198,11 @@ export class UnitLayer {
     let h: number | undefined
     let viaGlobe = false
     if (isolate) {
-      h = (scene.globe.show ? scene.globe.getHeight(carto) : undefined) ?? 0
+      // Units share the SCHEMATIC's ground plane by construction: the same
+      // z0 the isolate floor reference landed the building on. Sampling the
+      // globe here could disagree with the building by the google-mode
+      // offset (~26 m) and leave crews floating beside a grounded structure.
+      h = getAppState().isolateFloors?.z0 ?? (scene.globe.show ? scene.globe.getHeight(carto) : undefined) ?? 0
       viaGlobe = true
     } else {
       h = tileset?.getHeight(carto, scene)

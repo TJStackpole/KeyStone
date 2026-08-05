@@ -27,8 +27,11 @@ import './TacticalMap2D.css'
 // Positron) — standard OSM carto was tried here and retired: a consumer map
 // of subway entrances, shop icons and transit glyphs, cartoonish on a
 // command console.
-const CARTO_DARK_TILES = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
-const CARTO_LIGHT_TILES = 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'
+// nolabels variants: the *_all composites bake POI icons (bars, shops)
+// into the raster at high zoom — noise on a command console. Street names
+// come from our own CSCL label layer instead (sharper, our type).
+const CARTO_DARK_TILES = 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png'
+const CARTO_LIGHT_TILES = 'https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png'
 // NYS Digital Orthoimagery Program, latest statewide mosaic (public, keyless).
 // The service is a DYNAMIC MapServer (no tile cache — /tile/{z}/{y}/{x} 404s),
 // so we consume it through the ArcGIS export endpoint with MapLibre's
@@ -276,6 +279,10 @@ export function TacticalMap2D() {
               'icon-image': ['get', 'icon'],
               'icon-size': ['case', ['==', ['get', 'member'], 1], 0.5, 0.8],
               'icon-allow-overlap': true,
+              // FLUSH to the map plane — glyphs lie on the map, never
+              // billboard off it (the map is pitch-locked flat anyway).
+              'icon-pitch-alignment': 'map',
+              'icon-rotation-alignment': 'map',
               'text-field': ['get', 'label'],
               'text-font': ['Open Sans Regular'],
               'text-size': 11,

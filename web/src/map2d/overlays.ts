@@ -1,6 +1,6 @@
 import type * as maplibregl from 'maplibre-gl'
 import type { Feature, FeatureCollection } from 'geojson'
-import { fetchFacilities, fetchRoadSegments, fetchTaxLots, fetchTunnels } from '../api/nyc'
+import { fetchFacilities, fetchRoadSegments, fetchStreetLabels, fetchTaxLots, fetchTunnels } from '../api/nyc'
 import { sodaInit } from '../lib/soda'
 
 // ---------------------------------------------------------------------------
@@ -13,6 +13,8 @@ import { sodaInit } from '../lib/soda'
 // ---------------------------------------------------------------------------
 
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+let lastStreetsKey = ''
 
 // Same datasets the 3D boundaries layer draws (cesium/boundaries.ts).
 const BATTALIONS_URL = 'https://data.cityofnewyork.us/resource/xzng-ft6f.json?$limit=60'
@@ -239,4 +241,47 @@ export async function syncViewportOverlays(map: maplibregl.Map, toggles: Toggles
     }
   }
   setVisible(map, ['ov-roads-line'], !!toggles.roads && z >= 13)
+
+  // Street NAMES (CSCL) — basemap furniture, not a toggle: the nolabels
+  // bases carry no text at all, so the platform captions its own streets
+  // whenever the camera is close enough to work a block.
+  ensureLayers(map, 'ov-streetnames', () => [
+    {
+      id: 'ov-streetnames-label',
+      type: 'symbol',
+      source: 'ov-streetnames',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Open Sans Regular'],
+        'text-size': 11,
+        'text-letter-spacing': 0.08,
+        'text-rotate': ['get', 'rot'],
+        'text-rotation-alignment': 'map',
+        'text-pitch-alignment': 'map',
+        'text-padding': 6,
+      },
+      paint: { 'text-color': '#93a6bd', 'text-halo-color': 'rgba(10, 14, 20, 0.85)', 'text-halo-width': 1.3 },
+    },
+  ])
+  if (z >= 14) {
+    const key = `${c.lat.toFixed(3)},${c.lng.toFixed(3)}`
+    if (key !== lastStreetsKey) {
+      lastStreetsKey = key
+      try {
+        const labels = await fetchStreetLabels(c.lat, c.lng, 700)
+        setData(map, 'ov-streetnames', {
+          type: 'FeatureCollection',
+          features: labels.map((l) => ({
+            type: 'Feature',
+            // Upright reading angle: fold the street bearing into [-90, 90).
+            properties: { name: l.name, rot: ((l.bearingDeg % 180) + 180) % 180 - 90 },
+            geometry: { type: 'Point', coordinates: [l.lon, l.lat] },
+          })),
+        })
+      } catch (err) {
+        console.warn('[overlays2d] street names unavailable:', err)
+      }
+    }
+  }
+  setVisible(map, ['ov-streetnames-label'], z >= 14)
 }
