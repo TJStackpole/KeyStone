@@ -22,6 +22,7 @@ import { UtilityDock } from './components/UtilityDock'
 import { DrawToolbar } from './components/DrawToolbar'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
+import { FloorGauge } from './components/FloorGauge'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
 import { ScenarioBar } from './components/ScenarioBar'
 import { MaydayAlert } from './components/MaydayAlert'
@@ -187,6 +188,7 @@ export default function App() {
       </div>
       <DrawToolbar />
       <SiteIntelPanel />
+      <FloorGauge />
       <UtilityDock />
       <CommsPanel />
       <GroundViewExit />
