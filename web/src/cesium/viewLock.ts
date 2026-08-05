@@ -243,7 +243,9 @@ export function applyViewLockCamera(durationS = 0.6): void {
   const standoffM = depth + fit
   const pos = offsetDeg(centerLat, centerLon, normal, standoffM)
   scene.viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, z0 + heightM / 2),
+    // Level with the TRACKED floor, not mid-building — the facade view rides
+    // the floor the operator is working (engage lands on the fire floor).
+    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, floorCenterZ(s.viewLockFloor)),
     orientation: {
       heading: Cesium.Math.toRadians((normal + 180) % 360),
       pitch: 0,
@@ -266,9 +268,17 @@ export function stepViewLockFloor(delta: number): void {
   jumpViewLockFloor(getAppState().viewLockFloor + delta)
 }
 
-/** Direct floor set (fire-floor quick jump, stepper, arrows). The frame
- *  holds the whole facade — scrolling floors moves the HIGHLIGHT band and
- *  readout, never the camera, so the operator's zoom is never yanked. */
+/** True elevation of a floor's center — where a facade camera levels with it. */
+function floorCenterZ(floor: number): number {
+  const { z0, heightM, floors } = buildingRef()
+  const f = Math.max(1, Math.min(floors, floor))
+  return z0 + ((f - 0.5) / Math.max(1, floors)) * heightM
+}
+
+/** Direct floor set (fire-floor quick jump, stepper, arrows, floor gauge).
+ *  The VIEW rides the floor: the camera eases straight up/down the facade
+ *  to level with it — HEIGHT ONLY, so the operator's zoom (standoff off the
+ *  wall) and heading are never yanked. */
 export function jumpViewLockFloor(floor: number): void {
   const s = getAppState()
   if (s.viewLock === 'off') return
@@ -278,6 +288,18 @@ export function jumpViewLockFloor(floor: number): void {
   if (next === s.viewLockFloor) return
   setAppState({ viewLockFloor: next })
   syncFocusFloor()
+  // Camera tracks the floor in pinned facade views only — TOP has no
+  // up/down and a FREE (suspended) camera belongs to the operator.
+  if (s.viewLock === 'top' || s.viewLockSuspended) return
+  const scene = getScene()
+  if (!scene) return
+  const cam = scene.viewer.camera
+  const carto = cam.positionCartographic
+  scene.viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, floorCenterZ(next)),
+    orientation: { heading: cam.heading, pitch: 0, roll: 0 },
+    duration: 0.35,
+  })
 }
 
 let hintShown = false
