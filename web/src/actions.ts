@@ -815,7 +815,12 @@ export function reconcileProviderUpgrade(): void {
 export function resetIsolate(): void {
   if (!getAppState().isolateMode) return
   setAppState({ isolateMode: false })
-  if (getAppState().profile === 'fdny') setAppState({ mapMode: '2d' })
+  // Unconditional: isolate is the ONLY thing that puts mapMode on '3d', so
+  // its teardown always restores '2d'. This was fdny-guarded, and an isolate
+  // exited under the NYCEM hat stranded mapMode on '3d' — switching back
+  // handed FDNY the whole legacy 3D city chrome. NYCEM ignores mapMode, so
+  // '2d' is always safe to write.
+  setAppState({ mapMode: '2d' })
   applyIsolate(false)
 }
 
@@ -889,6 +894,11 @@ export function setProfile(next: 'fdny' | 'nycem'): void {
   }
   const prev = getAppState().profile
   if (next === prev) return
+  // Map posture never crosses profiles: ISOLATE (clipped scene + camera
+  // lock) is torn down on any switch, and FDNY always lands back on its 2D
+  // tactical map — never the citywide 3D chrome the other hat was wearing.
+  resetIsolate()
+  if (next === 'fdny') setAppState({ mapMode: '2d' })
   localStorage.setItem('ks-profile', next)
   // Each window stays sovereign: with ?profile pinned in the URL, another
   // window's localStorage write can't flip this one on its next reload.
