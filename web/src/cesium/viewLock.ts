@@ -276,9 +276,12 @@ function floorCenterZ(floor: number): number {
 }
 
 /** Direct floor set (fire-floor quick jump, stepper, arrows, floor gauge).
- *  The VIEW rides the floor: the camera eases straight up/down the facade
- *  to level with it — HEIGHT ONLY, so the operator's zoom (standoff off the
- *  wall) and heading are never yanked. */
+ *  The VIEW rides the floor: the camera flies to level with the selected
+ *  floor AND — when it is still parked at the whole-facade distance — dives
+ *  in to a working standoff that frames a handful of floors, so stepping
+ *  floors reads as real travel up and down the wall. An operator who has
+ *  zoomed tighter keeps their own distance (we only ever move IN, never
+ *  yank back out). */
 export function jumpViewLockFloor(floor: number): void {
   const s = getAppState()
   if (s.viewLock === 'off') return
@@ -293,12 +296,27 @@ export function jumpViewLockFloor(floor: number): void {
   if (s.viewLock === 'top' || s.viewLockSuspended) return
   const scene = getScene()
   if (!scene) return
+  const { heightM, floors, centerLat, centerLon } = buildingRef()
+  const { normal, depth } = facadeFor(s.viewLock)
   const cam = scene.viewer.camera
   const carto = cam.positionCartographic
+  // Current ground distance off the footprint center.
+  const dLatM = (Cesium.Math.toDegrees(carto.latitude) - centerLat) * 111_320
+  const dLonM =
+    (Cesium.Math.toDegrees(carto.longitude) - centerLon) * 111_320 * Math.cos((centerLat * Math.PI) / 180)
+  const curDist = Math.hypot(dLatM, dLonM)
+  // Working distance: frame ~4 floors of wall (never closer than the lock's
+  // 18 m zoom floor, plus the facade's own depth).
+  const frustum = cam.frustum
+  const fovy =
+    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
+  const floorH = heightM / Math.max(1, floors)
+  const workDist = depth + Math.max(24, (floorH * 2 + 4) / Math.tan(fovy / 2))
+  const pos = offsetDeg(centerLat, centerLon, normal, Math.min(curDist, workDist))
   scene.viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, floorCenterZ(next)),
-    orientation: { heading: cam.heading, pitch: 0, roll: 0 },
-    duration: 0.35,
+    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, floorCenterZ(next)),
+    orientation: { heading: Cesium.Math.toRadians((normal + 180) % 360), pitch: 0, roll: 0 },
+    duration: 0.5,
   })
 }
 
