@@ -6,17 +6,17 @@ import type { TrafficLink } from '../api/nyc'
 // route outlines, colored by current speed. Toggleable from Site Intel.
 // ---------------------------------------------------------------------------
 
-// Quick-reference palette (per the chief's spec): dark red = heavy traffic,
-// red = traffic, yellow = light traffic, free-flowing links draw NOTHING.
-const HEAVY = Cesium.Color.fromCssColorString('#7f1d1d').withAlpha(0.95) // <10 mph
-const TRAFFIC = Cesium.Color.fromCssColorString('#ef4444').withAlpha(0.9) // 10–20
-const LIGHT = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.85) // 20–35
-const FREE_FLOW_MPH = 35
+// Two-class palette (chief's spec, tightened 2026-08-05): red = heavy
+// (<10 mph), amber = moderate (10–20). Anything moving faster is NOT
+// congestion and draws NOTHING — the map only flags what slows the response.
+export const TRAFFIC_MODERATE_MPH = 20
+export const TRAFFIC_HEAVY_MPH = 10
+const HEAVY = Cesium.Color.fromCssColorString('#ef4444').withAlpha(0.95) // <10 mph
+const MODERATE = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.9) // 10–20
 
 function colorFor(speedMph: number): Cesium.Color | null {
-  if (speedMph >= FREE_FLOW_MPH) return null // no traffic — no color
-  if (speedMph >= 20) return LIGHT
-  if (speedMph >= 10) return TRAFFIC
+  if (speedMph >= TRAFFIC_MODERATE_MPH) return null // free enough — no color
+  if (speedMph >= TRAFFIC_HEAVY_MPH) return MODERATE
   return HEAVY
 }
 

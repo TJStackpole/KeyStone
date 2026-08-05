@@ -157,7 +157,7 @@ function hydrantsFC(hydrants: { id: string; lat: number; lon: number }[]): FC {
 
 export function TacticalMap2D() {
   const canMap2d = useCapability('view.map2d')
-  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles } = useAppSlice((s) => ({
+  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles, trafficLinks, trafficAgeMin } = useAppSlice((s) => ({
     mode2d: s.mapMode === '2d',
     layerToggles: s.layerToggles,
     incident: s.incident,
@@ -165,6 +165,8 @@ export function TacticalMap2D() {
     shapes: s.shapes,
     hydrants: s.intel.hydrants,
     footprintsGeo: s.footprintsGeo,
+    trafficLinks: s.trafficLinks,
+    trafficAgeMin: s.trafficAgeMin,
   }))
   // 2D is the tactical view ONLY where the manifest grants it (FDNY) — the
   // NYCEM profile keeps its citywide globe untouched.
@@ -205,12 +207,22 @@ export function TacticalMap2D() {
           posts: { type: 'geojson', data: EMPTY },
           hydrants: { type: 'geojson', data: EMPTY },
           units: { type: 'geojson', data: EMPTY },
+          traffic: { type: 'geojson', data: EMPTY },
           draft: { type: 'geojson', data: EMPTY },
         },
         layers: [
           { id: 'base-carto', type: 'raster', source: 'carto' },
           { id: 'fp-fill', type: 'fill', source: 'footprints', paint: { 'fill-color': '#334155', 'fill-opacity': 0.32 } },
           { id: 'fp-line', type: 'line', source: 'footprints', paint: { 'line-color': '#64748b', 'line-width': 1 } },
+          // DOT live speeds — features arrive pre-filtered to moderate/heavy
+          // (free-flowing links never reach the source; color/width per class).
+          {
+            id: 'traffic-line',
+            type: 'line',
+            source: 'traffic',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'width'], 'line-opacity': 0.9 },
+          },
           { id: 'target-fill', type: 'fill', source: 'target', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.4 } },
           { id: 'target-line', type: 'line', source: 'target', paint: { 'line-color': '#fbbf24', 'line-width': 2.5 } },
           {
@@ -290,7 +302,7 @@ export function TacticalMap2D() {
   // Data sync: store slices -> GeoJSON sources, pushed ONLY when the slice
   // object identity changed — units tick ~5x/sec and re-serializing six
   // unchanged collections per tick would burn worker+GPU for nothing.
-  const pushed = useRef<{ fp?: unknown; shapes?: unknown; hydrants?: unknown; units?: unknown }>({})
+  const pushed = useRef<{ fp?: unknown; shapes?: unknown; hydrants?: unknown; units?: unknown; traffic?: unknown }>({})
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
@@ -315,11 +327,27 @@ export function TacticalMap2D() {
       pushed.current.units = units
       set('units', unitsFC(units))
     }
+    if (pushed.current.traffic !== trafficLinks) {
+      pushed.current.traffic = trafficLinks
+      // Moderate/heavy ONLY — a link moving 20+ mph is not congestion and
+      // never reaches the map. Red under 10 mph, amber 10-20.
+      set('traffic', {
+        type: 'FeatureCollection',
+        features: trafficLinks
+          .filter((l) => l.speedMph < 20)
+          .map((l) => ({
+            type: 'Feature' as const,
+            geometry: { type: 'LineString' as const, coordinates: l.positions },
+            properties: l.speedMph < 10 ? { color: '#ef4444', width: 4.5 } : { color: '#f59e0b', width: 3 },
+          })),
+      })
+    }
     // SITE INTEL chips apply here exactly as on the 3D scene — hydrants,
     // neighbor buildings, and the fire-building highlight are all checkable.
     const t = layerToggles as unknown as Record<string, boolean>
     const vis = (id: string, on: boolean) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none')
     vis('hydrant-dot', t.hydrants !== false)
+    vis('traffic-line', t.traffic === true)
     vis('fp-fill', t.footprints !== false)
     vis('fp-line', t.footprints !== false)
     vis('target-fill', t.targetbox !== false)
@@ -411,6 +439,11 @@ export function TacticalMap2D() {
         {base === 'dark' ? 'DARK' : base === 'light' ? 'LIGHT' : 'SAT'}
       </button>
       {base === 'sat' && <div className="map2d-vintage">{ORTHO_VINTAGE}</div>}
+      {layerToggles.traffic && trafficAgeMin !== null && trafficAgeMin > 30 && (
+        <div className="map2d-vintage map2d-traffic-age" title="NYC DOT's public mirror is trailing real time — speeds shown are the newest it has published">
+          ⚠ TRAFFIC DATA {trafficAgeMin} MIN OLD — DOT FEED LAGGING
+        </div>
+      )}
     </div>
   )
 }

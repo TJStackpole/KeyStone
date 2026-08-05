@@ -1351,6 +1351,7 @@ export function toggleLayer(layer: ToggleLayerId): void {
   if (layer === 'traffic') {
     getTrafficLayer()?.setVisible(next && !parked)
     if (next && !parked) void refreshTraffic()
+    if (!next) setAppState({ trafficLinks: [], trafficAgeMin: null })
   }
   if (layer === 'lots') {
     getLotLayer()?.setVisible(next && !parked && overlayLodAllows('lots'))
@@ -2155,19 +2156,23 @@ export async function refreshTraffic(): Promise<void> {
     // ONE citywide download per cycle; the 2500 m try and the 8000 m widen
     // (DOT sensors cover highways/arterials only — residential incidents need
     // the approach corridors) both filter the same in-memory array.
-    const all = await fetchTrafficLinks()
+    const { links: all, ageMin } = await fetchTrafficLinks()
     let links = linksNear(all, incident.lat, incident.lon, 2500)
     if (!links.length) links = linksNear(all, incident.lat, incident.lon, 8000)
     // Stale-guard: the incident may have changed while the fetch was in flight.
     const now = getAppState()
     if (now.incident?.id !== incident.id || !now.layerToggles.traffic) return
     getTrafficLayer()?.set(links)
+    setAppState({ trafficLinks: links, trafficAgeMin: ageMin }) // the 2D map draws from the store
   } catch (err) {
     console.error('[traffic] layer unavailable:', err)
     // Same stale-guard as the success path — a late failure from a previous
     // incident must not wipe links a newer refresh already drew.
     const now = getAppState()
-    if (now.incident?.id === incident.id && now.layerToggles.traffic) getTrafficLayer()?.clear()
+    if (now.incident?.id === incident.id && now.layerToggles.traffic) {
+      getTrafficLayer()?.clear()
+      setAppState({ trafficLinks: [], trafficAgeMin: null })
+    }
   }
 }
 

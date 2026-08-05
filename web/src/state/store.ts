@@ -226,6 +226,10 @@ export interface AppState {
   /** Renderer-neutral footprint geometry for the 2D map (same fetch the 3D
    *  layer draws from; published by actions when footprints resolve). */
   footprintsGeo: { feats: import('../lib/footprints').Footprint[]; targetBin: string | null } | null
+  /** Fresh DOT link speeds near the box (renderer-neutral; 2D + 3D draw it). */
+  trafficLinks: { name: string; speedMph: number; asOf: string; positions: [number, number][] }[]
+  /** Minutes the DOT feed head trails the wall clock (null = unknown/off). */
+  trafficAgeMin: number | null
   /** Street-level camera dropped by the GND tool. */
   groundViewActive: boolean
   /** Photographic Street View panel (Google embed, key-gated). */
@@ -254,7 +258,7 @@ const initial: AppState = {
     hydrants: true,
     firehouses: true,
     streets: true,
-    traffic: false,
+    traffic: true, // DOT live speeds — draws moderate/heavy congestion only
     lots: true, // draws only when zoomed in — see refreshLots' height gate
     roads: true, // yellow road-network overlay, camera-following
     tunnels: true, // the four major vehicular tunnels, citywide
@@ -411,6 +415,8 @@ const initial: AppState = {
   mapMode: '2d',
   map2dReady: false,
   footprintsGeo: null,
+  trafficLinks: [],
+  trafficAgeMin: null,
   groundViewActive: false,
   groundViewFt: 6,
   streetViewOpen: false,

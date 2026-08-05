@@ -37,6 +37,7 @@ const OVERLAYS: { id: ToggleLayerId; label: string; hint: string; nycemOnly?: bo
   { id: 'divisions', label: 'FDNY Divisions', hint: 'Division boundary lines' },
   { id: 'lots', label: 'Address grid', hint: 'Tax-lot borders — click inside one to load its address' },
   { id: 'roads', label: 'Road network', hint: 'Yellow overlay of every drivable street, highway, bridge, and ramp' },
+  { id: 'traffic', label: 'Live traffic', hint: 'NYC DOT real-time speeds near the box — moderate (amber) and heavy (red) congestion only; free-flowing roads stay off the map' },
   { id: 'tunnels', label: 'Tunnels', hint: 'Major vehicular tunnels — Lincoln, Holland, Queens-Midtown, Hugh L. Carey (commercial access varies per tunnel)' },
   { id: 'poiFirehouses', label: 'All firehouses', hint: 'Every FDNY firehouse citywide (Facilities DB)' },
   { id: 'poiFdny', label: 'FDNY buildings', hint: 'Official FDNY buildings — HQ, offices, training, EMS stations' },

@@ -364,7 +364,14 @@ const NYC = { latMin: 40.3, latMax: 41.2, lonMin: -74.6, lonMax: -73.3 }
  * instead of doubling a multi-hundred-KB request. The 30-min-fresh window is
  * ~750 rows, so $limit 1500 covers it with margin at a third of the payload.
  */
-export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficLink[]> {
+export interface TrafficFetch {
+  links: TrafficLink[]
+  /** Minutes the FEED HEAD trails the wall clock — the Socrata mirror has
+   *  been observed lagging a full hour; the map labels anything over 30. */
+  ageMin: number | null
+}
+
+export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficFetch> {
   maybeFailNyc()
   const params = new URLSearchParams({
     $select: 'link_id,speed,status,link_points,link_name,data_as_of',
@@ -376,16 +383,21 @@ export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficLi
   const rows = (await res.json()) as TrafficRow[]
   const seen = new Set<string>()
   const out: TrafficLink[] = []
-  // Freshness cutoff: a halted sensor's last reading stays "newest" for its
-  // link forever — don't paint half-hour-old speeds as live traffic.
-  const cutoffMs = 30 * 60 * 1000
   const now = Date.now()
+  // Freshness is judged RELATIVE TO THE FEED HEAD, not the wall clock: the
+  // mirror itself lags (observed 60 min behind), and a wall-clock cutoff
+  // silently blanked the whole layer. Halted sensors still drop (their
+  // last reading trails the head), and a head older than 2 h is unusable.
+  const newestMs = Date.parse(rows[0]?.data_as_of ?? '')
+  const ageMin = Number.isFinite(newestMs) ? Math.max(0, Math.round((now - newestMs) / 60_000)) : null
+  if (ageMin !== null && ageMin > 120) return { links: [], ageMin }
+  const cutoffMs = 15 * 60 * 1000
   for (const r of rows) {
     const linkId = r.link_id ?? r.link_name ?? ''
     if (seen.has(linkId)) continue // rows are newest-first; keep the latest per link
     seen.add(linkId)
     const asOf = Date.parse(r.data_as_of ?? '')
-    if (Number.isFinite(asOf) && now - asOf > cutoffMs) continue
+    if (Number.isFinite(asOf) && Number.isFinite(newestMs) && newestMs - asOf > cutoffMs) continue
     const speed = Number(r.speed)
     if (!Number.isFinite(speed) || speed <= 0 || Number(r.status ?? 0) < 0) continue
     const positions: [number, number][] = []
@@ -405,7 +417,7 @@ export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficLi
     if (positions.length < 2) continue
     out.push({ name: r.link_name ?? 'link', speedMph: speed, asOf: r.data_as_of ?? '', positions })
   }
-  return out
+  return { links: out, ageMin }
 }
 
 /** Links with any vertex within radiusM of the point — filters ONE download. */
