@@ -441,7 +441,14 @@ export async function fetchTrafficLinks(signal?: AbortSignal): Promise<TrafficFe
   // last reading trails the head), and a head older than 2 h is unusable.
   const newestMs = parseEasternMs(rows[0]?.data_as_of ?? '')
   const ageMin = Number.isFinite(newestMs) ? Math.max(0, Math.round((now - newestMs) / 60_000)) : null
-  if (ageMin !== null && ageMin > 120) return { links: [], ageMin }
+  // CURRENT OR ABSENT: past 30 minutes the layer draws NOTHING rather than
+  // stale speeds or a warning banner — what's on the map is always real.
+  // The fresh-first query + 60 s cycle repopulate within a minute of the
+  // mirror catching back up.
+  if (ageMin !== null && ageMin > 30) {
+    console.warn(`[traffic] DOT mirror ${ageMin} min behind — layer withheld until it catches up`)
+    return { links: [], ageMin }
+  }
   const cutoffMs = 15 * 60 * 1000
   for (const r of rows) {
     const linkId = r.link_id ?? r.link_name ?? ''

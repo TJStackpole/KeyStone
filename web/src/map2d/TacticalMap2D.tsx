@@ -157,7 +157,7 @@ function hydrantsFC(hydrants: { id: string; lat: number; lon: number }[]): FC {
 
 export function TacticalMap2D() {
   const canMap2d = useCapability('view.map2d')
-  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles, trafficLinks, trafficAgeMin } = useAppSlice((s) => ({
+  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles, trafficLinks } = useAppSlice((s) => ({
     mode2d: s.mapMode === '2d',
     layerToggles: s.layerToggles,
     incident: s.incident,
@@ -166,7 +166,6 @@ export function TacticalMap2D() {
     hydrants: s.intel.hydrants,
     footprintsGeo: s.footprintsGeo,
     trafficLinks: s.trafficLinks,
-    trafficAgeMin: s.trafficAgeMin,
   }))
   // 2D is the tactical view ONLY where the manifest grants it (FDNY) — the
   // NYCEM profile keeps its citywide globe untouched.
@@ -439,11 +438,6 @@ export function TacticalMap2D() {
         {base === 'dark' ? 'DARK' : base === 'light' ? 'LIGHT' : 'SAT'}
       </button>
       {base === 'sat' && <div className="map2d-vintage">{ORTHO_VINTAGE}</div>}
-      {layerToggles.traffic && trafficAgeMin !== null && trafficAgeMin > 30 && (
-        <div className="map2d-vintage map2d-traffic-age" title="NYC DOT's public mirror is trailing real time — speeds shown are the newest it has published">
-          ⚠ TRAFFIC DATA {trafficAgeMin} MIN OLD — DOT FEED LAGGING
-        </div>
-      )}
     </div>
   )
 }
