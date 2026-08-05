@@ -145,6 +145,8 @@ export interface AppState {
   dashboardPage: 0 | 1 | 2 | 3 | 4
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
+  /** Command board diagram: unit uid -> normalized {x,y} on the building. */
+  boardPlacements: Record<string, { x: number; y: number }>
   /** Riding-list PAR checks: unit callsign -> ms epoch of last PAR. */
   parChecks: Record<string, number>
   /** The CAD feed entry the officer pressed to respond (SIMULATED FireCAD). */
@@ -365,6 +367,13 @@ const initial: AppState = {
   boardAssignments: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>
+    } catch {
+      return {}
+    }
+  })(),
+  boardPlacements: (() => {
+    try {
+      return JSON.parse(localStorage.getItem('ks-board-xy') ?? '{}') as Record<string, { x: number; y: number }>
     } catch {
       return {}
     }

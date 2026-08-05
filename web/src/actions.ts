@@ -92,9 +92,10 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   if (getAppState().replay.active) replayEngine.stop()
   // The accountability surfaces belong to ONE box: a new stand-up must not
   // inherit last box's ATTACK assignments or PAR stamps.
-  setAppState({ parChecks: {}, boardAssignments: {} })
+  setAppState({ parChecks: {}, boardAssignments: {}, boardPlacements: {} })
   try {
     localStorage.removeItem('ks-board')
+    localStorage.removeItem('ks-board-xy')
   } catch {
     // storage blocked — the in-memory reset above still applies
   }
@@ -1421,6 +1422,7 @@ export function adoptIncident(incident: Incident): void {
   getTrafficLayer()?.clear() // stale polylines from the previous location
   try {
     localStorage.removeItem('ks-board') // a drill must not inherit last box's board
+    localStorage.removeItem('ks-board-xy')
   } catch {
     // storage blocked — the in-memory reset below still applies
   }
@@ -1428,6 +1430,7 @@ export function adoptIncident(incident: Incident): void {
     incident,
     parChecks: {}, // accountability surfaces belong to ONE box
     boardAssignments: {},
+    boardPlacements: {},
     shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,
@@ -1551,6 +1554,7 @@ export function clearLocalIncident(): void {
   setAppState({ footprintsGeo: null })
   try {
     localStorage.removeItem('ks-board') // persisted board dies with the box
+    localStorage.removeItem('ks-board-xy')
   } catch {
     // storage blocked — the in-memory reset below still applies
   }
@@ -1562,6 +1566,7 @@ export function clearLocalIncident(): void {
     // or last week's SEARCH assignment presented as current is a lie.
     parChecks: {},
     boardAssignments: {},
+    boardPlacements: {},
     shapes: {}, // (undo stack cleared below — entries reference this dead set)
     selectedShapeId: null,
     drawTool: null,

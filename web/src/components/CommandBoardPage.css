@@ -301,3 +301,258 @@
 .cmdboard-page .cb-clear:active {
   background: rgba(239, 68, 68, 0.25);
 }
+
+/* ================= board v2: roster + building diagram ================= */
+
+.cmdboard-page .cb-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+/* ---------- left: responding roster ---------- */
+.cmdboard-page .cb-roster {
+  width: 348px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border, rgba(34, 211, 238, 0.22));
+  border-radius: 4px;
+  background: var(--panel-strong, rgba(9, 14, 23, 0.92));
+  overflow-y: auto;
+}
+
+.cmdboard-page .cb-roster-head b {
+  display: block;
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--amber-bright, #fbbf24);
+}
+.cmdboard-page .cb-roster-head i {
+  display: block;
+  font-style: normal;
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9.5px;
+  color: var(--text-dim, #94a3b8);
+  margin-top: 2px;
+}
+
+.cmdboard-page .cb-roster-tabs {
+  display: flex;
+  gap: 6px;
+}
+.cmdboard-page .cb-roster-tabs button {
+  flex: 1;
+  min-height: 34px;
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim, #94a3b8);
+  background: rgba(34, 211, 238, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.cmdboard-page .cb-roster-tabs button.on {
+  color: var(--cyan, #22d3ee);
+  border-color: rgba(34, 211, 238, 0.55);
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.cmdboard-page .cb-roster-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+.cmdboard-page .cb-roster-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cmdboard-page .cb-roster-col-head {
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim, #94a3b8);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  padding-bottom: 3px;
+  text-align: center;
+}
+/* roster tiles are compact — callsign is the payload */
+.cmdboard-page .cb-roster-col .cb-tile {
+  min-height: 40px;
+  padding: 4px 6px 4px 10px;
+}
+.cmdboard-page .cb-roster-col .cb-status {
+  font-size: 8px;
+}
+
+/* engaged (on the diagram or in a position) = crossed off, like the magnets */
+.cmdboard-page .cb-tile.cb-struck .cb-callsign {
+  text-decoration: line-through 2px rgba(226, 232, 240, 0.85);
+}
+.cmdboard-page .cb-tile.cb-struck {
+  opacity: 0.55;
+}
+
+.cmdboard-page .cb-roster-hint {
+  margin-top: auto;
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+  color: var(--text-faint, #64748b);
+}
+
+/* ---------- right: stage = diagram + position strip ---------- */
+.cmdboard-page .cb-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cmdboard-page .cb-diagram {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  border: 1px solid var(--border, rgba(34, 211, 238, 0.22));
+  border-radius: 4px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(239, 68, 68, 0.05), transparent 65%),
+    var(--panel-strong, rgba(9, 14, 23, 0.92));
+  overflow: hidden;
+}
+.cmdboard-page .cb-diagram svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cmdboard-page .cb-bldg-line {
+  fill: rgba(239, 68, 68, 0.04);
+  stroke: #ef4444;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+.cmdboard-page .cb-fire-band {
+  fill: rgba(239, 68, 68, 0.22);
+}
+.cmdboard-page .cb-ground-line {
+  stroke: var(--cyan, #22d3ee);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.cmdboard-page .cb-fl-label {
+  position: absolute;
+  left: 6px;
+  transform: translateY(-50%);
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim, #94a3b8);
+  pointer-events: none;
+}
+.cmdboard-page .cb-fl-label.fire {
+  color: var(--amber-bright, #fbbf24);
+}
+.cmdboard-page .cb-fireground-label {
+  position: absolute;
+  left: 50%;
+  bottom: 3.5%;
+  transform: translate(-50%, 50%);
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--cyan, #22d3ee);
+  background: #0a0e14;
+  padding: 0 8px;
+  pointer-events: none;
+}
+.cmdboard-page .cb-diagram-hint {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-faint, #64748b);
+  pointer-events: none;
+}
+
+/* the magnets */
+.cmdboard-page .cb-unit-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 58px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(10, 14, 20, 0.9);
+  font-family: var(--mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: #475569;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+  cursor: grab;
+  user-select: none;
+  z-index: 3;
+}
+.cmdboard-page .cb-unit-chip:active { cursor: grabbing; }
+.cmdboard-page .cb-unit-chip.edge-engine { background: #b91c1c; }
+.cmdboard-page .cb-unit-chip.edge-ladder { background: #dc2626; }
+.cmdboard-page .cb-unit-chip.edge-battalion { background: #f8fafc; color: #b91c1c; border-color: #b91c1c; }
+.cmdboard-page .cb-unit-chip.edge-rescue { background: #7f1d1d; }
+.cmdboard-page .cb-unit-chip.edge-ems { background: #1d4ed8; }
+.cmdboard-page .cb-unit-chip.edge-other { background: #334155; }
+.cmdboard-page .cb-chip-clear {
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px;
+}
+.cmdboard-page .cb-chip-clear:hover { opacity: 1; }
+
+/* ---------- position strip (was the full-page grid) ---------- */
+.cmdboard-page .cb-grid.strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: none;
+}
+.cmdboard-page .cb-grid.strip .cb-col {
+  min-width: 152px;
+  flex: 1;
+  min-height: 118px;
+  max-height: 178px;
+  overflow-y: auto;
+}
+.cmdboard-page .cb-grid.strip .cb-tile {
+  min-height: 38px;
+  padding: 3px 6px 3px 10px;
+}
+.cmdboard-page .cb-grid.strip .cb-status { font-size: 8px; }
+
+@media (max-width: 1100px) {
+  .cmdboard-page .cb-body { flex-direction: column; }
+  .cmdboard-page .cb-roster { width: auto; }
+  .cmdboard-page .cb-diagram { min-height: 300px; }
+}
