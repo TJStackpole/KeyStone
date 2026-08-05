@@ -186,6 +186,11 @@ let lastLotsKey = ''
 let lastRoadsKey = ''
 
 export async function syncViewportOverlays(map: maplibregl.Map, toggles: Toggles): Promise<void> {
+  // A moveend can land before the style finishes loading (boot flyTo on a
+  // cold CARTO fetch) — ensureLayers would throw "Style is not done loading"
+  // as an unhandled rejection. Bail BEFORE any ensure/key bookkeeping; the
+  // post-load kick in TacticalMap2D re-runs this sync.
+  if (!map.isStyleLoaded()) return
   const c = map.getCenter()
   const z = map.getZoom()
 

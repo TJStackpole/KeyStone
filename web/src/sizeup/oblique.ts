@@ -1,3 +1,4 @@
+import { ensureMapsJs } from '../lib/gmaps'
 import { getAppState } from '../state/store'
 
 // ---------------------------------------------------------------------------
@@ -125,17 +126,23 @@ export const GOOGLE_KEY = (import.meta.env.GOOGLE_MAPS_API_KEY as string | undef
 
 let mapsJsLoading: Promise<void> | null = null
 
-/** Load the Maps JS API once, on first use only — never in the base bundle. */
+/** Load the Maps JS API once, on first use only — never in the base bundle.
+ *  Shares the app-wide bootstrap in lib/gmaps (a second bootstrap script
+ *  races Google's initialization), then pulls the legacy-namespace libraries
+ *  the strip constructs directly: google.maps.Map / StreetViewService /
+ *  StreetViewPanorama only exist under loading=async AFTER their library
+ *  has been imported. */
 export function loadMapsJs(): Promise<void> {
   if (!GOOGLE_KEY) return Promise.reject(new Error('no key'))
-  if ((window as { google?: { maps?: unknown } }).google?.maps) return Promise.resolve()
   if (!mapsJsLoading) {
-    mapsJsLoading = new Promise((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_KEY}&v=weekly&loading=async&callback=__ksMapsReady`
-      ;(window as unknown as Record<string, unknown>).__ksMapsReady = () => resolve()
-      s.onerror = () => reject(new Error('Maps JS failed to load'))
-      document.head.appendChild(s)
+    mapsJsLoading = ensureMapsJs(GOOGLE_KEY)
+      .then(() => {
+        const lib = (window as unknown as { google: { maps: { importLibrary: (n: string) => Promise<unknown> } } }).google.maps
+        return Promise.all([lib.importLibrary('maps'), lib.importLibrary('streetView')])
+      })
+      .then(() => undefined)
+    mapsJsLoading.catch(() => {
+      mapsJsLoading = null // transient failure — next tab click retries
     })
   }
   return mapsJsLoading

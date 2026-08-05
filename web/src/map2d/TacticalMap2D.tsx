@@ -307,6 +307,10 @@ export function TacticalMap2D() {
       registerUnitSprites(map)
       setReady(true) // re-render -> sync effect pushes store data
       setAppState({ map2dReady: true }) // boot veil holds until first paintable state
+      // A boot flyTo's moveend can precede this event on a cold style fetch;
+      // syncViewportOverlays bails pre-load, so kick it once here to catch up
+      // (street names for the restored incident's block).
+      void syncViewportOverlays(map, mapTogglesRef.current as unknown as Record<string, boolean>)
     })
     registerMap2D(map)
     map.on('moveend', () => {

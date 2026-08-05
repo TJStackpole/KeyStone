@@ -901,18 +901,6 @@ export async function decideSuggestion(
   }
 }
 
-export async function activatePlanAction(plan: string, by: string): Promise<void> {
-  try {
-    await fetch('/api/nycem/plans', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ plan, by }),
-    })
-  } catch (err) {
-    console.error('[nycem] plan activation failed:', err)
-  }
-}
-
 export async function requestTransition(id: string, state: string, by: string, reason?: string): Promise<void> {
   try {
     await fetch(`/api/requests/${encodeURIComponent(id)}/transition`, {
