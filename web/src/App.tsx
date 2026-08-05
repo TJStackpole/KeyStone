@@ -41,6 +41,7 @@ import { attachLayoutSwipe } from './lib/layouts'
 import { PracticeTour } from './components/PracticeTour'
 import { ResponsePacket } from './components/ResponsePacket'
 import { CommandBoardPage } from './components/CommandBoardPage'
+import { DispatchPage } from './components/DispatchPage'
 import { RidingListPage } from './components/RidingListPage'
 import { DashboardTabs } from './components/DashboardTabs'
 import { CommandStrip } from './components/CommandStrip'
@@ -188,6 +189,7 @@ export default function App() {
       <TacticalMap2D />
       <OpsBanner />
       <CommandBoardPage />
+      <DispatchPage />
       <RidingListPage />
       <DecisionLogPage />
       <ResourceLedgerPage />

@@ -130,7 +130,9 @@ export interface AppState {
   /** Swipeable FDNY dashboards: 0 = tactical map, 1 = command board,
    *  2 = riding lists. Pages 1-2 are plain-DOM fallbacks that keep working
    *  even if the 3D view dies. */
-  dashboardPage: 0 | 1 | 2 | 3 | 4
+  dashboardPage: 0 | 1 | 2 | 3 | 4 | 5
+  /** Simulated dispatch audio currently speaking (DISPATCH page). */
+  dispatchPlaying: 'fdny' | 'ems' | 'both' | null
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
   /** Command board diagram: unit uid -> normalized {x,y} on the building. */
@@ -336,6 +338,7 @@ const initial: AppState = {
   gloveMode: localStorage.getItem('ks-glove') === '1',
   practiceTour: false,
   dashboardPage: 0,
+  dispatchPlaying: null,
   boardAssignments: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>

@@ -10,11 +10,12 @@ import { useAppSlice } from '../state/store'
 // view ever dies.
 // ---------------------------------------------------------------------------
 
-const PAGES: { id: 0 | 1 | 2 | 3 | 4; label: string; hint: string }[] = [
+const PAGES: { id: 0 | 1 | 2 | 3 | 4 | 5; label: string; hint: string }[] = [
   { id: 0, label: 'MAP', hint: 'The 3D tactical picture' },
   { id: 1, label: 'BOARD', hint: 'Command board — tap units through ATTACK / SEARCH / VENT positions, the way the IC runs it' },
   { id: 2, label: 'RIDING LIST', hint: 'Riding lists + PAR — the paper board, digital. Works even if the map dies' },
   { id: 3, label: 'LOG', hint: 'Decision log — one-tap benchmarks and notes, ICS-214 style, printable' },
+  { id: 5, label: 'DISPATCH', hint: 'Dispatch comms — the SIMULATED FDNY + EMS dispatch audio for the active box, generated from the live assignment' },
   { id: 4, label: 'RESOURCES', hint: 'Resource ledger — who is where, what the next alarm brings, which quarters sit empty' },
 ]
 
