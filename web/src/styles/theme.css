@@ -2164,7 +2164,9 @@ body:has(.map2d-root:not(.map2d-hidden)) .incident-btn { bottom: 230px; }
 .profile-item.on b { color: var(--cyan-bright); }
 /* Always-on watermark: screenshots and demos are self-identifying. */
 .profile-watermark {
-  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  /* bottom 8px sat inside the dash-tabs strip's band and ghosted across the
+     RESOURCES tab — ride just above the strip instead. */
+  position: absolute; bottom: 66px; left: 50%; transform: translateX(-50%);
   z-index: 90; pointer-events: none; font: 700 9px var(--mono);
   letter-spacing: 0.28em; color: rgba(148, 163, 184, 0.4); text-shadow: 0 0 6px rgba(10, 14, 20, 0.9);
 }
@@ -2327,8 +2329,8 @@ body.panel-dragging * { cursor: grabbing !important; }
 .feed-panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .feed-panel-head b { letter-spacing: 0.08em; color: var(--cyan, #22d3ee); font-size: 11px; }
 .feed-count { font-family: var(--mono, 'JetBrains Mono', monospace); color: rgba(148, 163, 184, 0.9); font-size: 10px; }
-.feed-close { margin-left: auto; background: none; border: none; color: rgba(148, 163, 184, 0.8); cursor: pointer; }
-.feed-warn {
+.feed-panel .feed-close { margin-left: auto; background: none; border: none; color: rgba(148, 163, 184, 0.8); cursor: pointer; }
+.feed-panel .feed-warn {
   margin: 4px 0 6px;
   padding: 4px 6px;
   border: 1px solid rgba(245, 158, 11, 0.45);
@@ -2336,9 +2338,12 @@ body.panel-dragging * { cursor: grabbing !important; }
   color: #fbbf24;
   font-size: 10px;
 }
-.feed-rows { display: flex; flex-direction: column; gap: 2px; max-height: 42vh; overflow-y: auto; }
-.feed-empty { color: rgba(148, 163, 184, 0.7); padding: 6px 0; }
-.feed-row {
+/* Scoped under .feed-panel: the citywide incidents feed ALSO uses a
+   .feed-row class (theme.css ~1173, flex) — this later grid rule was
+   leaking onto it and crushing the agency chip into a 10px column. */
+.feed-panel .feed-rows { display: flex; flex-direction: column; gap: 2px; max-height: 42vh; overflow-y: auto; }
+.feed-panel .feed-empty { color: rgba(148, 163, 184, 0.7); padding: 6px 0; }
+.feed-panel .feed-row {
   display: grid;
   grid-template-columns: 10px 1fr auto auto auto;
   align-items: center;
@@ -2346,21 +2351,21 @@ body.panel-dragging * { cursor: grabbing !important; }
   padding: 4px 2px;
   border-bottom: 1px solid rgba(34, 211, 238, 0.08);
 }
-.feed-dot { width: 8px; height: 8px; border-radius: 50%; }
-.feed-dot.ok { background: #34d399; box-shadow: 0 0 6px rgba(52, 211, 153, 0.7); }
-.feed-dot.stale { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.7); }
-.feed-dot.down { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.8); }
-.feed-dot.unconfigured { background: #475569; }
-.feed-dot.mock { background: #22d3ee; box-shadow: 0 0 6px rgba(34, 211, 238, 0.7); }
-.feed-name { color: #e2ecf7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.feed-status { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 9px; letter-spacing: 0.06em; color: rgba(148, 163, 184, 0.9); }
-.feed-row.down .feed-status { color: #f87171; }
-.feed-row.stale .feed-status { color: #fbbf24; }
-.feed-row.mock .feed-status { color: #22d3ee; }
-.feed-age { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 10px; color: rgba(226, 236, 247, 0.85); }
-.feed-lat { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 9px; color: rgba(148, 163, 184, 0.6); }
-.feed-detail { grid-column: 2 / -1; font-size: 9.5px; color: rgba(148, 163, 184, 0.85); }
-.feed-detail a { color: var(--cyan, #22d3ee); }
+.feed-panel .feed-dot { width: 8px; height: 8px; border-radius: 50%; }
+.feed-panel .feed-dot.ok { background: #34d399; box-shadow: 0 0 6px rgba(52, 211, 153, 0.7); }
+.feed-panel .feed-dot.stale { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.7); }
+.feed-panel .feed-dot.down { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.8); }
+.feed-panel .feed-dot.unconfigured { background: #475569; }
+.feed-panel .feed-dot.mock { background: #22d3ee; box-shadow: 0 0 6px rgba(34, 211, 238, 0.7); }
+.feed-panel .feed-name { color: #e2ecf7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-panel .feed-status { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 9px; letter-spacing: 0.06em; color: rgba(148, 163, 184, 0.9); }
+.feed-panel .feed-row.down .feed-status { color: #f87171; }
+.feed-panel .feed-row.stale .feed-status { color: #fbbf24; }
+.feed-panel .feed-row.mock .feed-status { color: #22d3ee; }
+.feed-panel .feed-age { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 10px; color: rgba(226, 236, 247, 0.85); }
+.feed-panel .feed-lat { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 9px; color: rgba(148, 163, 184, 0.6); }
+.feed-panel .feed-detail { grid-column: 2 / -1; font-size: 9.5px; color: rgba(148, 163, 184, 0.85); }
+.feed-panel .feed-detail a { color: var(--cyan, #22d3ee); }
 
 .tool-btn.danger.armed {
   background: rgba(239, 68, 68, 0.25);
