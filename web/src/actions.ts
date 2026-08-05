@@ -2454,7 +2454,9 @@ export async function placeExposureLabels(frontHeading?: number): Promise<void> 
   for (let e = 0; e < 4; e++) {
     const bearing = (front + e * 90) % 360
     const alongA = angDist(bearing, b.bearingA) < 45 || angDist(bearing, (b.bearingA + 180) % 360) < 45
-    const standoff = (alongA ? b.halfA : b.halfB) + 10
+    // Right AT the facade line (+1 m so the glyph clears the wall/extrusion)
+    // — exposure markers read as labels ON the building, not out in the street.
+    const standoff = (alongA ? b.halfA : b.halfB) + 1
     const rad = (bearing * Math.PI) / 180
     const lat = b.centerLat + (standoff * Math.cos(rad)) / 111_320
     const lon = b.centerLon + (standoff * Math.sin(rad)) / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
