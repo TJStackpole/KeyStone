@@ -93,3 +93,24 @@
   color: var(--text, #dbe4f0);
   white-space: pre-wrap;
 }
+
+/* Citywide feed lives on the DISPATCH page now (was the top-bar dropdown). */
+.dispatch-page .dp-body {
+  display: grid;
+  grid-template-columns: minmax(380px, 480px) 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.dispatch-page .dp-feed {
+  border: 1px solid var(--border, rgba(34, 211, 238, 0.22));
+  border-radius: 6px;
+  background: var(--panel-strong, rgba(9, 14, 23, 0.92));
+  padding: 12px 14px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}
+.dispatch-page .dp-cards { display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 1100px) {
+  .dispatch-page .dp-body { grid-template-columns: 1fr; }
+  .dispatch-page .dp-feed { max-height: 44vh; }
+}

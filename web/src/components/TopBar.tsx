@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   activateInspectedIncident,
-  focusFeedIncident,
   loadScenario,
   runDemoScenario,
   setIsolateScale,
@@ -12,7 +11,7 @@ import {
   toggleTopDownView,
 } from '../actions'
 import { setAppState, useAppSlice } from '../state/store'
-import type { FeedIncident, ToggleLayerId } from '../types'
+import type { ToggleLayerId } from '../types'
 import { resetPanelLayout } from '../lib/movable'
 import { hasCapability, PROFILE_LABEL, useCapability } from '../profiles/manifest'
 import { NEXT_STEP_LABEL, useNextStep } from '../lib/guidance'
@@ -81,101 +80,6 @@ const MODE_LABEL: Record<string, string> = {
   keyless: 'KEYLESS 3D',
   ion: 'ION TERRAIN',
   google: 'GOOGLE 3D',
-}
-
-function feedElapsed(startedAt: string): string {
-  const min = Math.max(0, Math.floor((Date.now() - Date.parse(startedAt)) / 60_000))
-  return min < 60 ? `${min}m` : `${Math.floor(min / 60)}h${min % 60}m`
-}
-
-/**
- * Citywide INCIDENTS dropdown (next to the wordmark): the SIMULATED dispatch
- * feed from the FDNY / NYPD / PAPD dispatch centers, broken down by FDNY
- * division → battalion. Clicking a box focuses the whole board on it —
- * stand-up at its location plus the responding assignment.
- */
-function IncidentsMenu() {
-  const { dispatchFeed, focusedFeedId } = useAppSlice((s) => ({ dispatchFeed: s.dispatchFeed, focusedFeedId: s.focusedFeedId }))
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [open])
-
-  // Division -> Battalion -> incidents, all numerically ordered. Built only
-  // while the dropdown is open — closed, this ran on every feed update.
-  const divisions = useMemo(() => {
-    if (!open) return []
-    const byDivision = new Map<number, Map<number, FeedIncident[]>>()
-    for (const fi of dispatchFeed) {
-      if (!byDivision.has(fi.division)) byDivision.set(fi.division, new Map())
-      const byBn = byDivision.get(fi.division)!
-      if (!byBn.has(fi.battalion)) byBn.set(fi.battalion, [])
-      byBn.get(fi.battalion)!.push(fi)
-    }
-    return [...byDivision.entries()].sort((a, b) => a[0] - b[0])
-  }, [open, dispatchFeed])
-
-  const pick = (fi: FeedIncident) => {
-    setOpen(false)
-    void focusFeedIncident(fi)
-  }
-
-  return (
-    <div className="incidents-wrap" ref={wrapRef}>
-      <button
-        className={`chip chip-btn amber${focusedFeedId ? ' active' : ''}`}
-        onClick={() => setOpen((o) => !o)}
-        title="Dispatch CAD feed (SIMULATED — FireCAD integration point). Press the box you are responding to: KeyStone stands it up and builds your response packet — dispatch info, the building, street view, and the fire so far"
-      >
-        <span className="dot" /> INCIDENTS {dispatchFeed.length} {open ? '▴' : '▾'}
-      </button>
-      {open && (
-        <div className="incidents-menu glass">
-          <div className="incidents-head">
-            SIMULATED CITYWIDE DISPATCH FEED · FDNY / NYPD / PAPD DISPATCH CENTERS
-          </div>
-          {divisions.length === 0 && <div className="incidents-empty">AWAITING DISPATCH FEED…</div>}
-          {divisions.map(([division, byBn]) => (
-            <div key={division} className="feed-division">
-              <div className="feed-division-head">DIVISION {division}</div>
-              {[...byBn.entries()]
-                .sort((a, b) => a[0] - b[0])
-                .map(([battalion, list]) => (
-                  <div key={battalion} className="feed-battalion">
-                    <div className="feed-battalion-head">BATTALION {battalion}</div>
-                    {list.map((fi) => (
-                      <button
-                        key={fi.id}
-                        className={`feed-row${focusedFeedId === fi.id ? ' focused' : ''}`}
-                        onClick={() => pick(fi)}
-                        title={`Focus the board on this box — flies to ${fi.address} and puts its responding units on the picture`}
-                      >
-                        <span className={`feed-src ${fi.source.toLowerCase()}`}>{fi.source}</span>
-                        <span className="feed-main">
-                          <b>{fi.type}</b>
-                          <i>{fi.address} · {fi.borough}</i>
-                        </span>
-                        <span className="feed-meta">
-                          {fi.units} UNIT{fi.units === 1 ? '' : 'S'} · {feedElapsed(fi.startedAt)}
-                          <em>{focusedFeedId === fi.id ? 'FOCUSED' : fi.status.toUpperCase()}</em>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 }
 
 function Clock() {
@@ -514,7 +418,6 @@ function BrandBlock() {
       <span className="sub">Incident Command · FDNY</span>
       <div className="brand-row">
         <span className="name">{PROFILE_LABEL.fdny.toUpperCase()}</span>
-        <IncidentsMenu />
       </div>
     </div>
   )
