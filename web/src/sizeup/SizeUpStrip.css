@@ -151,3 +151,22 @@
   font: 600 9px var(--mono, monospace);
   letter-spacing: 0.1em;
 }
+
+/* Exposure assignment (officer designates the street side / EXP 1). */
+.sizeup-face.assign { color: var(--amber-bright, #fbbf24); border-color: rgba(245, 158, 11, 0.5); }
+.sizeup-face.assign.on { background: rgba(245, 158, 11, 0.16); }
+.sizeup-face.pick {
+  color: var(--amber-bright, #fbbf24);
+  border-color: rgba(245, 158, 11, 0.55);
+  animation: sizeup-pick-pulse 1.2s ease-in-out infinite;
+}
+@keyframes sizeup-pick-pulse {
+  50% { background: rgba(245, 158, 11, 0.12); }
+}
+.sizeup-assign-hint {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--amber-bright, #fbbf24);
+  padding: 2px 2px 4px;
+}

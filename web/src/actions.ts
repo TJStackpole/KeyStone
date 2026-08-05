@@ -2411,13 +2411,24 @@ export async function clearAllShapes(): Promise<void> {
   if (failed) notify(`CLEAR ALL: ${failed} shape${failed === 1 ? '' : 's'} failed to delete on the server`, 'red')
 }
 
+/** Nearest 8-wind name for a bearing — how the notify line says which face. */
+export function windName(deg: number): string {
+  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(((((deg % 360) + 360) % 360) / 45)) % 8]
+}
+
 /**
- * One-press EXPOSURES: label the fire building's four sides the way FDNY
- * talks about them — Exposure 1 is the address/street side, then 2-3-4
- * clockwise. Markers sit just off each facade midpoint using the structure
- * frame, so they are right even on Manhattan's rotated grid.
+ * EXPOSURES: label the fire building's four sides the way FDNY talks about
+ * them — Exposure 1 is the street side, then 2-3-4 clockwise. Markers sit
+ * just off each facade midpoint using the structure frame, so they are
+ * right even on Manhattan's rotated grid.
+ *
+ * `frontHeading` is the responding officer's call: the outward bearing of
+ * the face they designate Exposure 1 (from the size-up strip's ASSIGN).
+ * Omitted, the address point picks the street side. Either way any prior
+ * exposure set is replaced — faceViews needs exactly one numbered set, and
+ * stacked sets used to silently break the exposure→view mapping.
  */
-export async function placeExposureLabels(): Promise<void> {
+export async function placeExposureLabels(frontHeading?: number): Promise<void> {
   if (getAppState().replay.active) return // history is not a drafting surface
   const s = getAppState()
   const b = s.targetBounds
@@ -2427,15 +2438,18 @@ export async function placeExposureLabels(): Promise<void> {
     return
   }
   const angDist = (x: number, y: number) => Math.abs((((x - y) % 360) + 540) % 360 - 180)
-  const toXY = (latM: number) => 111_320 * Math.cos((b.centerLat * Math.PI) / 180) * latM
-  void toXY
-  // Bearing from footprint center to the address point = the street side.
+  // Officer's designation wins; the bearing from footprint center to the
+  // address point is the fallback street side.
   const dLatM = (inc.lat - b.centerLat) * 111_320
   const dLonM = (inc.lon - b.centerLon) * 111_320 * Math.cos((b.centerLat * Math.PI) / 180)
-  const toward = (Math.atan2(dLonM, dLatM) * 180) / Math.PI
+  const toward = frontHeading ?? (Math.atan2(dLonM, dLatM) * 180) / Math.PI
   const normals = [0, 1, 2, 3].map((i) => (((b.bearingA + i * 90) % 360) + 360) % 360)
   let front = normals[0]
   for (const n of normals) if (angDist(n, toward) < angDist(front, toward)) front = n
+  const prior = Object.values(s.shapes).filter(
+    (sh): sh is Extract<IcsShape, { kind: 'post' }> => sh.kind === 'post' && sh.post === 'exposure',
+  )
+  await Promise.allSettled(prior.map((sh) => removeShapeSilent(sh.id)))
   const placed: IcsShape[] = []
   for (let e = 0; e < 4; e++) {
     const bearing = (front + e * 90) % 360
@@ -2463,7 +2477,7 @@ export async function placeExposureLabels(): Promise<void> {
     },
   })
   for (const sh of placed) await persistShape(sh)
-  notify('EXPOSURES 1-4 placed — Exposure 1 is the street side')
+  notify(`EXPOSURES SET — EXP 1 = ${windName(front)} FACE, 2-3-4 CLOCKWISE`)
 }
 
 /** THE alarm path: every caller (command strip chips, decision-log

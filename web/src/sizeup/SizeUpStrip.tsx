@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { toggleIsolateMode } from '../actions'
+import { placeExposureLabels, toggleIsolateMode, windName } from '../actions'
 import { MiniModel } from './MiniModel'
 import { GOOGLE_KEY, faceViews, loadMapsJs, nysOrthoFace } from './oblique'
 import type { FaceView, TargetFrame } from './oblique'
@@ -42,6 +42,10 @@ export function SizeUpStrip() {
   const [tab, setTab] = useState<Tab>('oblique')
   const [faceIdx, setFaceIdx] = useState(0)
   const [obliqueSrc, setObliqueSrc] = useState<'nys' | 'google45'>('nys')
+  // Exposure assignment: the responding officer taps ASSIGN, then the face
+  // that faces the street — it becomes EXPOSURE 1, 2-3-4 number clockwise
+  // (placed as EXPO posts: on both maps, persisted, one undo entry).
+  const [assigning, setAssigning] = useState(false)
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [street, setStreet] = useState<StreetShot | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -173,10 +177,34 @@ export function SizeUpStrip() {
           {tab !== 'model' && tab !== 'views' && (
             <div className="sizeup-faces">
               {faces.map((f, i) => (
-                <button key={f.exposure} className={`sizeup-face${i === faceIdx ? ' on' : ''}`} onClick={() => setFaceIdx(i)}>
-                  EXP {f.exposure}
+                <button
+                  key={f.exposure}
+                  className={`sizeup-face${!assigning && i === faceIdx ? ' on' : ''}${assigning ? ' pick' : ''}`}
+                  title={
+                    assigning
+                      ? `Make the ${windName(f.headingDeg)} face EXPOSURE 1 — 2-3-4 number clockwise from it`
+                      : `Exposure ${f.exposure} — the ${windName(f.headingDeg)} face, viewed from off that side toward the building`
+                  }
+                  onClick={() => {
+                    if (!assigning) {
+                      setFaceIdx(i)
+                      return
+                    }
+                    setAssigning(false)
+                    setFaceIdx(0) // EXP 1 = the face just designated
+                    void placeExposureLabels(f.headingDeg)
+                  }}
+                >
+                  {assigning ? `${windName(f.headingDeg)} → 1` : `EXP ${f.exposure}·${windName(f.headingDeg)}`}
                 </button>
               ))}
+              <button
+                className={`sizeup-face assign${assigning ? ' on' : ''}`}
+                title="Assign exposures: tap this, then tap the face that faces the street — it becomes EXPOSURE 1 and 2-3-4 number clockwise. Places the EXP markers on the map (one undo entry)."
+                onClick={() => setAssigning((v) => !v)}
+              >
+                {assigning ? '✕ CANCEL' : '⚑ ASSIGN'}
+              </button>
               {tab === 'oblique' && GOOGLE_KEY && (
                 <button
                   className={`sizeup-face src${obliqueSrc === 'google45' ? ' on' : ''}`}
@@ -187,6 +215,9 @@ export function SizeUpStrip() {
                 </button>
               )}
             </div>
+          )}
+          {assigning && tab !== 'model' && tab !== 'views' && (
+            <div className="sizeup-assign-hint">TAP THE STREET-SIDE FACE — IT BECOMES EXP 1 · 2-3-4 CLOCKWISE</div>
           )}
 
           {tab === 'views' && !locked && (

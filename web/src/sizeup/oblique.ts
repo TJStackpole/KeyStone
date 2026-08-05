@@ -26,9 +26,9 @@ export interface TargetFrame {
   halfB: number
 }
 
-/** The four faces, exposure-numbered. When EXPO posts exist their real
- *  street-side assignment wins; otherwise EXP 1 falls back to the most
- *  south-facing face (press EXPO on the rail to set the true street side). */
+/** The four faces, exposure-numbered. When EXPO posts exist (officer's
+ *  ASSIGN on the strip, or the EXPO draw tool) their assignment wins;
+ *  otherwise EXP 1 falls back to the most south-facing face. */
 export function faceViews(frame: TargetFrame): FaceView[] {
   const normals = [0, 90, 180, 270].map((d) => (frame.bearingA + 90 + d) % 360)
   const posts = Object.values(getAppState().shapes).filter(
