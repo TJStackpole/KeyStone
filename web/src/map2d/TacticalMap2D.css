@@ -19,11 +19,13 @@
   color: #94a3b8;
 }
 .map2d-north {
+  /* Bottom-left camera column: flame (278) / compass (224) / home (176),
+     then this at 122 and the basemap button at 68 — one line of controls. */
   position: absolute;
-  right: 344px; /* left of the SITE INTEL dock (320px + margins) */
-  top: calc(var(--topbar-h, 52px) + 22px);
-  width: 44px;
-  height: 44px;
+  left: 14px;
+  bottom: 122px;
+  width: 46px;
+  height: 46px;
   border: 1px solid rgba(34, 211, 238, 0.4);
   border-radius: 50%;
   background: rgba(10, 14, 20, 0.85);
@@ -43,10 +45,10 @@
 }
 .map2d-base {
   position: absolute;
-  right: 344px;
-  top: calc(var(--topbar-h, 52px) + 76px);
-  min-width: 44px;
-  min-height: 44px;
+  left: 14px;
+  bottom: 68px;
+  min-width: 46px;
+  min-height: 46px;
   border: 1px solid rgba(34, 211, 238, 0.5);
   border-radius: 6px;
   background: rgba(10, 14, 20, 0.85);
@@ -60,9 +62,10 @@
   border-color: #22d3ee;
 }
 .map2d-vintage {
+  /* rides beside the basemap button it describes */
   position: absolute;
-  right: 344px;
-  top: calc(var(--topbar-h, 52px) + 128px);
+  left: 68px;
+  bottom: 76px;
   padding: 3px 8px;
   background: rgba(10, 14, 20, 0.85);
   border: 1px solid rgba(245, 158, 11, 0.4);
