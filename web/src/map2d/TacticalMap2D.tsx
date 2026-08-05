@@ -353,9 +353,18 @@ export function TacticalMap2D() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
+    // Lazy bases must slot in at the BOTTOM of the stack — directly above
+    // base-carto — not before 'fp-fill': overlays synced at load also sit
+    // before fp-fill, so anchoring there would drop an opaque raster on top
+    // of every battalion line / tunnel / POI already on the map.
+    const aboveBase = () => {
+      const layers = map.getStyle().layers ?? []
+      const i = layers.findIndex((l) => l.id === 'base-carto')
+      return layers[i + 1]?.id
+    }
     if (base === 'osm' && !map.getSource('osm')) {
       map.addSource('osm', { type: 'raster', tiles: [OSM_TILES], tileSize: 256, attribution: '© OpenStreetMap contributors' })
-      map.addLayer({ id: 'base-osm', type: 'raster', source: 'osm' }, 'fp-fill')
+      map.addLayer({ id: 'base-osm', type: 'raster', source: 'osm' }, aboveBase())
     }
     if (base === 'sat' && !map.getSource('ortho')) {
       map.addSource('ortho', {
@@ -364,7 +373,12 @@ export function TacticalMap2D() {
         tileSize: 256,
         attribution: 'NYS ITS GIS Program Office',
       })
-      map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, 'fp-fill')
+      map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, aboveBase())
+    }
+    // Self-heal instances that inserted a base too high (pre-fix HMR survivors).
+    for (const id of ['base-osm', 'base-ortho']) {
+      const next = aboveBase()
+      if (map.getLayer(id) && next && next !== id) map.moveLayer(id, next)
     }
     map.setLayoutProperty('base-carto', 'visibility', base === 'dark' ? 'visible' : 'none')
     if (map.getLayer('base-osm')) map.setLayoutProperty('base-osm', 'visibility', base === 'osm' ? 'visible' : 'none')
