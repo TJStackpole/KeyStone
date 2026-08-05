@@ -28,8 +28,8 @@ import { getScene, getTacticalLayer, getTwinLayer } from './scene'
 // the free camera restored exactly as it was configured before the lock.
 // ---------------------------------------------------------------------------
 
-export type ViewLockMode = 'off' | 'top' | 'north' | 'east' | 'south' | 'west'
-type SideMode = Exclude<ViewLockMode, 'off' | 'top'>
+export type ViewLockMode = 'off' | 'orbit' | 'top' | 'north' | 'east' | 'south' | 'west'
+type SideMode = Exclude<ViewLockMode, 'off' | 'top' | 'orbit'>
 
 const CARDINAL_DEG: Record<SideMode, number> = { north: 0, east: 90, south: 180, west: 270 }
 
@@ -184,7 +184,7 @@ function unlockController(): void {
  *  (facade modes only — TOP and the free camera clear it). */
 function syncFocusFloor(): void {
   const s = getAppState()
-  const focusable = s.isolateMode && s.viewLock !== 'off' && s.viewLock !== 'top'
+  const focusable = s.isolateMode && s.viewLock !== 'off' && s.viewLock !== 'top' && s.viewLock !== 'orbit'
   getTacticalLayer()?.setFocusFloor(focusable ? s.viewLockFloor : null)
   // Blueprint twin: TOP + isolate = the tracked floor as a room-by-room
   // plan cutaway; any other mode restores the full 3D twin.
@@ -214,6 +214,11 @@ export function applyViewLockCamera(durationS = 0.6): void {
   const scene = getScene()
   const inc = s.incident
   if (!scene || !inc || s.viewLock === 'off' || s.viewLockSuspended) return
+  if (s.viewLock === 'orbit') {
+    lockController('orbit')
+    startOrbit()
+    return
+  }
   const { z0, heightM, centerLat, centerLon } = buildingRef()
   lockController(s.viewLock)
   if (s.viewLock === 'top') {
@@ -233,10 +238,26 @@ export function applyViewLockCamera(durationS = 0.6): void {
 }
 
 export function setViewLockMode(mode: Exclude<ViewLockMode, 'off'>): void {
+  const prev = getAppState().viewLock
+  if (mode !== 'orbit') stopOrbitTick()
   const patch: Record<string, unknown> = { viewLock: mode, viewLockSuspended: false }
-  // Entering a side view lands on the fire floor when the sim announced one.
-  if (mode !== 'top' && getAppState().viewLock === 'top') patch.viewLockFloor = defaultBattleFloor()
+  // FIXED DIRECTIONS START AT THE GROUND: a facade entered from orbit, TOP,
+  // or fresh begins at street level — floor steps then carry the vantage up
+  // the building. (The fire-floor jump chip is one press away.)
+  if (mode !== 'top' && mode !== 'orbit' && prev !== 'north' && prev !== 'east' && prev !== 'south' && prev !== 'west') {
+    patch.viewLockFloor = 1
+  }
   setAppState(patch)
+  if (mode === 'orbit') {
+    lockController('orbit')
+    // Pick the lap up from wherever the camera currently faces.
+    const cam = getScene()?.viewer.camera
+    if (cam) orbitTheta = (((Cesium.Math.toDegrees(cam.heading) + 180) % 360) + 360) % 360
+    setAppState({ viewLockOrbitPaused: false })
+    startOrbit()
+    syncFocusFloor()
+    return
+  }
   applyViewLockCamera(0.7)
 }
 
@@ -271,13 +292,76 @@ function fullFrameStandoffM(side: SideMode): number {
   return depth + Math.max(30, (heightM / 2 + 8) / Math.tan(fovy / 2), (width + 10) / Math.tan(fovx / 2))
 }
 
+// ------------------------------- Auto-orbit ---------------------------------
+
+let orbitTimer: ReturnType<typeof setInterval> | null = null
+let orbitTheta = 0
+
+/** Orbit radius: the whole structure in frame from any bearing. */
+function orbitStandoffM(): number {
+  const { heightM, halfA, halfB } = buildingRef()
+  const frustum = getScene()?.viewer.camera.frustum
+  const fovy =
+    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
+  const aspect = (frustum instanceof Cesium.PerspectiveFrustum ? frustum.aspectRatio : undefined) || 1.6
+  const fovx = 2 * Math.atan(Math.tan(fovy / 2) * aspect)
+  const halfMax = Math.max(halfA, halfB)
+  return halfMax + Math.max(34, (heightM / 2 + 10) / Math.tan(fovy / 2), (halfMax + 12) / Math.tan(fovx / 2))
+}
+
+function applyOrbitCamera(): void {
+  const scene = getScene()
+  if (!scene) return
+  const { z0, heightM, centerLat, centerLon } = buildingRef()
+  const standoff = orbitStandoffM()
+  const pos = offsetDeg(centerLat, centerLon, orbitTheta, standoff)
+  // Slightly above the roofline, always aimed at the structure's center.
+  const camZ = z0 + Math.max(heightM * 0.9, 8) + 4
+  const pitch = Math.atan2(z0 + heightM / 2 - camZ, standoff)
+  scene.viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, camZ),
+    orientation: { heading: Cesium.Math.toRadians((orbitTheta + 180) % 360), pitch, roll: 0 },
+  })
+}
+
+function stopOrbitTick(): void {
+  if (orbitTimer) {
+    clearInterval(orbitTimer)
+    orbitTimer = null
+  }
+}
+
+function startOrbit(): void {
+  stopOrbitTick()
+  applyOrbitCamera()
+  // ~6°/s — one lap a minute. setView per tick (no tween), so the lap keeps
+  // moving even in throttled panes and never fights the flight system.
+  orbitTimer = setInterval(() => {
+    const s = getAppState()
+    if (s.viewLock !== 'orbit') {
+      stopOrbitTick()
+      return
+    }
+    if (s.viewLockOrbitPaused) return
+    orbitTheta = (orbitTheta + 0.3) % 360
+    applyOrbitCamera()
+  }, 50)
+}
+
+/** ⏸/▶ on the LIVE VIEWS panel. Zoom works while paused — the orbit stops
+ *  writing the camera, so the wheel is yours until you resume. */
+export function setOrbitPaused(paused: boolean): void {
+  if (getAppState().viewLock !== 'orbit') return
+  setAppState({ viewLockOrbitPaused: paused })
+}
+
 /** Facade flight to an absolute elevation, re-latching a FREE camera and
  *  auto-adjusting to the fixed whole-building standoff — the camera flies
  *  to level with zAbs, squared to the facade, full structure in frame.
  *  Shared by floor jumps and the continuous height gauge. */
 function flyFacadeTo(zAbs: number, durationS: number): void {
   const s = getAppState()
-  if (s.viewLock === 'off' || s.viewLock === 'top') return
+  if (s.viewLock === 'off' || s.viewLock === 'top' || s.viewLock === 'orbit') return
   const scene = getScene()
   if (!scene) return
   // An explicit height/floor command means "put me level with THIS" — it
@@ -307,7 +391,7 @@ function flyFacadeTo(zAbs: number, durationS: number): void {
  *  the floor: the camera flies to eye level with it. */
 export function jumpViewLockFloor(floor: number): void {
   const s = getAppState()
-  if (s.viewLock === 'off') return
+  if (s.viewLock === 'off' || s.viewLock === 'orbit') return
   // TOP view steps the PLAN floor (blueprint cutaway) — no camera motion.
   if (s.viewLock === 'top' && !s.isolateMode) return
   const next = Math.max(1, Math.min(viewLockFloors(), Math.round(floor)))
@@ -323,17 +407,17 @@ export function jumpViewLockFloor(floor: number): void {
 let hintShown = false
 
 function engage(): void {
-  // Straight into a facade: the operator just committed to the structure —
-  // land head-on to the north-most face, fire floor highlighted.
-  setAppState({ viewLock: 'north', viewLockFloor: defaultBattleFloor(), viewLockSuspended: false })
-  applyViewLockCamera(1.0)
+  // The LIVE VIEW opens on a slow lap of the structure — the size-up walk-
+  // around, hands-free. ⏸ pauses it; N/E/S/W drop to ground-level facades.
+  setViewLockMode('orbit')
   if (!hintShown) {
     hintShown = true
-    notify('VIEW LOCKED TO STRUCTURE — N/E/S/W faces, ↑↓ floor highlight, T top, zoom free')
+    notify('LIVE VIEW ORBITING THE STRUCTURE — ⏸ pauses · N/E/S/W faces climb from the ground · T top')
   }
 }
 
 function disengage(): void {
+  stopOrbitTick()
   unlockController()
   setAppState({ viewLock: 'off', viewLockSuspended: false })
   syncFocusFloor()

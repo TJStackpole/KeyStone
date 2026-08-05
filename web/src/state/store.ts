@@ -112,7 +112,9 @@ export interface AppState {
    *  (and floor tracking) stay up; any view button re-locks. */
   viewLockSuspended: boolean
   /** FDNY battle-view lock: top-down or a building side, floors steppable. */
-  viewLock: 'off' | 'top' | 'north' | 'east' | 'south' | 'west'
+  viewLock: 'off' | 'orbit' | 'top' | 'north' | 'east' | 'south' | 'west'
+  /** Auto-orbit paused (LIVE VIEWS ⏸ button). */
+  viewLockOrbitPaused: boolean
   /** Current floor for the side (facade) battle views. */
   viewLockFloor: number
   /** Transient operator notice (top-center chip, auto-clears). */
@@ -310,6 +312,7 @@ const initial: AppState = {
   policyEditorOpen: false,
   targetBounds: null,
   viewLock: 'off',
+  viewLockOrbitPaused: false,
   viewLockSuspended: false,
   viewLockFloor: 1,
   uiNotice: null,

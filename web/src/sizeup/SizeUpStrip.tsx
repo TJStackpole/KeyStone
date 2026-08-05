@@ -34,13 +34,14 @@ function bearingTo(fromLat: number, fromLon: number, toLat: number, toLon: numbe
 }
 
 export function SizeUpStrip() {
-  const { incident, targetBounds, shapes, viewLock, viewLockFloor, suspended, units } = useAppSlice((s) => ({
+  const { incident, targetBounds, shapes, viewLock, viewLockFloor, suspended, orbitPaused, units } = useAppSlice((s) => ({
     incident: s.incident,
     targetBounds: s.targetBounds,
     shapes: s.shapes,
     viewLock: s.viewLock,
     viewLockFloor: s.viewLockFloor,
     suspended: s.viewLockSuspended,
+    orbitPaused: s.viewLockOrbitPaused,
     units: s.units,
   }))
   const [open, setOpen] = useState(true)
@@ -77,7 +78,8 @@ export function SizeUpStrip() {
       if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const k = e.key.toLowerCase()
-      if (k === 't') vl.setViewLockMode('top')
+      if (k === 'o') vl.setViewLockMode('orbit')
+      else if (k === 't') vl.setViewLockMode('top')
       else if (k === 'n') vl.setViewLockMode('north')
       else if (k === 'e') vl.setViewLockMode('east')
       else if (k === 's') vl.setViewLockMode('south')
@@ -288,24 +290,37 @@ export function SizeUpStrip() {
           )}
           {tab === 'views' && locked && (
             <div className="sizeup-views">
-              <button
-                className={`bv-lock${suspended ? ' free' : ''}`}
-                onClick={() => vl?.setViewLockSuspended(!suspended)}
-                title={suspended ? 'Camera is FREE — click to lock back into the disciplined view' : 'Camera is LOCKED to disciplined views — click to move around freely'}
-              >
-                {suspended ? '🔓 FREE' : '🔒 LOCKED'}
-              </button>
+              {viewLock === 'orbit' ? (
+                <button
+                  className={`bv-lock${orbitPaused ? ' free' : ''}`}
+                  onClick={() => vl?.setOrbitPaused(!orbitPaused)}
+                  title={orbitPaused ? 'Orbit paused — zoom is yours; press to resume the lap' : 'Slow lap around the structure — press to pause and look'}
+                >
+                  {orbitPaused ? '▶ RESUME ORBIT' : '⏸ PAUSE ORBIT'}
+                </button>
+              ) : (
+                <button
+                  className={`bv-lock${suspended ? ' free' : ''}`}
+                  onClick={() => vl?.setViewLockSuspended(!suspended)}
+                  title={suspended ? 'Camera is FREE — click to lock back into the disciplined view' : 'Camera is LOCKED to disciplined views — click to move around freely'}
+                >
+                  {suspended ? '🔓 FREE' : '🔒 LOCKED'}
+                </button>
+              )}
               <div className="sizeup-views-row">
+                <button className={`bv-btn${viewLock === 'orbit' ? ' on' : ''}`} onClick={() => vl?.setViewLockMode('orbit')} title="Auto-rotating lap around the structure (O)">
+                  ⟳
+                </button>
                 <button className={`bv-btn${viewLock === 'top' ? ' on' : ''}`} onClick={() => vl?.setViewLockMode('top')} title="Straight-down command view, north up (T)">
                   TOP
                 </button>
                 {SIDES.map((sd) => (
-                  <button key={sd.id} className={`bv-btn${viewLock === sd.id ? ' on' : ''}`} onClick={() => vl?.setViewLockMode(sd.id)} title={`Head-on ${sd.id.toUpperCase()} facade — ↑↓ steps floors`}>
+                  <button key={sd.id} className={`bv-btn${viewLock === sd.id ? ' on' : ''}`} onClick={() => vl?.setViewLockMode(sd.id)} title={`Head-on ${sd.id.toUpperCase()} facade — enters at street level, ↑↓ climbs the floors`}>
                     {sd.label}
                   </button>
                 ))}
               </div>
-              {vl && (
+              {vl && viewLock !== 'orbit' && (
                 <div className="sizeup-views-floor">
                   <button className="bv-btn" disabled={viewLockFloor <= 1} onClick={() => vl.stepViewLockFloor(-1)} title="Floor down (↓)">
                     ▼
@@ -333,7 +348,7 @@ export function SizeUpStrip() {
                   )}
                 </div>
               )}
-              <div className="sizeup-views-hints">T·N·E·S·W keys · ↑↓ floors · scroll zooms</div>
+              <div className="sizeup-views-hints">{viewLock === 'orbit' ? 'AUTO-ORBITING · ⏸ TO PAUSE AND LOOK · N/E/S/W ENTER AT STREET LEVEL' : 'O orbit · T·N·E·S·W keys · ↑↓ floors · scroll zooms'}</div>
             </div>
           )}
           <div className="sizeup-media" style={tab === 'views' ? { display: 'none' } : undefined}>
