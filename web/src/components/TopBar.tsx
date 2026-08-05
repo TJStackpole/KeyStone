@@ -171,7 +171,7 @@ function IncidentsMenu() {
                           <i>{fi.address} · {fi.borough}</i>
                         </span>
                         <span className="feed-meta">
-                          {fi.units} UNITS · {feedElapsed(fi.startedAt)}
+                          {fi.units} UNIT{fi.units === 1 ? '' : 'S'} · {feedElapsed(fi.startedAt)}
                           <em>{focusedFeedId === fi.id ? 'FOCUSED' : fi.status.toUpperCase()}</em>
                         </span>
                       </button>

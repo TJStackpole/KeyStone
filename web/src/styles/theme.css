@@ -1138,10 +1138,17 @@ html, body {
 .brand-row { display: flex; align-items: center; gap: 10px; }
 .incidents-wrap { position: relative; }
 .incidents-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 390px;
+  /* Fixed + flush to the screen edge: anchored to the chip it opened 67px
+     in, slicing the incident card beneath into stray word fragments
+     ("UNITS ON TH…", half a RUN button) that read as text overlap. The
+     glass top bar is this fixed box's containing block, so 0/left lands at
+     the bar's own left edge — flush over the panel column, covering it
+     whole. Top offsets from the published bar height, so a wrapped bar
+     can't leave the menu floating mid-row. */
+  position: fixed;
+  top: calc(var(--topbar-h, 52px) + 8px);
+  left: 2px;
+  width: min(420px, calc(100vw - 24px));
   max-height: 62vh;
   overflow-y: auto;
   padding: 10px 12px;
@@ -2877,7 +2884,6 @@ body.panel-dragging * { cursor: grabbing !important; }
    viewports — clamp them to the viewport edge instead. */
 @media (max-width: 1680px) {
   .scenarios-menu { left: auto; right: 0; }
-  .incidents-menu { width: min(390px, calc(100vw - 24px)); }
 }
 
 /* Condensed menu rows: same content, ~35% less height per item. */
