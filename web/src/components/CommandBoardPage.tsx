@@ -136,7 +136,7 @@ function BuildingDiagram({
     e.preventDefault()
     const uid = readDraggedUid(e)
     const box = boxRef.current
-    if (!uid || !box) return
+    if (!uid || !box || !units[uid]) return // only real rigs — not stray text drags
     const r = box.getBoundingClientRect()
     const x = Math.min(0.96, Math.max(0.04, (e.clientX - r.left) / r.width))
     const y = Math.min(0.95, Math.max(0.03, (e.clientY - r.top) / r.height))
@@ -350,7 +350,7 @@ export function CommandBoardPage() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   const uid = readDraggedUid(e)
-                  if (uid) assign(assignments, uid, pos)
+                  if (uid && units[uid]) assign(assignments, uid, pos)
                 }}
               >
                 <div className="cb-col-head">{pos}</div>
