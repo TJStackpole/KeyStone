@@ -226,22 +226,11 @@ export function applyViewLockCamera(durationS = 0.6): void {
     return
   }
   // TRUE ELEVATION of the chosen face: camera on the facade's own normal
-  // axis through the footprint center, level pitch, standing off far enough
-  // that the ENTIRE side — full height and full width — fits in frame.
-  const { normal, depth, width } = facadeFor(s.viewLock)
-  const frustum = scene.viewer.camera.frustum
-  const fovy =
-    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
-  const aspect =
-    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.aspectRatio : undefined) || 1.6
-  const fovx = 2 * Math.atan(Math.tan(fovy / 2) * aspect)
-  const fit = Math.max(
-    30,
-    (heightM / 2 + 8) / Math.tan(fovy / 2),
-    (width + 10) / Math.tan(fovx / 2),
-  )
-  const standoffM = depth + fit
-  const pos = offsetDeg(centerLat, centerLon, normal, standoffM)
+  // axis through the footprint center, level pitch, at the SAME fixed
+  // whole-building standoff every height/floor command uses — one stable
+  // sight picture from engage onward.
+  const { normal } = facadeFor(s.viewLock)
+  const pos = offsetDeg(centerLat, centerLon, normal, fullFrameStandoffM(s.viewLock))
   setAppState({ viewLockHeightM: floorAglM(s.viewLockFloor) })
   scene.viewer.camera.flyTo({
     // Level with the TRACKED floor, not mid-building — the facade view rides
@@ -296,10 +285,28 @@ export function viewLockGaugeInfo(): {
   return { minM: MIN_EYE_M, maxM: Math.max(heightM, MIN_EYE_M + 1), storeyM, floors, fireFloor: battleFireFloor() }
 }
 
+/** The FIXED standoff off a facade: far enough that the WHOLE building —
+ *  grade to roof, full width — stays in frame at level pitch from ANY gauge
+ *  height (a 5 ft eye still sees the roof). Every height/floor command
+ *  returns the camera to this same position off the building, so the sight
+ *  picture is stable: only the eye height slides. */
+function fullFrameStandoffM(side: SideMode): number {
+  const { heightM } = buildingRef()
+  const { depth, width } = facadeFor(side)
+  const frustum = getScene()?.viewer.camera.frustum
+  const fovy =
+    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
+  const aspect = (frustum instanceof Cesium.PerspectiveFrustum ? frustum.aspectRatio : undefined) || 1.6
+  const fovx = 2 * Math.atan(Math.tan(fovy / 2) * aspect)
+  // Vertical term covers grade→roof from the worst-case LOW eye (not from
+  // mid-height): heightM of wall must fit above a 5 ft camera at pitch 0.
+  return depth + Math.max(30, (heightM + 8) / Math.tan(fovy / 2), (width + 10) / Math.tan(fovx / 2))
+}
+
 /** Facade flight to an absolute elevation, re-latching a FREE camera and
- *  keeping (or tightening to) the working standoff — the camera flies to
- *  level with zAbs, squared to the facade. Shared by floor jumps and the
- *  continuous height gauge. */
+ *  auto-adjusting to the fixed whole-building standoff — the camera flies
+ *  to level with zAbs, squared to the facade, full structure in frame.
+ *  Shared by floor jumps and the continuous height gauge. */
 function flyFacadeTo(zAbs: number, durationS: number): void {
   const s = getAppState()
   if (s.viewLock === 'off' || s.viewLock === 'top') return
@@ -311,25 +318,9 @@ function flyFacadeTo(zAbs: number, durationS: number): void {
     setAppState({ viewLockSuspended: false })
     lockController(s.viewLock)
   }
-  const { heightM, floors, centerLat, centerLon } = buildingRef()
-  const { normal, depth } = facadeFor(s.viewLock)
-  const cam = scene.viewer.camera
-  const carto = cam.positionCartographic
-  // Current ground distance off the footprint center.
-  const dLatM = (Cesium.Math.toDegrees(carto.latitude) - centerLat) * 111_320
-  const dLonM =
-    (Cesium.Math.toDegrees(carto.longitude) - centerLon) * 111_320 * Math.cos((centerLat * Math.PI) / 180)
-  const curDist = Math.hypot(dLatM, dLonM)
-  // Working distance: frame ~4 floors of wall (never closer than the lock's
-  // 18 m zoom floor, plus the facade's own depth).
-  const frustum = cam.frustum
-  const fovy =
-    (frustum instanceof Cesium.PerspectiveFrustum ? frustum.fovy : undefined) ?? Cesium.Math.toRadians(45)
-  const floorH = heightM / Math.max(1, floors)
-  const workDist = depth + Math.max(24, (floorH * 2 + 4) / Math.tan(fovy / 2))
-  // Never tighter than the wall + a working margin — a re-latched FREE
-  // camera can start from anywhere, including inside the footprint.
-  const pos = offsetDeg(centerLat, centerLon, normal, Math.max(depth + 10, Math.min(curDist, workDist)))
+  const { centerLat, centerLon } = buildingRef()
+  const { normal } = facadeFor(s.viewLock)
+  const pos = offsetDeg(centerLat, centerLon, normal, fullFrameStandoffM(s.viewLock))
   scene.viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, zAbs),
     orientation: { heading: Cesium.Math.toRadians((normal + 180) % 360), pitch: 0, roll: 0 },
