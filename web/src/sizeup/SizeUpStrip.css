@@ -170,3 +170,12 @@
   color: var(--amber-bright, #fbbf24);
   padding: 2px 2px 4px;
 }
+
+/* STREET: the live look-around panorama fills the media box. */
+.sizeup-pano {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  background: #0a0e14;
+}
+.sizeup-pano .sizeup-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }

@@ -1,22 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { placeExposureLabels, toggleIsolateMode, windName } from '../actions'
-import { MiniModel } from './MiniModel'
 import { GOOGLE_KEY, faceViews, loadMapsJs, nysOrthoFace } from './oblique'
 import type { FaceView, TargetFrame } from './oblique'
-import { streetShot } from './streetview'
-import type { StreetShot } from './streetview'
 import { useAppSlice } from '../state/store'
 import './SizeUpStrip.css'
 
 // ---------------------------------------------------------------------------
 // Prompt 14 A2 — the SIZE-UP strip on the incident header. Replaces the 3D
 // flyaround as the way an officer reads the building: OBLIQUE four-face
-// views (keyless NYS ortho; Google 45° when the key exists), STREET at each
-// exposure with capture dates, and the on-demand rotatable MODEL. Nothing
-// fetches until its tab is opened; imagery vintage rides on every frame.
+// views (keyless NYS ortho; Google 45° when the key exists) with the
+// exposure ASSIGN control, and STREET — a live look-around panorama the
+// officer can rotate to read the environment they are going into. LIVE
+// VIEWS holds the ISOLATE camera rail. Nothing fetches until its tab opens.
 // ---------------------------------------------------------------------------
 
-type Tab = 'oblique' | 'street' | 'model' | 'views'
+type Tab = 'oblique' | 'street' | 'views'
 
 type ViewLockApi = typeof import('../cesium/viewLock')
 
@@ -27,11 +25,18 @@ const SIDES = [
   { id: 'west' as const, label: 'W' },
 ]
 
+/** Bearing from a pano point toward the building — the panorama opens facing
+ *  the front door, then the operator rotates freely. */
+function bearingTo(fromLat: number, fromLon: number, toLat: number, toLon: number): number {
+  const dLon = (toLon - fromLon) * Math.cos(((fromLat + toLat) / 2) * (Math.PI / 180))
+  const dLat = toLat - fromLat
+  return ((Math.atan2(dLon, dLat) * 180) / Math.PI + 360) % 360
+}
+
 export function SizeUpStrip() {
-  const { incident, targetBounds, footprintsGeo, shapes, viewLock, viewLockFloor, suspended, units } = useAppSlice((s) => ({
+  const { incident, targetBounds, shapes, viewLock, viewLockFloor, suspended, units } = useAppSlice((s) => ({
     incident: s.incident,
     targetBounds: s.targetBounds,
-    footprintsGeo: s.footprintsGeo,
     shapes: s.shapes,
     viewLock: s.viewLock,
     viewLockFloor: s.viewLockFloor,
@@ -47,8 +52,8 @@ export function SizeUpStrip() {
   // (placed as EXPO posts: on both maps, persisted, one undo entry).
   const [assigning, setAssigning] = useState(false)
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
-  const [street, setStreet] = useState<StreetShot | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [streetErr, setStreetErr] = useState<string | null>(null)
   // LIVE VIEWS (the old floating battle-view rail, docked here): the camera
   // API lazy-loads with the tab so this component keeps Cesium out of its
   // static graph. The tab is always on the strip — unlocked it offers the
@@ -142,39 +147,86 @@ export function SizeUpStrip() {
     }
   }, [open, tab, obliqueSrc, frame, face])
 
-  // STREET: static image + capture date, per face, tab-lazy.
+  // STREET: a live, rotatable panorama — the nearest outdoor pano to the
+  // building, opened FACING it. The officer drags to look around the block
+  // they are going into; the pano's own arrows walk the street.
   useEffect(() => {
-    if (!open || tab !== 'street' || !frame || !face) return
+    if (!open || tab !== 'street' || !frame || !GOOGLE_KEY) return
     let dead = false
-    setStreet(null)
-    void streetShot(frame, face).then((s) => {
-      if (!dead) setStreet(s)
-    })
+    setStreetErr(null)
+    loadMapsJs()
+      .then(() => {
+        if (dead) return
+        const g = (
+          window as unknown as {
+            google: {
+              maps: {
+                StreetViewService: new () => {
+                  getPanorama: (
+                    req: unknown,
+                    cb: (data: { location?: { pano?: string; latLng?: { lat: () => number; lng: () => number } } } | null, status: string) => void,
+                  ) => void
+                }
+                StreetViewPanorama: new (el: HTMLElement, opts: unknown) => unknown
+              }
+            }
+          }
+        ).google
+        new g.maps.StreetViewService().getPanorama(
+          {
+            location: { lat: frame.centerLat, lng: frame.centerLon },
+            radius: 90,
+            preference: 'nearest',
+            source: 'outdoor',
+          },
+          (data, status) => {
+            if (dead) return
+            const el = document.getElementById('sizeup-pano')
+            if (!el) return
+            if (status !== 'OK' || !data?.location?.pano || !data.location.latLng) {
+              setStreetErr('NO STREET VIEW COVERAGE AT THIS ADDRESS')
+              return
+            }
+            const heading = bearingTo(data.location.latLng.lat(), data.location.latLng.lng(), frame.centerLat, frame.centerLon)
+            new g.maps.StreetViewPanorama(el, {
+              pano: data.location.pano,
+              pov: { heading, pitch: 6 },
+              zoom: 0.7,
+              addressControl: false,
+              fullscreenControl: false,
+              motionTracking: false,
+              motionTrackingControl: false,
+              showRoadLabels: true,
+            })
+          },
+        )
+      })
+      .catch(() => {
+        if (!dead) setStreetErr('STREET VIEW UNAVAILABLE — check the Maps JavaScript API on the key')
+      })
     return () => {
       dead = true
     }
-  }, [open, tab, frame, face])
+  }, [open, tab, frame])
 
   if (!incident || !frame) return null
 
-  const target = footprintsGeo?.feats.find((f) => f.bin === footprintsGeo.targetBin) ?? null
-
   return (
     <div className="sizeup">
-      <button className="sizeup-head" onClick={() => setOpen((v) => !v)} title="Size-up imagery — oblique faces, street view, rotatable model">
+      <button className="sizeup-head" onClick={() => setOpen((v) => !v)} title="Size-up imagery — oblique faces and a look-around street view">
         SIZE-UP {open ? '▾' : '▸'}
       </button>
       {open && (
         <>
           <div className="sizeup-tabs" role="tablist">
-            {(['views', 'oblique', 'street', 'model'] as Tab[]).map((t) => (
+            {(['views', 'oblique', 'street'] as Tab[]).map((t) => (
               <button key={t} role="tab" aria-selected={tab === t} className={`sizeup-tab${tab === t ? ' on' : ''}${t === 'views' && locked ? ' live' : ''}`} onClick={() => setTab(t)}>
-                {t === 'views' ? 'LIVE VIEWS' : t === 'oblique' ? 'OBLIQUE' : t === 'street' ? 'STREET' : '3D MODEL'}
+                {t === 'views' ? 'LIVE VIEWS' : t === 'oblique' ? 'OBLIQUE' : 'STREET'}
               </button>
             ))}
           </div>
 
-          {tab !== 'model' && tab !== 'views' && (
+          {tab === 'oblique' && (
             <div className="sizeup-faces">
               {faces.map((f, i) => (
                 <button
@@ -205,7 +257,7 @@ export function SizeUpStrip() {
               >
                 {assigning ? '✕ CANCEL' : '⚑ ASSIGN'}
               </button>
-              {tab === 'oblique' && GOOGLE_KEY && (
+              {GOOGLE_KEY && (
                 <button
                   className={`sizeup-face src${obliqueSrc === 'google45' ? ' on' : ''}`}
                   onClick={() => setObliqueSrc((v) => (v === 'nys' ? 'google45' : 'nys'))}
@@ -216,7 +268,7 @@ export function SizeUpStrip() {
               )}
             </div>
           )}
-          {assigning && tab !== 'model' && tab !== 'views' && (
+          {assigning && tab === 'oblique' && (
             <div className="sizeup-assign-hint">TAP THE STREET-SIDE FACE — IT BECOMES EXP 1 · 2-3-4 CLOCKWISE</div>
           )}
 
@@ -293,24 +345,16 @@ export function SizeUpStrip() {
             )}
             {tab === 'street' &&
               (GOOGLE_KEY ? (
-                street === null ? (
-                  <div className="sizeup-wait">FETCHING STREET VIEW…</div>
-                ) : street.url ? (
-                  <figure className="sizeup-street">
-                    <img src={street.url} alt={`Street view, exposure ${street.exposure}`} />
-                    <figcaption>
-                      EXPOSURE {street.exposure} · CAPTURED {street.captureDate ?? 'DATE UNKNOWN'}
-                    </figcaption>
-                  </figure>
-                ) : (
-                  <div className="sizeup-wait">NO STREET VIEW COVERAGE ON THIS SIDE</div>
-                )
+                <div id="sizeup-pano" className="sizeup-pano">
+                  {streetErr && <div className="sizeup-wait">{streetErr}</div>}
+                </div>
               ) : (
                 <div className="sizeup-wait">STREET VIEW NEEDS THE GOOGLE KEY IN .env (GOOGLE_MAPS_API_KEY)</div>
               ))}
-            {tab === 'model' &&
-              (target ? <MiniModel target={target} centerLat={frame.centerLat} centerLon={frame.centerLon} /> : <div className="sizeup-wait">FOOTPRINT STILL LOADING…</div>)}
           </div>
+          {tab === 'street' && GOOGLE_KEY && !streetErr && (
+            <div className="sizeup-views-hints">DRAG TO LOOK AROUND · ARROWS WALK THE STREET · OPENS FACING THE BUILDING</div>
+          )}
         </>
       )}
     </div>
