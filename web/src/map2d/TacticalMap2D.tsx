@@ -17,17 +17,18 @@ import './TacticalMap2D.css'
 // the SAME store the 3D scene renders: real footprint geometry (no
 // extrusion), the fire building highlighted, ICS zones/posts/apparatus pads,
 // exposure labels, hydrants, and every tracked unit in taxonomy glyphs.
-// Keyless: OSM raster base + NYS 2024 orthoimagery one-tap toggle (vintage
-// labeled on screen per Phase A.5). No continuous render loop — MapLibre
-// only paints on data/camera changes, which is the entire point.
+// Keyless: CARTO dark/light raster bases + NYS orthoimagery one-tap toggle
+// (vintage labeled on screen per Phase A.5). No continuous render loop —
+// MapLibre only paints on data/camera changes, which is the entire point.
 // ---------------------------------------------------------------------------
 
-const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 // Clean dark tactical base (CARTO Dark Matter, keyless w/ attribution) — the
-// DEFAULT. Standard OSM carto is a consumer map: subway entrances, shop
-// icons, transit glyphs — "random shit" on a command console. It stays
-// available as the OSM base option for when that detail is wanted.
+// DEFAULT. The LIGHT option is the same cartography in daylight (CARTO
+// Positron) — standard OSM carto was tried here and retired: a consumer map
+// of subway entrances, shop icons and transit glyphs, cartoonish on a
+// command console.
 const CARTO_DARK_TILES = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+const CARTO_LIGHT_TILES = 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'
 // NYS Digital Orthoimagery Program, latest statewide mosaic (public, keyless).
 // The service is a DYNAMIC MapServer (no tile cache — /tile/{z}/{y}/{x} 404s),
 // so we consume it through the ArcGIS export endpoint with MapLibre's
@@ -171,7 +172,7 @@ export function TacticalMap2D() {
   const divRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const [ready, setReady] = useState(false)
-  const [base, setBase] = useState<'dark' | 'osm' | 'sat'>('dark')
+  const [base, setBase] = useState<'dark' | 'light' | 'sat'>('dark')
 
   // Create the map once, on first activation — never for pure-3D sessions.
   useEffect(() => {
@@ -348,8 +349,9 @@ export function TacticalMap2D() {
     }
   }, [incident])
 
-  // Basemap picker: DARK (default) / OSM detail / SAT. The ortho source is
-  // still created on FIRST use only (declared-hidden rasters wedge loading).
+  // Basemap picker: DARK (default) / LIGHT (daylight) / SAT. Non-default
+  // sources are still created on FIRST use only (declared-hidden rasters
+  // wedge loading).
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
@@ -362,9 +364,9 @@ export function TacticalMap2D() {
       const i = layers.findIndex((l) => l.id === 'base-carto')
       return layers[i + 1]?.id
     }
-    if (base === 'osm' && !map.getSource('osm')) {
-      map.addSource('osm', { type: 'raster', tiles: [OSM_TILES], tileSize: 256, attribution: '© OpenStreetMap contributors' })
-      map.addLayer({ id: 'base-osm', type: 'raster', source: 'osm' }, aboveBase())
+    if (base === 'light' && !map.getSource('light')) {
+      map.addSource('light', { type: 'raster', tiles: [CARTO_LIGHT_TILES], tileSize: 512, attribution: '© OpenStreetMap contributors © CARTO' })
+      map.addLayer({ id: 'base-light', type: 'raster', source: 'light' }, aboveBase())
     }
     if (base === 'sat' && !map.getSource('ortho')) {
       map.addSource('ortho', {
@@ -375,13 +377,16 @@ export function TacticalMap2D() {
       })
       map.addLayer({ id: 'base-ortho', type: 'raster', source: 'ortho' }, aboveBase())
     }
-    // Self-heal instances that inserted a base too high (pre-fix HMR survivors).
-    for (const id of ['base-osm', 'base-ortho']) {
+    // Self-heal instances that inserted a base too high (pre-fix HMR
+    // survivors); base-osm is the retired OSM base a live instance may
+    // still carry — keep it out of sight.
+    for (const id of ['base-light', 'base-ortho']) {
       const next = aboveBase()
       if (map.getLayer(id) && next && next !== id) map.moveLayer(id, next)
     }
     map.setLayoutProperty('base-carto', 'visibility', base === 'dark' ? 'visible' : 'none')
-    if (map.getLayer('base-osm')) map.setLayoutProperty('base-osm', 'visibility', base === 'osm' ? 'visible' : 'none')
+    if (map.getLayer('base-light')) map.setLayoutProperty('base-light', 'visibility', base === 'light' ? 'visible' : 'none')
+    if (map.getLayer('base-osm')) map.setLayoutProperty('base-osm', 'visibility', 'none')
     if (map.getLayer('base-ortho')) map.setLayoutProperty('base-ortho', 'visibility', base === 'sat' ? 'visible' : 'none')
   }, [base, ready])
 
@@ -400,10 +405,10 @@ export function TacticalMap2D() {
       </div>
       <button
         className="map2d-base"
-        onClick={() => setBase((v) => (v === 'dark' ? 'osm' : v === 'osm' ? 'sat' : 'dark'))}
-        title="Basemap: DARK tactical (clean) → OSM streets (full detail) → SAT (NYS orthoimagery). Tap to cycle."
+        onClick={() => setBase((v) => (v === 'dark' ? 'light' : v === 'light' ? 'sat' : 'dark'))}
+        title="Basemap: DARK tactical → LIGHT daylight (same clean cartography) → SAT (NYS orthoimagery). Tap to cycle."
       >
-        {base === 'dark' ? 'DARK' : base === 'osm' ? 'OSM' : 'SAT'}
+        {base === 'dark' ? 'DARK' : base === 'light' ? 'LIGHT' : 'SAT'}
       </button>
       {base === 'sat' && <div className="map2d-vintage">{ORTHO_VINTAGE}</div>}
     </div>
