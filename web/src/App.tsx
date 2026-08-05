@@ -38,7 +38,6 @@ import { MyAgencyRequestsPanel } from './components/MyAgencyRequestsPanel'
 import { PolicyEditorPanel } from './components/PolicyEditorPanel'
 import { ProfileWatermark } from './components/ProfileWatermark'
 import { NoticeChip } from './components/NoticeChip'
-import { BattleViewBar } from './components/BattleViewBar'
 import { hasCapability, useCapability } from './profiles/manifest'
 import { applyOverlayLod } from './cesium/overlayLod'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
@@ -227,7 +226,6 @@ export default function App() {
       <PolicyEditorPanel />
       <ProfileWatermark />
       <NoticeChip />
-      <BattleViewBar />
       <WindAdvisory />
       <Compass />
       <BootVeil msg={bootMsg} />

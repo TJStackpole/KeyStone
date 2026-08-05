@@ -30,7 +30,7 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
     key: 'planning',
     label: 'PLAN',
     hint: 'Planning — intel and comms forward; tactical rails tucked',
-    minimized: ['roster', 'battle-view', 'draw-toolbar', 'takchat', 'streetview'],
+    minimized: ['roster', 'draw-toolbar', 'takchat', 'streetview'], // battle-view rail retired -> SIZE-UP LIVE VIEWS tab
   },
   {
     key: 'wall',

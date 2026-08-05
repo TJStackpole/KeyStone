@@ -15,14 +15,27 @@ import './SizeUpStrip.css'
 // fetches until its tab is opened; imagery vintage rides on every frame.
 // ---------------------------------------------------------------------------
 
-type Tab = 'oblique' | 'street' | 'model'
+type Tab = 'oblique' | 'street' | 'model' | 'views'
+
+type ViewLockApi = typeof import('../cesium/viewLock')
+
+const SIDES = [
+  { id: 'north' as const, label: 'N' },
+  { id: 'east' as const, label: 'E' },
+  { id: 'south' as const, label: 'S' },
+  { id: 'west' as const, label: 'W' },
+]
 
 export function SizeUpStrip() {
-  const { incident, targetBounds, footprintsGeo, shapes } = useAppSlice((s) => ({
+  const { incident, targetBounds, footprintsGeo, shapes, viewLock, viewLockFloor, suspended, units } = useAppSlice((s) => ({
     incident: s.incident,
     targetBounds: s.targetBounds,
     footprintsGeo: s.footprintsGeo,
     shapes: s.shapes,
+    viewLock: s.viewLock,
+    viewLockFloor: s.viewLockFloor,
+    suspended: s.viewLockSuspended,
+    units: s.units,
   }))
   const [open, setOpen] = useState(true)
   const [tab, setTab] = useState<Tab>('oblique')
@@ -31,6 +44,43 @@ export function SizeUpStrip() {
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [street, setStreet] = useState<StreetShot | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  // LIVE VIEWS (the old floating battle-view rail, docked here): the camera
+  // API lazy-loads with the tab so this component keeps Cesium out of its
+  // static graph. The tab exists only while the ISOLATE view lock is armed.
+  const locked = viewLock !== 'off'
+  const [vl, setVl] = useState<ViewLockApi | null>(null)
+  useEffect(() => {
+    if (locked && !vl) void import('../cesium/viewLock').then(setVl)
+  }, [locked, vl])
+  useEffect(() => {
+    // Lock engaging pulls the strip to the camera controls; disengaging
+    // returns to imagery so a dead tab never lingers.
+    setTab((t) => (locked ? 'views' : t === 'views' ? 'oblique' : t))
+  }, [locked])
+  // One-keystroke camera control while locked (moved from the old rail).
+  useEffect(() => {
+    if (!locked || !vl) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const k = e.key.toLowerCase()
+      if (k === 't') vl.setViewLockMode('top')
+      else if (k === 'n') vl.setViewLockMode('north')
+      else if (k === 'e') vl.setViewLockMode('east')
+      else if (k === 's') vl.setViewLockMode('south')
+      else if (k === 'w') vl.setViewLockMode('west')
+      else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        vl.stepViewLockFloor(1)
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        vl.stepViewLockFloor(-1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [locked, vl])
 
   const frame: TargetFrame | null = targetBounds
   // shapes in the deps: pressing EXPO re-maps 1-4 to the REAL street side.
@@ -110,14 +160,14 @@ export function SizeUpStrip() {
       {open && (
         <>
           <div className="sizeup-tabs" role="tablist">
-            {(['oblique', 'street', 'model'] as Tab[]).map((t) => (
-              <button key={t} role="tab" aria-selected={tab === t} className={`sizeup-tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>
-                {t === 'oblique' ? 'OBLIQUE' : t === 'street' ? 'STREET' : '3D MODEL'}
+            {([...(locked ? (['views'] as Tab[]) : []), 'oblique', 'street', 'model'] as Tab[]).map((t) => (
+              <button key={t} role="tab" aria-selected={tab === t} className={`sizeup-tab${tab === t ? ' on' : ''}${t === 'views' ? ' live' : ''}`} onClick={() => setTab(t)}>
+                {t === 'views' ? 'LIVE VIEWS' : t === 'oblique' ? 'OBLIQUE' : t === 'street' ? 'STREET' : '3D MODEL'}
               </button>
             ))}
           </div>
 
-          {tab !== 'model' && (
+          {tab !== 'model' && tab !== 'views' && (
             <div className="sizeup-faces">
               {faces.map((f, i) => (
                 <button key={f.exposure} className={`sizeup-face${i === faceIdx ? ' on' : ''}`} onClick={() => setFaceIdx(i)}>
@@ -136,7 +186,57 @@ export function SizeUpStrip() {
             </div>
           )}
 
-          <div className="sizeup-media">
+          {tab === 'views' && locked && (
+            <div className="sizeup-views">
+              <button
+                className={`bv-lock${suspended ? ' free' : ''}`}
+                onClick={() => vl?.setViewLockSuspended(!suspended)}
+                title={suspended ? 'Camera is FREE — click to lock back into the disciplined view' : 'Camera is LOCKED to disciplined views — click to move around freely'}
+              >
+                {suspended ? '🔓 FREE' : '🔒 LOCKED'}
+              </button>
+              <div className="sizeup-views-row">
+                <button className={`bv-btn${viewLock === 'top' ? ' on' : ''}`} onClick={() => vl?.setViewLockMode('top')} title="Straight-down command view, north up (T)">
+                  TOP
+                </button>
+                {SIDES.map((sd) => (
+                  <button key={sd.id} className={`bv-btn${viewLock === sd.id ? ' on' : ''}`} onClick={() => vl?.setViewLockMode(sd.id)} title={`Head-on ${sd.id.toUpperCase()} facade — ↑↓ steps floors`}>
+                    {sd.label}
+                  </button>
+                ))}
+              </div>
+              {vl && (
+                <div className="sizeup-views-floor">
+                  <button className="bv-btn" disabled={viewLockFloor <= 1} onClick={() => vl.stepViewLockFloor(-1)} title="Floor down (↓)">
+                    ▼
+                  </button>
+                  <div className="bv-floor-readout">
+                    <b>
+                      {viewLock === 'top' ? 'PLAN ' : ''}FL {viewLockFloor}
+                    </b>
+                    <i>
+                      {(() => {
+                        const onFloor = Object.values(units).filter(
+                          (u) => (u.category === 'ff' || u.category === 'officer') && (u.floor ?? 0) === viewLockFloor,
+                        ).length
+                        return `${onFloor > 0 ? `${onFloor} MBR` : '—'} · ${vl.viewLockFloors()} FL`
+                      })()}
+                    </i>
+                  </div>
+                  <button className="bv-btn" disabled={viewLockFloor >= vl.viewLockFloors()} onClick={() => vl.stepViewLockFloor(1)} title="Floor up (↑)">
+                    ▲
+                  </button>
+                  {vl.battleFireFloor() !== null && vl.battleFireFloor() !== viewLockFloor && (
+                    <button className="bv-btn bv-fire" onClick={() => vl.jumpViewLockFloor(vl.battleFireFloor()!)} title="Jump to the fire floor">
+                      ◎ FL {vl.battleFireFloor()}
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="sizeup-views-hints">T·N·E·S·W keys · ↑↓ floors · scroll zooms</div>
+            </div>
+          )}
+          <div className="sizeup-media" style={tab === 'views' ? { display: 'none' } : undefined}>
             {tab === 'oblique' && obliqueSrc === 'nys' && (frameUrl ? <img src={frameUrl} alt={`Exposure ${face?.exposure}`} /> : <div className="sizeup-wait">{err ?? 'FETCHING NYS IMAGERY…'}</div>)}
             {tab === 'oblique' && obliqueSrc === 'google45' && (
               <div id="sizeup-g45" className="sizeup-g45">
