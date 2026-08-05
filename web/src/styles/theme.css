@@ -2172,83 +2172,7 @@ body:has(.map2d-root:not(.map2d-hidden)) .incident-btn { bottom: 230px; }
    exercises)
 --------------------------------------------------------------------------- */
 
-.eoc-wrap { position: relative; }
-.eoc-menu {
-  position: absolute; top: calc(100% + 8px); right: 0; min-width: 260px;
-  padding: 10px; display: flex; flex-direction: column; gap: 6px;
-  z-index: 80; border: 1px solid var(--border); border-radius: 10px;
-}
-.eoc-menu input {
-  background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 5px;
-  color: var(--text); font: 500 11px var(--ui); padding: 6px 8px; outline: none;
-}
-.eoc-item {
-  text-align: left; background: none; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px;
-  color: var(--text-dim); font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
-  padding: 7px 9px; cursor: pointer;
-}
-.eoc-item:hover:not(:disabled) { border-color: var(--amber); color: var(--text); }
-.eoc-item.on { border-color: var(--amber); color: var(--amber-bright); background: rgba(245,158,11,0.08); }
-.eoc-item:disabled { opacity: 0.4; cursor: not-allowed; }
-.eoc-note { font-family: var(--mono); font-size: 8px; letter-spacing: 0.08em; color: var(--text-faint); }
 
-.wc-left {
-  position: absolute; top: calc(var(--topbar-h, 52px) + 18px); left: 10px; width: 360px; bottom: 220px;
-  display: flex; flex-direction: column; z-index: 32; border-radius: 10px; padding: 10px; gap: 8px;
-}
-.wc-right {
-  position: absolute; top: calc(var(--topbar-h, 52px) + 18px); right: 10px; width: 430px; bottom: 220px;
-  display: flex; flex-direction: column; z-index: 32; border-radius: 10px; padding: 10px; gap: 10px;
-  overflow-y: auto;
-}
-/* GeoChat is bottom-right pinned (z 44) and would cover the last ~190px of
-   the Watch Command right column — request form, rules editor. While the
-   citywide view is up, slide the chat left of the column instead. */
-body:has(.wc-right) .takchat-panel:not([data-moved]) { right: 450px; }
-/* Tactical chrome that bleeds under/over the citywide panels: the map-nav
-   cluster floats above the ticker (z 40 > 32), and HOME / fly-to-incident
-   are dead-ends in this view; the Site Intel panel pokes out below the
-   right column. Hidden while Watch Command is up. */
-body:has(.wc-left) .incident-btn,
-body:has(.wc-left) .intel-panel,
-body:has(.wc-left) .draw-toolbar { display: none; }
-/* Compass + HOME are shared-core navigation — shift them clear of the
-   citywide column instead of hiding them (NYCEM lives in this view). */
-body:has(.wc-left) .compass,
-body:has(.wc-left) .home-btn { left: 384px; }
-/* Interaction parity with the rest of the console (chips transition ~120ms). */
-.wc-inc-row, .wc-open-btn, .wc-filters button, .wc-req-actions button,
-.wc-banner-btns button, .wc-endex, .eoc-item { transition: all 120ms; }
-/* WATCH CMD chip attention badge: pending suggestions + SLA breaches are
-   invisible from the tactical board without it. */
-.wc-chip-badge {
-  font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0;
-  color: #0a0e14; background: var(--amber-bright); border-radius: 7px;
-  padding: 1px 5px; margin-left: 6px; animation: pulse 1.6s ease-in-out infinite;
-}
-/* Inline decline flow (replaces the console's only native browser dialog). */
-.wc-req-declineform { display: flex; gap: 5px; margin-top: 5px; }
-.wc-req-declineform input {
-  flex: 1; background: rgba(7,12,20,0.85); border: 1px solid rgba(239,68,68,0.55);
-  border-radius: 4px; color: var(--text); font: 500 10.5px var(--ui); padding: 4px 7px; outline: none;
-}
-.wc-req-declineform button {
-  background: none; border: 1px solid rgba(148,163,184,0.35); border-radius: 4px;
-  color: var(--text-dim); font: 600 9px var(--mono); padding: 3px 7px; cursor: pointer; transition: all 120ms;
-}
-.wc-req-declineform button:first-of-type:not(:disabled) { border-color: rgba(239,68,68,0.55); color: #fca5a5; }
-.wc-req-declineform button:disabled { opacity: 0.4; cursor: default; }
-/* Timeline strip: axis + steady-state note (two bare gray lanes read as broken). */
-.wc-strip-axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 7.5px; color: var(--text-faint); padding-top: 2px; }
-.wc-strip-empty { font-style: normal; font-family: var(--mono); font-size: 8px; color: var(--text-faint); margin-left: 10px; letter-spacing: 0.06em; }
-.wc-strip-lane { position: relative; }
-.wc-strip-lane::before {
-  content: attr(data-lane); position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
-  font-family: var(--mono); font-size: 7px; color: var(--text-faint); letter-spacing: 0.08em; pointer-events: none;
-}
-/* Failed-save affordance (rules editor / EOC menu). */
-.wc-open-btn.failed { border-color: rgba(239,68,68,0.65); color: #fca5a5; }
-.eoc-note.failed { color: #fca5a5; }
 /* ------------------- Prompt 12: workspace profiles ------------------------ */
 /* Wordmark doubles as the profile switcher. */
 .profile-btn {
@@ -2301,23 +2225,6 @@ body:has(.wc-left) .home-btn { left: 384px; }
 .agency-req-pair { color: var(--text-dim); }
 .agency-req-meta em { font-style: normal; margin-left: auto; color: var(--text-faint); }
 .agency-req-desc { font: 500 10.5px var(--ui); color: var(--text); margin: 4px 0; }
-/* Policy editor (admin). */
-.policy-editor {
-  position: absolute; top: calc(var(--topbar-h, 52px) + 18px); left: 50%; transform: translateX(-50%);
-  width: 520px; z-index: 80; border-radius: 10px; padding: 12px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.policy-head { display: flex; align-items: center; }
-.policy-note { font: 500 10px var(--ui); color: var(--text-dim); line-height: 1.5; }
-.policy-row { display: flex; align-items: center; gap: 10px; }
-.policy-label { flex: 1; display: flex; flex-direction: column; }
-.policy-label b { font: 600 11px var(--ui); color: var(--text); }
-.policy-label i { font-style: normal; font: 500 8.5px var(--mono); color: var(--text-faint); }
-.policy-row select {
-  background: rgba(7, 12, 20, 0.85); border: 1px solid var(--border); border-radius: 5px;
-  color: var(--text); font: 600 10px var(--mono); padding: 5px 8px; outline: none;
-}
-.policy-failed { font: 700 9px var(--mono); color: #fca5a5; letter-spacing: 0.06em; }
 /* Aggregate-only (policy) presentation. */
 .crew-aggregate, .floor-aggregate {
   font: 600 8.5px var(--mono); color: var(--text-faint); letter-spacing: 0.05em;
@@ -2419,212 +2326,24 @@ body:has(.wc-left) .home-btn { left: 384px; }
 body.panel-dragging { user-select: none; cursor: grabbing; }
 body.panel-dragging * { cursor: grabbing !important; }
 
-/* Dirty-close confirm on the exercise review (base .panel-close is 22px sq). */
-.exr-btns .panel-close.confirm {
-  width: auto; padding: 0 8px; color: var(--amber-bright);
-  border-color: rgba(245,158,11,0.6); font: 700 9px var(--mono); letter-spacing: 0.06em;
-}
-.wc-head { display: flex; align-items: center; gap: 10px; }
-.wc-count { font-family: var(--mono); font-size: 10px; color: var(--amber-bright); letter-spacing: 0.1em; }
-.wc-operator {
-  background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 5px;
-  color: var(--text); font: 500 11px var(--ui); padding: 6px 8px; outline: none;
-}
-.wc-section { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-.wc-section-title {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; color: var(--cyan);
-  border-bottom: 1px solid rgba(34,211,238,0.2); padding-bottom: 4px;
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-}
-.wc-caveat { font-style: normal; font-size: 7.5px; color: var(--amber-bright); letter-spacing: 0.1em; }
-.wc-filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.wc-filters select, .wc-filters button {
-  background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--text-dim); font-family: var(--mono); font-size: 9px; padding: 3px 7px; cursor: pointer;
-}
-.wc-filters button.on { color: var(--cyan); border-color: var(--border-strong); }
-.wc-ticker-scroll { flex: 1; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.wc-tick {
-  display: flex; gap: 7px; align-items: baseline; font-size: 11px; padding: 3px 5px;
-  border-left: 2px solid rgba(148,163,184,0.25); border-radius: 2px;
-}
-.wc-tick.sev4, .wc-tick.sev5 { border-left-color: var(--red); background: rgba(239,68,68,0.06); }
-.wc-tick.sev3 { border-left-color: var(--amber); }
-.wc-tick-ts { font-family: var(--mono); font-size: 9px; color: var(--text-faint); flex: none; }
-.wc-tick-kind { font-family: var(--mono); font-size: 8px; color: var(--cyan-dim); letter-spacing: 0.08em; flex: none; text-transform: uppercase; }
-.wc-tick-text { color: var(--text); }
-/* No-silent-simulation rule: dispatch-feed / drill-script rows carry a chip. */
-.wc-sim-chip {
-  flex: none; font-family: var(--mono); font-size: 7.5px; letter-spacing: 0.08em;
-  color: var(--amber-bright); border: 1px solid rgba(245,158,11,0.55); border-radius: 3px;
-  padding: 0 3px; line-height: 12px; align-self: center;
-}
-.wc-empty { font-family: var(--mono); font-size: 10px; color: var(--text-faint); padding: 8px 0; }
-.wc-obs { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
-.wc-endex {
-  background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.6); border-radius: 6px;
-  color: #fca5a5; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
-  padding: 9px; cursor: pointer;
-}
-.wc-endex:hover { background: rgba(239,68,68,0.2); }
 
-.wc-rollup { display: flex; flex-wrap: wrap; gap: 5px; }
-.wc-agency-chip {
-  font-family: var(--mono); font-size: 9.5px; padding: 3px 7px; border-radius: 4px;
-  border: 1px solid rgba(148,163,184,0.25); color: var(--text-dim);
-}
-.wc-agency-chip b { color: var(--cyan); }
-.wc-inc-row {
-  display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
-  background: none; border: 1px solid transparent; border-radius: 5px; padding: 5px 7px;
-  color: var(--text); font-size: 11.5px; cursor: pointer;
-}
-.wc-inc-row:hover { background: rgba(34,211,238,0.06); border-color: rgba(34,211,238,0.2); }
-.wc-inc-row.focused { border-color: rgba(34,211,238,0.45); }
-.wc-sev { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.wc-sev.s1 { background: #38bdf8; } .wc-sev.s2 { background: #fbbf24; } .wc-sev.s3 { background: #fb923c; }
-.wc-sev.s4 { background: #f87171; } .wc-sev.s5 { background: #ef4444; }
-.wc-inc-addr { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wc-inc-meta { font-family: var(--mono); font-size: 8.5px; color: var(--text-faint); flex: none; }
-.wc-inc-detail { padding: 4px 10px 8px 24px; font-size: 10.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
-.wc-open-btn {
-  align-self: flex-start; background: rgba(34,211,238,0.08); border: 1px solid var(--border-strong); border-radius: 5px;
-  color: var(--cyan); font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; padding: 5px 9px; cursor: pointer;
-}
+ .wc-sev.s2 { background: #fbbf24; } .wc-sev.s3 { background: #fb923c; }
+ .wc-sev.s5 { background: #ef4444; }
 
-.wc-kanban { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
-.wc-kanban-col { min-width: 150px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
-.wc-kanban-head { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--text-faint); }
-.wc-kanban-head b { color: var(--cyan); }
-.wc-queue { display: flex; flex-direction: column; gap: 5px; }
-.wc-req {
-  border: 1px solid rgba(148,163,184,0.22); border-radius: 6px; padding: 6px 7px;
-  display: flex; flex-direction: column; gap: 4px; background: rgba(7,12,20,0.5);
-}
-.wc-req.breach { border-color: var(--red); animation: pulse 1.2s infinite; }
-.wc-req-head { display: flex; gap: 6px; align-items: center; }
-.wc-req-pri { font-family: var(--mono); font-size: 7.5px; letter-spacing: 0.1em; padding: 1px 4px; border-radius: 3px; border: 1px solid; }
-.wc-req-pri.routine { color: var(--text-dim); border-color: rgba(148,163,184,0.4); }
-.wc-req-pri.urgent { color: var(--amber-bright); border-color: rgba(245,158,11,0.55); }
-.wc-req-pri.immediate { color: #f87171; border-color: rgba(239,68,68,0.7); }
-.wc-req-pair { font-family: var(--mono); font-size: 9px; color: var(--cyan-dim); }
-.wc-req-age { margin-left: auto; font-family: var(--mono); font-size: 8px; color: var(--text-faint); }
-.wc-req-desc { font-size: 10.5px; color: var(--text); }
-.wc-req-decline { font-size: 9.5px; color: #fca5a5; }
-.wc-req-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.wc-req-actions button {
-  background: none; border: 1px solid rgba(148,163,184,0.3); border-radius: 4px;
-  color: var(--text-dim); font-family: var(--mono); font-size: 8px; padding: 2px 6px; cursor: pointer;
-}
-.wc-req-actions button:hover { color: var(--cyan); border-color: var(--border-strong); }
-.wc-metrics table { width: 100%; border-collapse: collapse; font-size: 10px; }
-.wc-metrics th, .wc-metrics td { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(148,163,184,0.12); }
-.wc-metrics th { font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; color: var(--text-faint); }
-.wc-newreq { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
-.wc-newreq select, .wc-newreq input, .wc-newreq button {
-  background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--text); font-size: 10px; padding: 4px 6px;
-}
-.wc-newreq input { flex: 1; min-width: 120px; }
-.wc-newreq button { cursor: pointer; color: var(--cyan); }
-.wc-newreq button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.wc-rule { display: flex; flex-direction: column; gap: 4px; padding: 5px 0; border-bottom: 1px solid rgba(148,163,184,0.1); }
-.wc-rule-head { display: flex; gap: 7px; align-items: center; font-size: 11px; color: var(--text); }
-.wc-rule-head span { font-family: var(--mono); font-size: 9px; color: var(--text-faint); }
-.wc-rule-head select { background: rgba(7,12,20,0.85); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 10px; }
-.wc-rule-match {
-  background: rgba(7,12,20,0.85); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--text-dim); font-family: var(--mono); font-size: 9.5px; padding: 4px 7px; outline: none;
-}
 
-/* Below the drill transport bar (top:64px + ~44px tall) — a suggestion
-   banner must never cover the pause/scrub controls mid-exercise. */
-.wc-banners { position: absolute; top: calc(var(--topbar-h, 52px) + 64px); left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 620px; max-width: 80vw; }
-.wc-banner { display: flex; gap: 10px; align-items: center; border: 1px solid rgba(245,158,11,0.6); border-radius: 8px; padding: 10px 12px; box-shadow: var(--glow-amber); }
-.wc-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.wc-banner-text b { font-size: 12px; color: var(--amber-bright); }
-.wc-banner-text i { font-style: normal; font-size: 10.5px; color: var(--text-dim); }
-.wc-banner-actions { font-family: var(--mono); font-size: 9px !important; }
-.wc-banner-btns { display: flex; flex-direction: column; gap: 4px; }
-.wc-banner-btns button {
-  background: none; border: 1px solid rgba(148,163,184,0.35); border-radius: 4px;
-  color: var(--text-dim); font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; padding: 4px 10px; cursor: pointer;
-}
-.wc-banner-btns .wc-accept { border-color: rgba(34,197,94,0.6); color: #4ade80; }
 
-.wc-hover {
-  position: absolute; top: calc(var(--topbar-h, 52px) + 18px); left: 50%; transform: translateX(-50%); z-index: 58;
-  min-width: 320px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px;
-  display: flex; flex-direction: column; gap: 6px;
-}
-.wc-hover b { font-size: 12.5px; }
-.wc-hover-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 10.5px; }
-.wc-hover-grid span { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--text-faint); }
-.wc-hover-grid i { font-style: normal; color: var(--text); }
-.wc-hover-foot { font-family: var(--mono); font-size: 8px; color: var(--text-faint); letter-spacing: 0.06em; }
-.wc-hover-foot em { font-style: normal; color: var(--amber-bright); }
 
-.wc-strip { position: absolute; left: 380px; right: 450px; bottom: 214px; height: 64px; z-index: 30; border-radius: 8px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
-.wc-strip-title { font-family: var(--mono); font-size: 8px; letter-spacing: 0.12em; color: var(--text-faint); }
-.wc-strip-lane { position: relative; height: 16px; background: rgba(148,163,184,0.06); border-radius: 3px; }
-.wc-plan-band {
-  position: absolute; top: 1px; bottom: 1px; background: rgba(245,158,11,0.28); border: 1px solid rgba(245,158,11,0.5);
-  border-radius: 3px; font-family: var(--mono); font-size: 8px; color: var(--amber-bright);
-  overflow: hidden; white-space: nowrap; padding: 1px 4px; min-width: 40px;
-}
-.wc-eoc-mark {
-  position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--cyan);
-  font-family: var(--mono); font-size: 8.5px; color: var(--cyan); padding-left: 3px;
-}
 
-/* Exercise review (M8) */
-.exr-veil { position: absolute; inset: 0; z-index: 90; background: rgba(4,7,12,0.75); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 30px 0; }
-.exr-panel { width: 860px; max-width: 94vw; border: 1px solid var(--border-strong); border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
-.exr-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.exr-id { font-family: var(--mono); font-size: 10px; color: var(--text-faint); }
-.exr-btns { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-.exr-btns button {
-  background: rgba(7,12,20,0.7); border: 1px solid var(--border); border-radius: 5px;
-  color: var(--cyan); font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; padding: 6px 10px; cursor: pointer;
-}
-.exr-section h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--cyan); margin: 0 0 8px; border-bottom: 1px solid rgba(34,211,238,0.2); padding-bottom: 4px; }
-.exr-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 11px; }
-.exr-grid span { font-family: var(--mono); font-size: 9px; color: var(--text-faint); letter-spacing: 0.08em; }
-.exr-grid i { font-style: normal; color: var(--text); }
-.exr-row { display: flex; gap: 8px; align-items: flex-start; font-size: 11px; padding: 2px 0; }
-.exr-ts { font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); flex: none; }
-.exr-row textarea {
-  flex: 1; background: rgba(7,12,20,0.5); border: 1px solid rgba(148,163,184,0.2); border-radius: 4px;
-  color: var(--text); font: 400 11px var(--ui); padding: 5px 7px; resize: vertical; min-height: 34px;
-}
-.exr-src { font-family: var(--mono); font-size: 8px; color: var(--cyan-dim); flex: none; padding-top: 6px; cursor: help; }
-.exr-obj { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; font-size: 11px; }
-.exr-obj i { font-style: normal; color: var(--text-dim); }
-.exr-met { align-self: flex-start; font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; padding: 1px 6px; border-radius: 3px; border: 1px solid; }
-.exr-met.met { color: #4ade80; border-color: rgba(34,197,94,0.5); }
-.exr-met.partial { color: var(--amber-bright); border-color: rgba(245,158,11,0.5); }
-.exr-met.not-observed { color: var(--text-faint); border-color: rgba(148,163,184,0.3); }
-.exr-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-.exr-table th, .exr-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(148,163,184,0.12); vertical-align: top; }
-.exr-table th { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--text-faint); }
-.exr-table input { width: 100%; background: rgba(7,12,20,0.5); border: 1px solid rgba(148,163,184,0.2); border-radius: 4px; color: var(--text); font-size: 10.5px; padding: 3px 6px; }
-.exr-delta-note { font-style: normal; font-size: 9px; color: var(--amber-bright); }
-.exr-foot { font-family: var(--mono); font-size: 8px; color: var(--text-faint); letter-spacing: 0.04em; border-top: 1px solid rgba(148,163,184,0.15); padding-top: 8px; }
 
 @media print {
   body * { visibility: hidden; }
   .aar-print, .aar-print * { visibility: visible; }
   .aar-print .noprint, .aar-print .noprint * { visibility: hidden; display: none; }
-  .exr-veil { position: static; background: #fff; padding: 0; overflow: visible; }
-  .exr-panel { width: 100%; max-width: none; border: none; color: #111; background: #fff; }
-  .exr-panel, .exr-panel * { color: #111 !important; background: #fff !important; border-color: #999 !important; }
   /* The drill AAR overlay (its own @media print block re-shows .aar-panel)
      can be mounted UNDER the exercise review — the script's final aar event
      opens it silently. When the exercise review is up, it owns the print;
      without this the two panels superimpose in the exported PDF. */
-  body:has(.exr-veil) .aar-backdrop,
-  body:has(.exr-veil) .aar-backdrop * { visibility: hidden !important; display: none !important; }
 }
 
 /* ---- Prompt 13: feed health board -------------------------------------- */
@@ -2936,16 +2655,6 @@ body.panel-dragging * { cursor: grabbing !important; }
   }
   /* Watch Command panes: wc-strip's desktop insets (380/450) go negative
      here, and wc-left/right overlap by ~40px at 768. */
-  .wc-strip {
-    left: 10px;
-    right: 10px;
-  }
-  .wc-left {
-    width: 300px;
-  }
-  .wc-right {
-    width: min(430px, calc(100vw - 320px));
-  }
   .scenarios-menu,
   .incidents-menu,
   .overlays-menu,

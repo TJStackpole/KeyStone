@@ -5,47 +5,27 @@ import { dirname, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
-import { generateAar, getExercise, listExercises, saveExercise, updateExercise, type AarDraft } from './aar.js'
 import { SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
 import { DispatchFeed, type FeedIncident } from './dispatchFeed.js'
 import { env } from './env.js'
 import {
-  activatePlan,
   appendRequestUpdate,
-  deactivatePlan,
-  EOC_LEVEL_LABEL,
-  eocHistory,
-  eocLevel,
-  nycemSnapshot,
   openRequest,
-  plans,
-  pushTicker,
   REQUEST_THRESHOLDS_MS,
   requestMetrics,
   requests,
   requestsWire,
-  sanitizeTriggerRules,
-  saveTriggerRules,
-  setEocLevel,
-  tickerFeed,
   transitionRequest,
-  triggerRules,
-  type EocLevel,
   type InteragencyRequest,
   type RequestPriority,
   type RequestState,
-  type TickerEvent,
-  type TriggerRule,
-} from './nycem.js'
+} from './requests.js'
 import { OpsClock } from './opsClock.js'
 import { POLICY_SCHEMA, setVisibilityPolicy, visibilityPolicy } from './policy.js'
-import { WeatherWatch, type TriggerSuggestion } from './weather.js'
 import { allFeedHealth, clearAllFeedMocks, feedData, pushableFeedData, registerFeed, setFeedMock, startFeeds } from './feeds/registry.js'
 import dotCameras from './feeds/adapters/dotCameras.js'
 import mtaSubway from './feeds/adapters/mtaSubway.js'
 import noaaWater from './feeds/adapters/noaaWater.js'
-import openFema from './feeds/adapters/openFema.js'
-import usgsGages from './feeds/adapters/usgsGages.js'
 import {
   appendTimeline,
   clearIncident,
@@ -143,7 +123,7 @@ setInterval(() => {
 
 // Prompt 13 — feed ingestion layer: register every adapter, then start the
 // staggered polling loops. Each feed degrades alone; keys are all optional.
-for (const adapter of [mtaSubway, dotCameras, noaaWater, usgsGages, openFema]) registerFeed(adapter)
+for (const adapter of [mtaSubway, dotCameras, noaaWater]) registerFeed(adapter)
 startFeeds(broadcast)
 
 wss.on('connection', (socket) => {
@@ -169,23 +149,14 @@ wss.on('connection', (socket) => {
       dispatchFeed: dispatchFeed.all(),
       // Prompt 11 — NYCEM coordination layer state.
       portfolio: portfolio(),
-      ticker: tickerFeed(),
-      eoc: { level: eocLevel(), history: eocHistory() },
-      plans: plans(),
       // Wire slice: active + recent terminal — the full accountability set
       // stays server-side for metrics/AAR (it accretes by design).
       requests: requestsWire(),
       requestThresholds: REQUEST_THRESHOLDS_MS,
-      weather: weather.snapshot(),
       // Prompt 13 — live-data layer: health for every registered feed plus
       // the latest payload of each push-enabled feed (big pull-only lists
       // like the camera inventory are fetched over REST on demand).
       feeds: { health: allFeedHealth(), data: pushableFeedData() },
-      // Rules ride the snapshot too — the client never GETs them, and the
-      // only other writer is the PUT broadcast, so a fresh dashboard would
-      // otherwise show an empty (dead) rules editor while the server is
-      // actively evaluating three enabled rules.
-      rules: triggerRules(),
       // Prompt 12 — cross-agency visibility policy (hot-reloads via PUT).
       visibilityPolicy: visibilityPolicy(),
     }),
@@ -753,10 +724,10 @@ app.get('/api/dispatch/feed', (_req, res) => res.json({ incidents: dispatchFeed.
 // command authority.
 // ---------------------------------------------------------------------------
 
-/** Citywide ticker: push + broadcast one merged feed of major events. */
-function ticker(kind: string, text: string, extra: Partial<TickerEvent> = {}): void {
-  const ev = pushTicker({ kind, text, ...extra })
-  broadcast({ type: 'ticker', event: ev })
+/** The citywide ticker left with the NYCEM coordination bundle — call
+ *  sites keep their shape (the timeline is the surviving record). */
+function ticker(_kind: string, _text: string, _extra: Record<string, unknown> = {}): void {
+  void _kind
 }
 
 /** CIMS Primary Agency for the tactical board's incident types. */
@@ -869,93 +840,9 @@ function broadcastPortfolio(): void {
 
 // ------------------------------ EOC level ------------------------------------
 
-app.post('/api/nycem/eoc', (req, res) => {
-  const { level, changedBy } = req.body as { level?: number; changedBy?: string }
-  if (![1, 2, 3, 4].includes(level as number)) return res.status(400).json({ error: 'level must be 1-4' })
-  if (!changedBy?.trim()) return res.status(400).json({ error: '"changed by" is required' })
-  const change = setEocLevel(level as EocLevel, changedBy.trim())
-  appendTimeline('eoc.level', { level, changedBy })
-  ticker('eoc', `EOC activation ${EOC_LEVEL_LABEL[level as EocLevel]} — changed by ${changedBy}`, {
-    severity: 5 - (level as number),
-  })
-  broadcast({ type: 'eoc', level: eocLevel(), change, history: eocHistory() })
-  res.json({ level: eocLevel(), history: eocHistory() })
-})
-
 // --------------------------- Plan activations --------------------------------
 
-app.post('/api/nycem/plans', (req, res) => {
-  const { plan, by } = req.body as { plan?: string; by?: string }
-  if (!plan?.trim() || !by?.trim()) return res.status(400).json({ error: 'plan and by are required' })
-  const p = activatePlan(plan.trim(), by.trim())
-  appendTimeline('plan.activated', { plan: p.plan, by })
-  ticker('plan', `${p.plan} ACTIVATED by ${by}`, { severity: 3 })
-  broadcast({ type: 'plans', plans: plans() })
-  res.status(201).json(p)
-})
-
-app.post('/api/nycem/plans/:id/deactivate', (req, res) => {
-  const { by } = req.body as { by?: string }
-  if (!by?.trim()) return res.status(400).json({ error: 'by is required' })
-  const p = deactivatePlan(req.params.id, by.trim())
-  if (!p) return res.status(404).json({ error: 'no active plan with that id' })
-  appendTimeline('plan.deactivated', { plan: p.plan, by })
-  ticker('plan', `${p.plan} deactivated by ${by}`)
-  broadcast({ type: 'plans', plans: plans() })
-  res.json(p)
-})
-
 // ---------------------------- Trigger rules (M5) ------------------------------
-
-app.get('/api/nycem/rules', (_req, res) => res.json({ rules: triggerRules() }))
-
-app.put('/api/nycem/rules', (req, res) => {
-  // Full shape validation: one malformed element would persist, silently
-  // kill trigger evaluation on every poll, and crash the rules editor on
-  // every dashboard — reject the whole write instead of dropping entries.
-  const sanitized = sanitizeTriggerRules((req.body as { rules?: unknown }).rules)
-  if (!sanitized) return res.status(400).json({ error: 'rules array required' })
-  if (sanitized.dropped > 0) {
-    return res.status(400).json({
-      error: `${sanitized.dropped} rule(s) malformed — each rule needs id, plan, eventMatch[] and suggestedEocLevel 1-4`,
-    })
-  }
-  saveTriggerRules(sanitized.rules)
-  weather.reevaluate()
-  broadcast({ type: 'rules', rules: triggerRules() })
-  res.json({ rules: triggerRules() })
-})
-
-// ------------------------------ Weather (M5) ----------------------------------
-
-const weather = new WeatherWatch()
-weather.on('weather', (snap) => broadcast({ type: 'weather', ...snap }))
-weather.on('suggestion', (s: TriggerSuggestion) => {
-  appendTimeline('weather.trigger', { plan: s.plan, product: s.product.event, suggestionId: s.id })
-  ticker(
-    'weather',
-    `NWS ${s.product.event}${s.product.simulated ? ' (SIMULATED)' : ''} meets ${s.plan} trigger criteria — suggest EOC Level ${s.suggestedEocLevel}`,
-    { severity: 4, sim: !!s.product.simulated },
-  )
-  broadcast({ type: 'weather', ...weather.snapshot() })
-})
-weather.start()
-
-app.get('/api/nycem/weather', (_req, res) => res.json(weather.snapshot()))
-
-app.post('/api/nycem/suggestions/:id', (req, res) => {
-  const { action, by } = req.body as { action?: 'accepted' | 'snoozed' | 'dismissed'; by?: string }
-  if (!action || !['accepted', 'snoozed', 'dismissed'].includes(action)) {
-    return res.status(400).json({ error: 'action must be accepted | snoozed | dismissed' })
-  }
-  if (!by?.trim()) return res.status(400).json({ error: 'by is required' })
-  const s = weather.decide(req.params.id, action, by.trim())
-  if (!s) return res.status(404).json({ error: 'no pending suggestion with that id' })
-  // ALL THREE decisions log — accept, snooze, dismiss.
-  appendTimeline('weather.decision', { suggestionId: s.id, plan: s.plan, action, by })
-  ticker('weather', `${s.plan} trigger ${action} by ${by}`)
-  res.json(s)
-})
 
 // ------------------------ Interagency requests (M2) ---------------------------
 
@@ -1035,65 +922,6 @@ app.get('/api/requests/metrics', (req, res) => {
   res.json({ metrics: requestMetrics(from, to) })
 })
 
-// ----------------------------- Exercises (M8) ---------------------------------
-
-app.post('/api/exercises/finish', (_req, res) => {
-  if (!scenario.exercise || !scenario.exerciseStartedAt) {
-    return res.status(400).json({ error: 'no exercise session running (load a scenario with exercise: true)' })
-  }
-  const snap = nycemSnapshot()
-  const session = generateAar({
-    scenario: String(scenario.status().name ?? 'exercise'),
-    startedAt: scenario.exerciseStartedAt,
-    endedAt: new Date().toISOString(),
-    timeline: getState().timeline,
-    ticker: snap.ticker,
-    requests: snap.requests,
-    eocChanges: snap.eoc.history,
-    plans: snap.plans,
-    suggestions: weather.snapshot().suggestions,
-  })
-  saveExercise(session)
-  appendTimeline('exercise.finished', { id: session.id, scenario: session.scenario })
-  ticker('plan', `Exercise ended — AAR draft ${session.id} generated (${session.aar.metrics.length} metrics)`)
-  // The recording session is over: clear the flag so ENDEX can't mint
-  // overlapping sessions while the drill winds down. Playback continues.
-  scenario.setExercise(false)
-  broadcast({ type: 'scenario.status', scenario: scenario.status() })
-  res.status(201).json(session)
-})
-
-app.get('/api/exercises', (_req, res) => res.json({ exercises: listExercises() }))
-
-app.get('/api/exercises/:id', (req, res) => {
-  const s = getExercise(req.params.id)
-  if (!s) return res.status(404).json({ error: 'no such exercise' })
-  res.json(s)
-})
-
-app.put('/api/exercises/:id', (req, res) => {
-  const { aar } = req.body as { aar?: AarDraft }
-  // Structural check: a truthy non-AAR body ({"aar":42}) would persist to
-  // the session file and crash every future same-scenario review (the panel
-  // reads prior.metrics for run-over-run deltas).
-  if (
-    !aar ||
-    typeof aar !== 'object' ||
-    typeof aar.overview !== 'object' ||
-    !aar.overview ||
-    !Array.isArray(aar.keyEvents) ||
-    !Array.isArray(aar.objectives) ||
-    !Array.isArray(aar.strengths) ||
-    !Array.isArray(aar.improvements) ||
-    !Array.isArray(aar.improvementPlan) ||
-    !Array.isArray(aar.metrics)
-  ) {
-    return res.status(400).json({ error: 'aar must be a full AAR draft object' })
-  }
-  if (!updateExercise(req.params.id, aar)) return res.status(404).json({ error: 'no such exercise' })
-  res.json({ ok: true })
-})
-
 // ------------------- Visibility policy (Prompt 12, admin) -------------------
 
 app.get('/api/policy', (_req, res) => res.json({ policy: visibilityPolicy(), schema: POLICY_SCHEMA }))
@@ -1108,19 +936,6 @@ app.put('/api/policy', (req, res) => {
   broadcast({ type: 'policy', policy: next })
   res.json({ policy: next })
 })
-
-app.get('/api/nycem/state', (_req, res) =>
-  res.json({
-    eoc: { level: eocLevel(), history: eocHistory() },
-    plans: plans(),
-    portfolio: portfolio(),
-    ticker: tickerFeed(),
-    requests: requests(),
-    thresholds: REQUEST_THRESHOLDS_MS,
-    rules: triggerRules(),
-    weather: weather.snapshot(),
-  }),
-)
 
 const simComms = new SimComms()
 simComms.on('line', (channel: CommsChannel, line: TranscriptLine) => {
@@ -1419,18 +1234,6 @@ const scenario = new ScenarioEngine({
     setFeedMock(feedId, payload)
   },
   clearFeedMocks: () => clearAllFeedMocks(),
-  injectNws: (nws) => {
-    weather.injectMockProduct({
-      id: nws.id,
-      event: nws.event,
-      headline: nws.headline,
-      severity: nws.severity,
-      onset: new Date().toISOString(),
-      ends: nws.endsInMin ? new Date(Date.now() + nws.endsInMin * 60_000).toISOString() : null,
-      areaDesc: nws.areaDesc,
-      polygons: nws.polygons ?? [],
-    })
-  },
 })
 
 // Safe now: the feed's synchronous first update reads scenario via portfolio().
@@ -1447,7 +1250,6 @@ app.post('/api/scenario/load', async (req, res) => {
     // block this run's scripted trigger from re-firing — but a failed load
     // (typo'd name) keeps the OLD scenario running, and clearing first
     // would strip its live products and pending banner from every station.
-    weather.clearSimulated()
     // Exercise mode (M8): live human interactions record alongside the
     // script; /api/exercises/finish builds the HSEEP AAR from the window.
     scenario.setExercise(!!exercise)
@@ -1501,7 +1303,6 @@ app.post('/api/scenario/seek', (req, res) => {
 
 app.post('/api/scenario/stop', (_req, res) => {
   scenario.stop()
-  weather.clearSimulated() // the run's injected products end with it
   res.json(scenario.status())
 })
 

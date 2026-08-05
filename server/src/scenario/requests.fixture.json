@@ -1,0 +1,324 @@
+{
+ "name": "Engine request-lifecycle fixture (test only)",
+ "drill": true,
+ "incident": {
+  "address": "PORT AUTHORITY BUS TERMINAL \u2014 625 8TH AVE (DRILL)",
+  "lat": 40.756888,
+  "lon": -73.991493,
+  "bin": "1083268",
+  "bbl": "1010320029",
+  "type": "Structural Fire"
+ },
+ "events": [
+  {
+   "t": 30,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-TOW",
+    "incidentId": "primary",
+    "requestingAgency": "FDNY",
+    "assignedAgency": "NYPD",
+    "description": "Heavy tow for articulated bus blocking 8th Ave apparatus access",
+    "priority": "urgent",
+    "createdBy": "FDNY Ops (drill)"
+   }
+  },
+  {
+   "t": 45,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-BEDS",
+    "incidentId": "primary",
+    "requestingAgency": "OEM",
+    "assignedAgency": "EMS",
+    "description": "Poll Level 1 trauma centers for burn + trauma bed availability (MCI)",
+    "priority": "urgent",
+    "createdBy": "OEM Watch Command (drill)"
+   }
+  },
+  {
+   "t": 60,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-CONED",
+    "incidentId": "primary",
+    "requestingAgency": "FDNY",
+    "assignedAgency": "ConEd",
+    "description": "Confirm gas + electric shutoff, 8th Ave & W 40th quadrant",
+    "priority": "immediate",
+    "createdBy": "FDNY Ops (drill)"
+   }
+  },
+  {
+   "t": 90,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-MTA",
+    "incidentId": "primary",
+    "requestingAgency": "OEM",
+    "assignedAgency": "MTA",
+    "description": "Service change: bypass 42 St\u2013Port Authority on A/C/E",
+    "priority": "routine",
+    "createdBy": "OEM Watch Command (drill)"
+   }
+  },
+  {
+   "t": 95,
+   "kind": "request_transition",
+   "refId": "REQ-TOW",
+   "state": "acknowledged",
+   "by": "NYPD Ops (drill)"
+  },
+  {
+   "t": 120,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-DOT",
+    "incidentId": "primary",
+    "requestingAgency": "OEM",
+    "assignedAgency": "DOT",
+    "description": "Street closure: 8th Ave 39th\u201342nd, signage + barriers",
+    "priority": "urgent",
+    "createdBy": "OEM Watch Command (drill)"
+   }
+  },
+  {
+   "t": 130,
+   "kind": "request_transition",
+   "refId": "REQ-BEDS",
+   "state": "acknowledged",
+   "by": "EMS Citywide (drill)"
+  },
+  {
+   "t": 150,
+   "kind": "request_transition",
+   "refId": "REQ-TOW",
+   "state": "assigned",
+   "by": "NYPD Ops (drill)"
+  },
+  {
+   "t": 150,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-DOB",
+    "incidentId": "primary",
+    "requestingAgency": "FDNY",
+    "assignedAgency": "DOB",
+    "description": "Structural engineer to assess terminal mezzanine after fire extension",
+    "priority": "urgent",
+    "createdBy": "FDNY Command (drill)"
+   }
+  },
+  {
+   "t": 181,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "acknowledged",
+   "by": "ConEd ERC (drill)"
+  },
+  {
+   "t": 200,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-DEP",
+    "incidentId": "FLOOD-QNS-1",
+    "requestingAgency": "OEM",
+    "assignedAgency": "DEP",
+    "description": "Sewer surcharge assessment, Queens Blvd 40s blocks",
+    "priority": "urgent",
+    "createdBy": "OEM Watch Command (drill)"
+   }
+  },
+  {
+   "t": 210,
+   "kind": "request_transition",
+   "refId": "REQ-DOT",
+   "state": "acknowledged",
+   "by": "DOT OCMC (drill)"
+  },
+  {
+   "t": 240,
+   "kind": "request",
+   "request": {
+    "refId": "REQ-PAPD",
+    "incidentId": "primary",
+    "requestingAgency": "PAPD",
+    "assignedAgency": "FDNY",
+    "description": "Ventilation assist: terminal concourse smoke clearance plan",
+    "priority": "routine",
+    "createdBy": "PAPD Desk (drill)"
+   }
+  },
+  {
+   "t": 260,
+   "kind": "request_transition",
+   "refId": "REQ-BEDS",
+   "state": "assigned",
+   "by": "EMS Citywide (drill)"
+  },
+  {
+   "t": 300,
+   "kind": "request_transition",
+   "refId": "REQ-TOW",
+   "state": "in_progress",
+   "by": "NYPD Tow 7 (drill)"
+  },
+  {
+   "t": 310,
+   "kind": "request_transition",
+   "refId": "REQ-MTA",
+   "state": "acknowledged",
+   "by": "MTA RCC (drill)"
+  },
+  {
+   "t": 360,
+   "kind": "request_transition",
+   "refId": "REQ-DOT",
+   "state": "assigned",
+   "by": "DOT OCMC (drill)"
+  },
+  {
+   "t": 378,
+   "kind": "alarm_level",
+   "level": "2nd"
+  },
+  {
+   "t": 380,
+   "kind": "request_transition",
+   "refId": "REQ-PAPD",
+   "state": "acknowledged",
+   "by": "FDNY Command (drill)"
+  },
+  {
+   "t": 420,
+   "kind": "request_transition",
+   "refId": "REQ-BEDS",
+   "state": "in_progress",
+   "by": "EMS Citywide (drill)"
+  },
+  {
+   "t": 420,
+   "kind": "request_transition",
+   "refId": "REQ-DEP",
+   "state": "acknowledged",
+   "by": "DEP BWSO (drill)"
+  },
+  {
+   "t": 431,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "assigned",
+   "by": "ConEd ERC (drill)"
+  },
+  {
+   "t": 433,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "in_progress",
+   "by": "ConEd Crew 22 (drill)"
+  },
+  {
+   "t": 500,
+   "kind": "request_transition",
+   "refId": "REQ-MTA",
+   "state": "assigned",
+   "by": "MTA RCC (drill)"
+  },
+  {
+   "t": 520,
+   "kind": "request_transition",
+   "refId": "REQ-DOT",
+   "state": "in_progress",
+   "by": "DOT Crew 12 (drill)"
+  },
+  {
+   "t": 520,
+   "kind": "request_transition",
+   "refId": "REQ-PAPD",
+   "state": "assigned",
+   "by": "FDNY Command (drill)"
+  },
+  {
+   "t": 560,
+   "kind": "request_transition",
+   "refId": "REQ-DEP",
+   "state": "assigned",
+   "by": "DEP BWSO (drill)"
+  },
+  {
+   "t": 620,
+   "kind": "request_transition",
+   "refId": "REQ-MTA",
+   "state": "in_progress",
+   "by": "MTA RCC (drill)"
+  },
+  {
+   "t": 626,
+   "kind": "alarm_level",
+   "level": "3rd"
+  },
+  {
+   "t": 640,
+   "kind": "request_transition",
+   "refId": "REQ-PAPD",
+   "state": "in_progress",
+   "by": "L-21 (drill)"
+  },
+  {
+   "t": 700,
+   "kind": "request_transition",
+   "refId": "REQ-PAPD",
+   "state": "complete",
+   "by": "L-21 (drill)"
+  },
+  {
+   "t": 760,
+   "kind": "request_transition",
+   "refId": "REQ-DEP",
+   "state": "in_progress",
+   "by": "DEP Field 3 (drill)"
+  },
+  {
+   "t": 800,
+   "kind": "request_transition",
+   "refId": "REQ-MTA",
+   "state": "complete",
+   "by": "MTA RCC (drill)"
+  },
+  {
+   "t": 880,
+   "kind": "request_transition",
+   "refId": "REQ-CONED",
+   "state": "complete",
+   "by": "ConEd Crew 22 (drill)"
+  },
+  {
+   "t": 900,
+   "kind": "request_transition",
+   "refId": "REQ-TOW",
+   "state": "complete",
+   "by": "NYPD Tow 7 (drill)"
+  },
+  {
+   "t": 1000,
+   "kind": "request_transition",
+   "refId": "REQ-DOT",
+   "state": "complete",
+   "by": "DOT Crew 12 (drill)"
+  },
+  {
+   "t": 1100,
+   "kind": "request_transition",
+   "refId": "REQ-BEDS",
+   "state": "complete",
+   "by": "EMS Citywide (drill)"
+  },
+  {
+   "t": 1300,
+   "kind": "request_transition",
+   "refId": "REQ-DEP",
+   "state": "complete",
+   "by": "DEP Field 3 (drill)"
+  }
+ ]
+}

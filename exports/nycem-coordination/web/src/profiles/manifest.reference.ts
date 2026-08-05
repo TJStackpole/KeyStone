@@ -19,6 +19,7 @@ export type ProfileId = 'fdny' | 'nycem'
 
 export const PROFILES: { id: ProfileId; label: string; sub: string }[] = [
   { id: 'fdny', label: 'KeyStone FDNY', sub: 'Incident Command · FDNY' },
+  { id: 'nycem', label: 'KeyStone NYCEM', sub: 'Citywide Coordination · NYCEM · CIMS' },
 ]
 
 export const PROFILE_LABEL: Record<ProfileId, string> = { fdny: 'KeyStone FDNY', nycem: 'KeyStone NYCEM' }
@@ -62,6 +63,8 @@ export const CAPABILITIES: Record<string, Capability> = {
   // Stream-gage hydrology is coordination/planning data (Coastal Storm Plan
   // triggers). The fireground's water picture is the harbor chip, which
   // self-gates to water-related incident types.
+  'feeds.usgs-gages': { profiles: ['nycem'] },
+  'feeds.openfema': { profiles: ['nycem'] },
   'comms.transcripts': { profiles: 'both', visibilityScope: 'all_agencies', sensitivity: 'tactical_audio' },
   'chat.tak': { profiles: 'both' },
   'video.panels': { profiles: 'both', sensitivity: 'tactical_audio' },
@@ -81,6 +84,7 @@ export const CAPABILITIES: Record<string, Capability> = {
   // a chief/captain/LT monitoring a fireground must never be one mis-tap
   // from changing what every agency can see. Lives on the NYCEM/facilitator
   // side until real identity/roles exist.
+  'admin.policy-editor': { profiles: ['nycem'] },
 
   // ---- KEYSTONE FDNY (tactical command posture) ---------------------------
   'doctrine.manuals': {
@@ -105,6 +109,14 @@ export const CAPABILITIES: Record<string, Capability> = {
   'rehab.tracking': { profiles: ['fdny'] },
   'collapse.checklist': { profiles: ['fdny'] },
 
+  // ---- KEYSTONE NYCEM (citywide coordination posture) ---------------------
+  'watchcommand.portfolio': { profiles: ['nycem'], visibilityScope: 'all_agencies' },
+  'eoc.level-chip': { profiles: ['nycem'] },
+  'ticker.citywide': { profiles: ['nycem'] },
+  'requests.board-full': { profiles: ['nycem'], visibilityScope: 'all_agencies' }, // kanban + queues + metrics + CSV
+  'weather.trigger-rules': { profiles: ['nycem'] },
+  'aar.hseep-exercise': { profiles: ['nycem'] },
+  'cims.role-labels': { profiles: ['nycem'] },
 }
 
 export function hasCapability(profile: ProfileId, id: string): boolean {

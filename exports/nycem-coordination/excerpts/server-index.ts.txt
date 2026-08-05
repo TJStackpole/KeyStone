@@ -1,0 +1,262 @@
+import {
+  activatePlan,
+  appendRequestUpdate,
+  deactivatePlan,
+  EOC_LEVEL_LABEL,
+  eocHistory,
+  eocLevel,
+  nycemSnapshot,
+  openRequest,
+  plans,
+  pushTicker,
+  REQUEST_THRESHOLDS_MS,
+  requestMetrics,
+  requests,
+  requestsWire,
+  sanitizeTriggerRules,
+  saveTriggerRules,
+  setEocLevel,
+  tickerFeed,
+  transitionRequest,
+  triggerRules,
+  type EocLevel,
+  type InteragencyRequest,
+  type RequestPriority,
+  type RequestState,
+  type TickerEvent,
+  type TriggerRule,
+} from './nycem.js'
+
+// ————— removed block —————
+import { WeatherWatch, type TriggerSuggestion } from './weather.js'
+
+// ————— removed block —————
+import openFema from './feeds/adapters/openFema.js'
+
+// ————— removed block —————
+import usgsGages from './feeds/adapters/usgsGages.js'
+
+// ————— removed block —————
+/** Citywide ticker: push + broadcast one merged feed of major events. */
+function ticker(kind: string, text: string, extra: Partial<TickerEvent> = {}): void {
+  const ev = pushTicker({ kind, text, ...extra })
+  broadcast({ type: 'ticker', event: ev })
+}
+
+// ————— removed block —————
+app.post('/api/nycem/eoc', (req, res) => {
+  const { level, changedBy } = req.body as { level?: number; changedBy?: string }
+  if (![1, 2, 3, 4].includes(level as number)) return res.status(400).json({ error: 'level must be 1-4' })
+  if (!changedBy?.trim()) return res.status(400).json({ error: '"changed by" is required' })
+  const change = setEocLevel(level as EocLevel, changedBy.trim())
+  appendTimeline('eoc.level', { level, changedBy })
+  ticker('eoc', `EOC activation ${EOC_LEVEL_LABEL[level as EocLevel]} — changed by ${changedBy}`, {
+    severity: 5 - (level as number),
+  })
+  broadcast({ type: 'eoc', level: eocLevel(), change, history: eocHistory() })
+  res.json({ level: eocLevel(), history: eocHistory() })
+})
+
+
+// ————— removed block —————
+app.post('/api/nycem/plans', (req, res) => {
+  const { plan, by } = req.body as { plan?: string; by?: string }
+  if (!plan?.trim() || !by?.trim()) return res.status(400).json({ error: 'plan and by are required' })
+  const p = activatePlan(plan.trim(), by.trim())
+  appendTimeline('plan.activated', { plan: p.plan, by })
+  ticker('plan', `${p.plan} ACTIVATED by ${by}`, { severity: 3 })
+  broadcast({ type: 'plans', plans: plans() })
+  res.status(201).json(p)
+})
+
+
+// ————— removed block —————
+app.post('/api/nycem/plans/:id/deactivate', (req, res) => {
+  const { by } = req.body as { by?: string }
+  if (!by?.trim()) return res.status(400).json({ error: 'by is required' })
+  const p = deactivatePlan(req.params.id, by.trim())
+  if (!p) return res.status(404).json({ error: 'no active plan with that id' })
+  appendTimeline('plan.deactivated', { plan: p.plan, by })
+  ticker('plan', `${p.plan} deactivated by ${by}`)
+  broadcast({ type: 'plans', plans: plans() })
+  res.json(p)
+})
+
+
+// ————— removed block —————
+app.get('/api/nycem/rules', (_req, res) => res.json({ rules: triggerRules() }))
+
+
+// ————— removed block —————
+app.put('/api/nycem/rules', (req, res) => {
+  // Full shape validation: one malformed element would persist, silently
+  // kill trigger evaluation on every poll, and crash the rules editor on
+  // every dashboard — reject the whole write instead of dropping entries.
+  const sanitized = sanitizeTriggerRules((req.body as { rules?: unknown }).rules)
+  if (!sanitized) return res.status(400).json({ error: 'rules array required' })
+  if (sanitized.dropped > 0) {
+    return res.status(400).json({
+      error: `${sanitized.dropped} rule(s) malformed — each rule needs id, plan, eventMatch[] and suggestedEocLevel 1-4`,
+    })
+  }
+  saveTriggerRules(sanitized.rules)
+  weather.reevaluate()
+  broadcast({ type: 'rules', rules: triggerRules() })
+  res.json({ rules: triggerRules() })
+})
+
+
+// ————— removed block —————
+app.get('/api/nycem/weather', (_req, res) => res.json(weather.snapshot()))
+
+
+// ————— removed block —————
+app.post('/api/nycem/suggestions/:id', (req, res) => {
+  const { action, by } = req.body as { action?: 'accepted' | 'snoozed' | 'dismissed'; by?: string }
+  if (!action || !['accepted', 'snoozed', 'dismissed'].includes(action)) {
+    return res.status(400).json({ error: 'action must be accepted | snoozed | dismissed' })
+  }
+  if (!by?.trim()) return res.status(400).json({ error: 'by is required' })
+  const s = weather.decide(req.params.id, action, by.trim())
+  if (!s) return res.status(404).json({ error: 'no pending suggestion with that id' })
+  // ALL THREE decisions log — accept, snooze, dismiss.
+  appendTimeline('weather.decision', { suggestionId: s.id, plan: s.plan, action, by })
+  ticker('weather', `${s.plan} trigger ${action} by ${by}`)
+  res.json(s)
+})
+
+
+// ————— removed block —————
+// ------------------------------ Weather (M5) ----------------------------------
+
+const weather = new WeatherWatch()
+weather.on('weather', (snap) => broadcast({ type: 'weather', ...snap }))
+weather.on('suggestion', (s: TriggerSuggestion) => {
+  appendTimeline('weather.trigger', { plan: s.plan, product: s.product.event, suggestionId: s.id })
+  ticker(
+    'weather',
+    `NWS ${s.product.event}${s.product.simulated ? ' (SIMULATED)' : ''} meets ${s.plan} trigger criteria — suggest EOC Level ${s.suggestedEocLevel}`,
+    { severity: 4, sim: !!s.product.simulated },
+  )
+  broadcast({ type: 'weather', ...weather.snapshot() })
+})
+weather.start()
+
+
+// ————— removed block —————
+    weather.clearSimulated()
+
+// ————— removed block —————
+  injectNws: (nws) => {
+    weather.injectMockProduct({
+      id: nws.id,
+      event: nws.event,
+      headline: nws.headline,
+      severity: nws.severity,
+      onset: new Date().toISOString(),
+      ends: nws.endsInMin ? new Date(Date.now() + nws.endsInMin * 60_000).toISOString() : null,
+      areaDesc: nws.areaDesc,
+      polygons: nws.polygons ?? [],
+    })
+  },
+
+// ————— removed block —————
+      ticker: tickerFeed(),
+
+// ————— removed block —————
+      eoc: { level: eocLevel(), history: eocHistory() },
+
+// ————— removed block —————
+      plans: plans(),
+
+// ————— removed block —————
+      weather: weather.snapshot(),
+
+// ————— removed block —————
+      // Rules ride the snapshot too — the client never GETs them, and the
+      // only other writer is the PUT broadcast, so a fresh dashboard would
+      // otherwise show an empty (dead) rules editor while the server is
+      // actively evaluating three enabled rules.
+      rules: triggerRules(),
+
+// ————— removed block —————
+// ----------------------------- Exercises (M8) ---------------------------------
+
+app.post('/api/exercises/finish', (_req, res) => {
+  if (!scenario.exercise || !scenario.exerciseStartedAt) {
+    return res.status(400).json({ error: 'no exercise session running (load a scenario with exercise: true)' })
+  }
+  const snap = nycemSnapshot()
+  const session = generateAar({
+    scenario: String(scenario.status().name ?? 'exercise'),
+    startedAt: scenario.exerciseStartedAt,
+    endedAt: new Date().toISOString(),
+    timeline: getState().timeline,
+    ticker: snap.ticker,
+    requests: snap.requests,
+    eocChanges: snap.eoc.history,
+    plans: snap.plans,
+    suggestions: weather.snapshot().suggestions,
+  })
+  saveExercise(session)
+  appendTimeline('exercise.finished', { id: session.id, scenario: session.scenario })
+  ticker('plan', `Exercise ended — AAR draft ${session.id} generated (${session.aar.metrics.length} metrics)`)
+  // The recording session is over: clear the flag so ENDEX can't mint
+  // overlapping sessions while the drill winds down. Playback continues.
+  scenario.setExercise(false)
+  broadcast({ type: 'scenario.status', scenario: scenario.status() })
+  res.status(201).json(session)
+})
+
+
+// ————— removed block —————
+app.get('/api/exercises', (_req, res) => res.json({ exercises: listExercises() }))
+
+
+// ————— removed block —————
+app.get('/api/exercises/:id', (req, res) => {
+  const s = getExercise(req.params.id)
+  if (!s) return res.status(404).json({ error: 'no such exercise' })
+  res.json(s)
+})
+
+
+// ————— removed block —————
+app.put('/api/exercises/:id', (req, res) => {
+  const { aar } = req.body as { aar?: AarDraft }
+  // Structural check: a truthy non-AAR body ({"aar":42}) would persist to
+  // the session file and crash every future same-scenario review (the panel
+  // reads prior.metrics for run-over-run deltas).
+  if (
+    !aar ||
+    typeof aar !== 'object' ||
+    typeof aar.overview !== 'object' ||
+    !aar.overview ||
+    !Array.isArray(aar.keyEvents) ||
+    !Array.isArray(aar.objectives) ||
+    !Array.isArray(aar.strengths) ||
+    !Array.isArray(aar.improvements) ||
+    !Array.isArray(aar.improvementPlan) ||
+    !Array.isArray(aar.metrics)
+  ) {
+    return res.status(400).json({ error: 'aar must be a full AAR draft object' })
+  }
+  if (!updateExercise(req.params.id, aar)) return res.status(404).json({ error: 'no such exercise' })
+  res.json({ ok: true })
+})
+
+
+// ————— removed block —————
+app.get('/api/nycem/state', (_req, res) =>
+  res.json({
+    eoc: { level: eocLevel(), history: eocHistory() },
+    plans: plans(),
+    portfolio: portfolio(),
+    ticker: tickerFeed(),
+    requests: requests(),
+    thresholds: REQUEST_THRESHOLDS_MS,
+    rules: triggerRules(),
+    weather: weather.snapshot(),
+  }),
+)
+  weather.clearSimulated() // the run's injected products end with it

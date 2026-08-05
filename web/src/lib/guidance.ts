@@ -33,7 +33,7 @@ export function computeNextStep(s: AppState): NextStepId | null {
     )
     return overdue ? 'requests' : null
   }
-  if (s.replay.active || s.watchCommand) return null
+  if (s.replay.active) return null
   if (!s.incident) return s.inspected ? 'active-incident' : 'search'
   const hasPerimeter = Object.values(s.shapes).some((sh) => sh.kind === 'zone' && sh.zone === 'perimeter')
   if (s.mapMode === '2d') {

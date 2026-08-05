@@ -1,0 +1,119 @@
+export interface PortfolioIncident {
+  id: string
+  address: string
+  borough: string
+  lat: number
+  lon: number
+  type: string
+  severity: number
+  /** CIMS terminology, exactly: Primary / Supporting Agency. */
+  primaryAgency: string
+  supportingAgencies: string[]
+  /** "Tracked in KeyStone" — never authoritative citywide availability. */
+  unitsByAgency: Record<string, number>
+  startedAt: string
+  source: 'board' | 'scenario' | 'feed'
+  alarmLevel?: string
+  openRequests: number
+  focused: boolean
+}
+
+export interface TickerEvent {
+  id: string
+  ts: string
+  kind: string
+  text: string
+  incidentId?: string
+  agency?: string
+  borough?: string
+  severity?: number
+  /** Simulated origin (dispatch feed, drill script) — row shows a SIM chip. */
+  sim?: boolean
+}
+
+export interface EocChange {
+  level: EocLevel
+  changedBy: string
+  changedAt: string
+}
+
+export interface PlanActivation {
+  id: string
+  plan: string
+  activatedAt: string
+  activatedBy: string
+  deactivatedAt?: string
+  deactivatedBy?: string
+}
+
+export interface TriggerRule {
+  id: string
+  plan: string
+  enabled: boolean
+  eventMatch: string[]
+  suggestedEocLevel: EocLevel
+  suggestedActions: string[]
+  validateSme: boolean
+}
+
+export interface TriggerSuggestion {
+  id: string
+  ruleId: string
+  plan: string
+  suggestedEocLevel: EocLevel
+  suggestedActions: string[]
+  firedAt: string
+  product: NwsAlert
+  state: 'pending' | 'accepted' | 'snoozed' | 'dismissed'
+  decidedBy?: string
+  decidedAt?: string
+  validateSme: boolean
+}
+
+export interface WeatherObsNycem {
+  stationId: string
+  observedAt: string | null
+  tempC: number | null
+  windKt: number | null
+  windDirDeg: number | null
+  precipMmHr: number | null
+}
+
+export interface ExerciseSession {
+  id: string
+  scenario: string
+  startedAt: string
+  endedAt: string
+  aar: AarDraft
+}
+
+export interface NwsAlert {
+  id: string
+  event: string
+  headline: string
+  severity: string
+  onset: string | null
+  ends: string | null
+  areaDesc: string
+  polygons: [number, number][][]
+  simulated?: boolean
+}
+
+export type EocLevel = 1 | 2 | 3 | 4
+
+  { id: 'nycem', label: 'KeyStone NYCEM', sub: 'Citywide Coordination · NYCEM · CIMS' },
+
+  // ---- KEYSTONE NYCEM (citywide coordination posture) ---------------------
+  'watchcommand.portfolio': { profiles: ['nycem'], visibilityScope: 'all_agencies' },
+  'eoc.level-chip': { profiles: ['nycem'] },
+  'ticker.citywide': { profiles: ['nycem'] },
+  'requests.board-full': { profiles: ['nycem'], visibilityScope: 'all_agencies' }, // kanban + queues + metrics + CSV
+  'weather.trigger-rules': { profiles: ['nycem'] },
+  'aar.hseep-exercise': { profiles: ['nycem'] },
+  'cims.role-labels': { profiles: ['nycem'] },
+
+  'feeds.usgs-gages': { profiles: ['nycem'] },
+
+  'feeds.openfema': { profiles: ['nycem'] },
+
+  'admin.policy-editor': { profiles: ['nycem'] },

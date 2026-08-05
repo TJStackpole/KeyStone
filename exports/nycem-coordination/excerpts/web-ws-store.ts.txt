@@ -1,0 +1,85 @@
+  portfolio?: PortfolioIncident[]
+  ticker?: TickerEvent[]
+  eoc?: { level: EocLevel; history: EocChange[] }
+  plans?: PlanActivation[]
+  weather?: { alerts: NwsAlert[]; obs: WeatherObsNycem | null; suggestions: TriggerSuggestion[] }
+  rules?: TriggerRule[]
+interface PortfolioMsg {
+  type: 'portfolio'
+  incidents: PortfolioIncident[]
+}
+interface TickerMsg {
+  type: 'ticker'
+  event: TickerEvent
+}
+interface EocMsg {
+  type: 'eoc'
+  level: EocLevel
+  history: EocChange[]
+}
+interface PlansMsg {
+  type: 'plans'
+  plans: PlanActivation[]
+}
+interface WeatherMsg {
+  type: 'weather'
+  alerts: NwsAlert[]
+  obs: WeatherObsNycem | null
+  suggestions: TriggerSuggestion[]
+}
+interface RulesMsg {
+  type: 'rules'
+  rules: TriggerRule[]
+}
+  // Prompt 11 coordination layer sits ABOVE incidents — replay never gates it.
+  'portfolio',
+  'ticker',
+  'eoc',
+  'plans',
+  'weather',
+  'rules',
+        // Prompt 11 coordination-layer state rides the snapshot too.
+        portfolio: msg.portfolio ?? s.portfolio,
+        tickerFeed: msg.ticker ?? s.tickerFeed,
+        eoc: msg.eoc ?? s.eoc,
+        planActivations: msg.plans ?? s.planActivations,
+        // The rules editor is snapshot-fed: nothing else delivers rules to a
+        // fresh client (the 'rules' broadcast only fires on another PUT).
+        triggerRules: msg.rules ?? s.triggerRules,
+        ...(msg.weather
+          ? {
+              weatherAlerts: msg.weather.alerts,
+              weatherObs: msg.weather.obs,
+              triggerSuggestions: msg.weather.suggestions,
+            }
+          : {}),
+    case 'portfolio':
+      setAppState({ portfolio: msg.incidents })
+      break
+    case 'eoc':
+      setAppState({ eoc: { level: msg.level, history: msg.history } })
+      break
+    case 'plans':
+      setAppState({ planActivations: msg.plans })
+      break
+    case 'ticker':
+      // Dedupe by id: a reconnect snapshot plus an in-flight broadcast can
+      // deliver the same event twice (same guard the transcript stream has).
+      setAppState((s) =>
+        s.tickerFeed.some((e) => e.id === msg.event.id)
+          ? {} // empty patch engages the store's no-op short-circuit
+          : { tickerFeed: [...s.tickerFeed, msg.event].slice(-300) },
+      )
+      break
+    case 'weather':
+      setAppState({ weatherAlerts: msg.alerts, weatherObs: msg.obs, triggerSuggestions: msg.suggestions })
+      break
+    case 'rules':
+      setAppState({ triggerRules: msg.rules })
+      break
+  weatherAlerts: NwsAlert[]
+  weatherObs: WeatherObsNycem | null
+  triggerRules: TriggerRule[]
+  weatherObs: null,
+  triggerRules: [],
+  weatherAlerts: [],

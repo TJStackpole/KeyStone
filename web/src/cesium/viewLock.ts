@@ -390,7 +390,6 @@ function disengage(): void {
       s.incident &&
       s.viewLock === 'off' &&
       !s.isolateMode &&
-      !s.watchCommand &&
       !s.groundViewActive &&
       !s.replay.active
     ) {
@@ -417,7 +416,6 @@ export function attachViewLockController(): () => void {
       hasCapability(s.profile, 'tactical.view-lock') &&
       s.isolateMode &&
       !s.groundViewActive &&
-      !s.watchCommand &&
       !s.replay.active
     if (should !== lastShould) {
       lastShould = should
@@ -435,7 +433,6 @@ export function attachViewLockController(): () => void {
             hasCapability(n.profile, 'tactical.view-lock') &&
             n.isolateMode &&
             !n.groundViewActive &&
-            !n.watchCommand &&
             !n.replay.active
           if (!stillShould) {
             lastShould = false

@@ -11,7 +11,6 @@ import { HazardLayer } from './hazards'
 import { IntelMarkerLayer } from './intelMarkers'
 import { LotLayer } from './lots'
 import { PoiLayer } from './poi'
-import { PortfolioLayer } from './portfolioLayer'
 import { RoadLayer } from './roads'
 import { ShapeLayer } from './shapes'
 import { StreetLabelLayer } from './streets'
@@ -37,7 +36,6 @@ let trafficLayer: TrafficLayer | null = null
 let tacticalLayer: TacticalModelLayer | null = null
 let lotLayer: LotLayer | null = null
 let poiLayer: PoiLayer | null = null
-let portfolioLayer: PortfolioLayer | null = null
 let roadLayer: RoadLayer | null = null
 let twinLayer: import('./twin').TwinLayer | null = null
 let hazardLayer: HazardLayer | null = null
@@ -62,7 +60,6 @@ export function registerScene(h: SceneHandle): void {
   tacticalLayer = new TacticalModelLayer(h.viewer)
   lotLayer = new LotLayer(h.viewer)
   poiLayer = new PoiLayer(h.viewer)
-  portfolioLayer = new PortfolioLayer(h.viewer)
   roadLayer = new RoadLayer(h.viewer)
   void import('./twin').then((m) => {
     twinLayer = new m.TwinLayer(h.viewer)
@@ -96,7 +93,6 @@ export function unregisterScene(): void {
   tacticalLayer = null
   lotLayer = null
   poiLayer = null
-  portfolioLayer = null
   roadLayer = null
   twinLayer = null
   hazardLayer = null
@@ -158,9 +154,6 @@ export function getPoiLayer(): PoiLayer | null {
   return poiLayer
 }
 
-export function getPortfolioLayer(): PortfolioLayer | null {
-  return portfolioLayer
-}
 
 export function getTwinLayer(): import('./twin').TwinLayer | null {
   return twinLayer

@@ -24,7 +24,6 @@ import {
   getFocusLayer,
   getFootprintLayer,
   getIntelLayer,
-  getPortfolioLayer,
   getExposureLayer,
   getScene,
   getHazardLayer,
@@ -111,9 +110,6 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     setAppState({ viewMode: '3d' })
     void setTopDown(scene, false)
   }
-  // Standing up an incident is a deliberate move to the tactical board —
-  // the citywide chrome and its pick handlers must not linger on top.
-  leaveWatchCommandSilently()
   if (scene) flyToTactical(scene.viewer, hit.lat, hit.lon)
 
   // These run concurrently; each degrades independently per the CLAUDE.md rule.
@@ -862,7 +858,7 @@ export async function restoreIncident(): Promise<void> {
     // A profile landing in Watch Command keeps its citywide frame — the
     // restored incident arrives as the focused portfolio marker instead
     // (same rule as adoption).
-    if (scene && !getAppState().watchCommand) flyToTactical(scene.viewer, body.incident.lat, body.incident.lon)
+    if (scene) flyToTactical(scene.viewer, body.incident.lat, body.incident.lon)
     void loadFootprints(body.incident)
     void loadSiteIntel(body.incident)
     getFocusLayer()?.apply(body.incident, getAppState().activeIncidentMode)
@@ -883,182 +879,6 @@ export async function restoreIncident(): Promise<void> {
 // only. Logged to the event log now — it becomes the audit trail when real
 // identity arrives.
 // ---------------------------------------------------------------------------
-
-export function setProfile(next: 'fdny' | 'nycem'): void {
-  // FDNY loses the menu items for coordination POIs — persisted ON toggles
-  // must not keep painting layers the workspace can no longer control.
-  // Dashboard pages are FDNY chrome — a profile switch always lands on MAP.
-  setAppState({ dashboardPage: 0 })
-  if (next === 'fdny') {
-    setAppState((s) => ({ layerToggles: { ...s.layerToggles, poiPrecincts: false, poiNycem: false } }))
-    for (const kind of ['poiPrecincts', 'poiNycem'] as const) void getPoiLayer()?.setEnabled(kind, false).catch(() => {})
-  }
-  const prev = getAppState().profile
-  if (next === prev) return
-  // Map posture never crosses profiles: ISOLATE (clipped scene + camera
-  // lock) is torn down on any switch, and FDNY always lands back on its 2D
-  // tactical map — never the citywide 3D chrome the other hat was wearing.
-  resetIsolate()
-  if (next === 'fdny') setAppState({ mapMode: '2d' })
-  localStorage.setItem('ks-profile', next)
-  // Each window stays sovereign: with ?profile pinned in the URL, another
-  // window's localStorage write can't flip this one on its next reload.
-  if (new URLSearchParams(window.location.search).has('profile')) {
-    const url = new URL(window.location.href)
-    url.searchParams.set('profile', next)
-    window.history.replaceState(null, '', url)
-  }
-  setAppState({ profile: next })
-  applyUnitVisibility() // member markers are policy+profile gated
-  if (next === 'nycem') {
-    // Coordination posture: open the Watch Command chrome WITHOUT the
-    // citywide camera flight — switching must preserve map position (the
-    // flight belongs to landing/toggling, not to changing hats).
-    openWatchCommandChrome()
-  } else {
-    // Tactical posture: NYCEM-only chrome must not linger. Camera stays put.
-    leaveWatchCommandSilently()
-  }
-  void fetch('/api/timeline', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      kind: 'profile_switch',
-      payload: { from: prev, to: next, by: localStorage.getItem('ks-operator') ?? 'unnamed operator' },
-    }),
-  }).catch((err) => console.error('[profile] switch log failed:', err))
-}
-
-/** Watch Command panels + layers without moving the camera. */
-function openWatchCommandChrome(): void {
-  setAppState({ watchCommand: true })
-  const now = getAppState()
-  getPortfolioLayer()?.setIncidents(now.portfolio, now.portfolioHoverId)
-  getPortfolioLayer()?.setWeather(now.weatherAlerts)
-  getPortfolioLayer()?.setActive(true, (id) => focusPortfolioIncident(id))
-}
-
-/** NYC citywide framing for the Watch Command portfolio view. */
-const WATCH_VIEW = { lon: -73.94, lat: 40.55, height: 62_000, pitchDeg: -55 }
-
-export function enterWatchCommand(): void {
-  const scene = getScene()
-  if (!scene) return
-  // Manifest guard: profiles without the Watch Command capability must never
-  // enter this state — its panels, Escape handler, and exit chip are all
-  // gated off, leaving an unrecoverable citywide half-state.
-  if (!hasCapability(getAppState().profile, 'watchcommand.portfolio')) return
-  if (getAppState().groundViewActive) exitGround()
-  // Isolate clips every building but the incident out of the scene — the
-  // citywide portfolio over a clipped-away city is unreadable. Unwind it
-  // like the other special view modes.
-  if (getAppState().isolateMode) toggleIsolateMode()
-  if (getAppState().viewMode === 'topdown') {
-    setAppState({ viewMode: '3d' })
-    void setTopDown(scene, false)
-  }
-  openWatchCommandChrome()
-  scene.viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(WATCH_VIEW.lon, WATCH_VIEW.lat, WATCH_VIEW.height),
-    orientation: { heading: 0, pitch: Cesium.Math.toRadians(WATCH_VIEW.pitchDeg), roll: 0 },
-    duration: 1.8,
-  })
-}
-
-/**
- * Prompt 12 — the flagship two-screen pitch: this window becomes the FDNY
- * tactical display, a second window opens as NYCEM Watch Command, and the
- * server-side scenario engine drives both over the same ws clock (no sync
- * layer — one playback authority).
- */
-export async function launchDualScreenDemo(): Promise<void> {
-  if (getAppState().exerciseReviewDirty) {
-    notify('UNSAVED AAR EDITS — save or discard the review before launching')
-    return
-  }
-  const win = window.open(`${location.origin}${location.pathname}?profile=nycem`, 'keystone-nycem', 'width=1680,height=1050')
-  if (!win) {
-    // Do NOT start a one-screen "dual-screen demo": with no NYCEM window the
-    // exercise would have no facilitator surface at all.
-    notify('SECOND WINDOW BLOCKED — allow pop-ups for this site, then relaunch', 'red')
-    return
-  }
-  setProfile('fdny')
-  // exercise:true so the NYCEM window gets the ENDEX/AAR chrome; this
-  // window's enterWatchCommand is a no-op under the FDNY profile.
-  await loadScenario('pabt-flood-exercise', { exercise: true })
-}
-
-export function exitWatchCommand(): void {
-  leaveWatchCommandSilently()
-  // Breadcrumb behavior: return to the tactical board if one is up.
-  const inc = getAppState().incident
-  const scene = getScene()
-  if (inc && scene) flyToTactical(scene.viewer, inc.lat, inc.lon)
-}
-
-/**
- * Drop the citywide chrome WITHOUT the breadcrumb flight — for tactical
- * actions (search-bar stand-up, feed pick, drill load) that fly the camera
- * themselves. Without this, those paths left the Watch Command panels,
- * markers, and pick handlers live on top of the tactical board.
- */
-function leaveWatchCommandSilently(): void {
-  if (!getAppState().watchCommand) return
-  setAppState({ watchCommand: false, portfolioHoverId: null })
-  getPortfolioLayer()?.setActive(false)
-}
-
-/**
- * Click-through from the citywide view: the portfolio and the tactical view
- * share the same incident objects — the board incident just exits to its
- * tactical view; a feed box focuses the board on it (existing flow); a
- * scripted secondary flies there WITHOUT killing the running drill (it is
- * tracked, not commanded — single tactical board at a time).
- */
-export function focusPortfolioIncident(id: string): void {
-  const pi = getAppState().portfolio.find((p) => p.id === id)
-  if (!pi) return
-  if (pi.focused) {
-    exitWatchCommand()
-    return
-  }
-  if (pi.source === 'feed') {
-    const feed = getAppState().dispatchFeed.find((f) => f.id === id)
-    if (feed) {
-      leaveWatchCommandSilently()
-      void focusFeedIncident(feed)
-    }
-    return
-  }
-  // Scenario secondary: fly the tactical camera to it, drill board intact.
-  const scene = getScene()
-  setAppState({ watchCommand: false, portfolioHoverId: null })
-  getPortfolioLayer()?.setActive(false)
-  if (scene) flyToTactical(scene.viewer, pi.lat, pi.lon)
-}
-
-/** Keep the citywide markers/weather in sync while Watch Command is up. */
-export function refreshWatchLayers(): void {
-  const s = getAppState()
-  if (!s.watchCommand) return
-  getPortfolioLayer()?.setIncidents(s.portfolio, s.portfolioHoverId)
-  getPortfolioLayer()?.setWeather(s.weatherAlerts)
-}
-
-export async function changeEocLevel(level: 1 | 2 | 3 | 4, changedBy: string): Promise<boolean> {
-  try {
-    const res = await fetch('/api/nycem/eoc', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ level, changedBy }),
-    })
-    return res.ok
-  } catch (err) {
-    console.error('[nycem] eoc change failed:', err)
-    return false
-  }
-}
 
 /** Returns whether the decision was recorded — ACCEPT must not activate the
  *  plan when the logged decision itself failed (audit gap), or when another
@@ -1093,19 +913,6 @@ export async function activatePlanAction(plan: string, by: string): Promise<void
   }
 }
 
-export async function saveRules(rules: import('./types').TriggerRule[]): Promise<boolean> {
-  try {
-    const res = await fetch('/api/nycem/rules', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ rules }),
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
 export async function requestTransition(id: string, state: string, by: string, reason?: string): Promise<void> {
   try {
     await fetch(`/api/requests/${encodeURIComponent(id)}/transition`, {
@@ -1135,22 +942,6 @@ export async function openInteragencyRequest(input: {
     return res.ok
   } catch {
     return false
-  }
-}
-
-/** M8: end the running exercise — the server builds the HSEEP AAR draft. */
-export async function finishExercise(): Promise<void> {
-  try {
-    const res = await fetch('/api/exercises/finish', { method: 'POST' })
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null
-      console.error('[exercise] finish failed:', body?.error)
-      return
-    }
-    const session = (await res.json()) as import('./types').ExerciseSession
-    setAppState({ exerciseReview: session })
-  } catch (err) {
-    console.error('[exercise] finish failed:', err)
   }
 }
 
@@ -1460,7 +1251,7 @@ export function adoptIncident(incident: Incident): void {
   // this up). An operator monitoring the citywide view keeps that view —
   // the incident arrives as the focused portfolio marker, not a camera yank
   // underneath the still-open Watch Command panels.
-  if (scene && !getAppState().watchCommand) flyToTactical(scene.viewer, incident.lat, incident.lon)
+  if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
   void loadFootprints(incident)
   void loadSiteIntel(incident)
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
@@ -1485,20 +1276,13 @@ async function scenarioPost(path: string, body?: Record<string, unknown>): Promi
   }
 }
 
-export async function loadScenario(name: string, opts: { exercise?: boolean } = {}): Promise<void> {
-  // A plain drill is a tactical activity: drop the citywide chrome BEFORE the
-  // load so the drill's incident broadcast flies the camera to the board.
-  // (Deliberate operator action — restoring it on failure would flap the UI.)
-  if (!opts.exercise) leaveWatchCommandSilently()
+export async function loadScenario(name: string): Promise<void> {
   // A failed load (bad name, server down) must not play whatever stale
-  // scenario is loaded, open the exercise chrome over nothing, or apply the
-  // comms-view mutations below — nothing about the request needs them first.
-  if (!(await scenarioPost('load', { name, exercise: !!opts.exercise }))) return
+  // scenario is loaded or apply the comms-view mutations below.
+  if (!(await scenarioPost('load', { name }))) return
   // Merged command view is the right default for multi-channel drill traffic.
   setAppState({ aarOpen: false, alert: null, commsAll: true, commsOpen: true })
   await scenarioPost('play')
-  // Exercises are a Watch Command activity — open the portfolio view.
-  if (opts.exercise) enterWatchCommand()
 }
 
 export const playScenario = (): Promise<boolean> => scenarioPost('play')

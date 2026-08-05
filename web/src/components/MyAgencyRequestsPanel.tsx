@@ -4,7 +4,7 @@ import { requestTransition } from '../actions'
 import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'
 import type { RequestState } from '../types'
-import { requestElapsed } from './WatchCommandPanel'
+import { requestElapsed } from '../lib/requests'
 
 // ---------------------------------------------------------------------------
 // Prompt 12 — the FDNY profile's slim "My Agency Requests" panel. FDNY is a

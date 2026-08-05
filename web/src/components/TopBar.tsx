@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   activateInspectedIncident,
-  changeEocLevel,
-  enterWatchCommand,
-  exitWatchCommand,
   focusFeedIncident,
-  launchDualScreenDemo,
   loadScenario,
-  setProfile,
   runDemoScenario,
   setIsolateScale,
   setIsolateView,
@@ -19,20 +14,19 @@ import {
 import { setAppState, useAppSlice } from '../state/store'
 import type { FeedIncident, ToggleLayerId } from '../types'
 import { resetPanelLayout } from '../lib/movable'
-import { hasCapability, PROFILES, PROFILE_SWITCHABLE, useCapability, useProfile } from '../profiles/manifest'
+import { hasCapability, PROFILE_LABEL, useCapability } from '../profiles/manifest'
 import { NEXT_STEP_LABEL, useNextStep } from '../lib/guidance'
 import { applyLayoutPreset, LAYOUT_PRESETS } from '../lib/layouts'
 import { openBrief } from '../lib/brief'
 import { HarborChip } from './DataAge'
 import { SearchBar } from './SearchBar'
-import { requestElapsed } from './WatchCommandPanel'
 
 // Map overlays that live in the top-bar OVERLAYS dropdown rather than the
 // (incident-gated) Site Intel chip row — they're useful with no incident up.
 // `nycemOnly`: coordination geography (agency office locations) — an FDNY
 // officer reads NYPD/NYCEM presence as UNITS on the scene, not buildings on
 // a map. Their own boundaries, hydro/road context, and hospitals stay.
-const OVERLAYS: { id: ToggleLayerId; label: string; hint: string; nycemOnly?: boolean }[] = [
+const OVERLAYS: { id: ToggleLayerId; label: string; hint: string }[] = [
   { id: 'battalions', label: 'FDNY Battalions', hint: 'Battalion boundary lines' },
   { id: 'divisions', label: 'FDNY Divisions', hint: 'Division boundary lines' },
   { id: 'lots', label: 'Address grid', hint: 'Tax-lot borders — click inside one to load its address' },
@@ -41,15 +35,12 @@ const OVERLAYS: { id: ToggleLayerId; label: string; hint: string; nycemOnly?: bo
   { id: 'tunnels', label: 'Tunnels', hint: 'Major vehicular tunnels — Lincoln, Holland, Queens-Midtown, Hugh L. Carey (commercial access varies per tunnel)' },
   { id: 'poiFirehouses', label: 'All firehouses', hint: 'Every FDNY firehouse citywide (Facilities DB)' },
   { id: 'poiFdny', label: 'FDNY buildings', hint: 'Official FDNY buildings — HQ, offices, training, EMS stations' },
-  { id: 'poiPrecincts', label: 'NYPD precincts', hint: 'Precinct station houses citywide', nycemOnly: true },
   { id: 'poiHospitals', label: 'Major hospitals', hint: 'Hospitals and acute-care hospitals citywide' },
-  { id: 'poiNycem', label: 'NYCEM HQ', hint: 'NYC Emergency Management headquarters and offices', nycemOnly: true },
 ]
 
 function OverlaysMenu() {
   const { layerToggles } = useAppSlice((s) => ({ layerToggles: s.layerToggles }))
-  const overlaysProfile = useProfile()
-  const items = OVERLAYS.filter((o) => !o.nycemOnly || overlaysProfile === 'nycem')
+  const items = OVERLAYS
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -208,7 +199,6 @@ function Clock() {
 
 /** DEMO + DRILL combined — one launcher, two scripted scenarios. */
 function ScenariosMenu() {
-  const canExercise = useCapability('aar.hseep-exercise')
   const { scenario, incident } = useAppSlice((s) => ({ scenario: s.scenario, incident: s.incident }))
   const [open, setOpen] = useState(false)
   // One stray click must never erase a 30-minute live run: when a scenario
@@ -272,94 +262,6 @@ function ScenariosMenu() {
             )}</b>
             <i>Multi-agency bus fire w/ MCI at the Port Authority Bus Terminal</i>
           </button>
-          {canExercise && (
-            <button
-              className="scenario-item drill"
-              onClick={() => launch('exercise', () => void loadScenario('pabt-flood-exercise', { exercise: true }))}
-            >
-              <b>{armedId === 'exercise' ? 'RESTARTS THE RUNNING RUN — CLICK AGAIN' : 'EXERCISE'}</b>
-              <i>PABT drill + Queens flash flood, two incidents — live participants, HSEEP AAR at the end</i>
-            </button>
-          )}
-          <button className="scenario-item" onClick={() => launch('dual', () => void launchDualScreenDemo())}>
-            <b>{armedId === 'dual' ? 'RESTARTS THE RUNNING RUN — CLICK AGAIN' : 'DUAL-SCREEN DEMO'}</b>
-            <i>FDNY tactical here + NYCEM Watch Command in a second window, one live clock · first run: allow pop-ups, drag the new window to screen 2</i>
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** EOC activation level chip (Prompt 11): Level 4 Watch Command is the
- *  always-on default; every change requires "changed by" and logs. */
-function EocChip() {
-  const { eoc } = useAppSlice((s) => ({ eoc: s.eoc }))
-  const [open, setOpen] = useState(false)
-  const [by, setBy] = useState(() => localStorage.getItem('ks-operator') ?? '')
-  const [failed, setFailed] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-  // Re-sync from the shared operator identity on every open — both this chip
-  // and the Watch Command panel persist every edit to ks-operator, so the
-  // stored value is always the latest handoff. A fill-only-when-empty guard
-  // would keep logging EOC changes under the PREVIOUS operator's name.
-  useEffect(() => {
-    if (open) setBy(localStorage.getItem('ks-operator') ?? '')
-  }, [open])
-  useEffect(() => {
-    if (!open) return
-    const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [open])
-  const LABELS: Record<number, string> = {
-    4: 'Level 4 — Watch Command (steady state)',
-    3: 'Level 3 — Situation Room',
-    2: 'Level 2 — Partial EOC',
-    1: 'Level 1 — Full EOC',
-  }
-  return (
-    <div className="eoc-wrap" ref={wrapRef}>
-      <button
-        className={`chip chip-btn${eoc.level < 4 ? ' amber active' : ''}`}
-        onClick={() => setOpen((o) => !o)}
-        title={`EOC activation: ${LABELS[eoc.level]} — every change logs with "changed by"`}
-      >
-        <span className="dot" /> EOC L{eoc.level} {open ? '▴' : '▾'}
-      </button>
-      {open && (
-        <div className="eoc-menu glass">
-          <input
-            placeholder='"Changed by" (required)'
-            value={by}
-            onChange={(e) => {
-              setBy(e.target.value)
-              localStorage.setItem('ks-operator', e.target.value)
-            }}
-          />
-          {[4, 3, 2, 1].map((l) => (
-            <button
-              key={l}
-              className={`eoc-item${eoc.level === l ? ' on' : ''}`}
-              disabled={!by.trim()}
-              title={by.trim() ? undefined : 'Enter "changed by" first — every change logs with attribution'}
-              onClick={() => {
-                setFailed(false)
-                void changeEocLevel(l as 1 | 2 | 3 | 4, by.trim()).then((ok) => {
-                  // A failed change must not look identical to a successful
-                  // one — keep the menu open and say so.
-                  if (ok) setOpen(false)
-                  else setFailed(true)
-                })
-              }}
-            >
-              {LABELS[l]}
-            </button>
-          ))}
-          {failed && <div className="eoc-note failed">CHANGE FAILED — SERVER UNREACHABLE</div>}
-          <div className="eoc-note">Manual change only · immutable history on the citywide timeline</div>
         </div>
       )}
     </div>
@@ -485,11 +387,10 @@ function PanelsMenu({
     gloveMode: s.gloveMode,
   }))
   const layoutMoved = Object.keys(panelOffsets).length > 0
-  const menuProfile = useProfile()
-  // Trouble badge honors profile filtering — no phantom ⚠ for feeds this
-  // workspace can't even see (the panel filters identically).
+  // Trouble badge honors capability filtering — no phantom ⚠ for feeds
+  // this workspace can't even see (the panel filters identically).
   const feedTrouble = Object.values(feedHealth).some(
-    (f) => hasCapability(menuProfile, f.capabilityId) && (f.status === 'down' || f.status === 'stale'),
+    (f) => hasCapability('fdny', f.capabilityId) && (f.status === 'down' || f.status === 'stale'),
   )
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -605,109 +506,26 @@ const LAYER_LABEL: Record<string, string> = {
   persistence: 'PERSISTENCE',
 }
 
-/**
- * Prompt 12 — the workspace profile switcher lives in the wordmark. Anyone
- * can switch instantly (PROFILE_SWITCHABLE flips to role-locked when sign-in
- * lands); the switch preserves map position and logs to the event log.
- */
-function ProfileSwitcher() {
-  const profile = useProfile()
-  const { exerciseReviewDirty } = useAppSlice((s) => ({ exerciseReviewDirty: s.exerciseReviewDirty }))
-  const [open, setOpen] = useState(false)
-  // Switching to a profile without the AAR capability unmounts the review
-  // panel and destroys unsaved facilitator edits — arm a two-step confirm.
-  const [confirmId, setConfirmId] = useState<string | null>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [open])
-  const active = PROFILES.find((p) => p.id === profile) ?? PROFILES[0]
+/** The wordmark: fixed FDNY brand + the citywide INCIDENTS feed. (The
+ *  multi-profile switcher left with the NYCEM coordination bundle.) */
+function BrandBlock() {
   return (
-    <div className="wordmark" ref={wrapRef}>
-      <span className="sub">{active.sub}</span>
+    <div className="wordmark">
+      <span className="sub">Incident Command · FDNY</span>
       <div className="brand-row">
-        <button
-          className="name profile-btn"
-          disabled={!PROFILE_SWITCHABLE}
-          onClick={() => setOpen((o) => !o)}
-          title="Switch workspace profile — instant, map position preserved, logged"
-        >
-          {active.label.toUpperCase()} {open ? '▴' : '▾'}
-        </button>
+        <span className="name">{PROFILE_LABEL.fdny.toUpperCase()}</span>
         <IncidentsMenu />
       </div>
-      {open && (
-        <div className="profile-menu glass">
-          {PROFILES.map((p) => {
-            const losesAar = exerciseReviewDirty && !hasCapability(p.id, 'aar.hseep-exercise')
-            const armed = confirmId === p.id
-            return (
-              <button
-                key={p.id}
-                className={`profile-item${p.id === profile ? ' on' : ''}${armed ? ' warn' : ''}`}
-                onClick={() => {
-                  if (losesAar && !armed) {
-                    setConfirmId(p.id)
-                    return
-                  }
-                  setOpen(false)
-                  setConfirmId(null)
-                  setProfile(p.id)
-                }}
-              >
-                <b>{armed ? 'DISCARD UNSAVED AAR EDITS?' : p.label}</b>
-                <i>{armed ? 'This profile has no AAR review — switching loses your edits. Click again to proceed.' : p.sub}</i>
-              </button>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
 
-/** WATCH CMD chip with an attention badge: pending weather suggestions and
- *  ack-threshold breaches only render inside the citywide view, so without
- *  this an operator on the tactical board never learns they exist. */
-function WatchCmdChip({ watchCommand }: { watchCommand: boolean }) {
-  const { triggerSuggestions, interagencyRequests, requestThresholds } = useAppSlice((s) => ({
-    triggerSuggestions: s.triggerSuggestions,
-    interagencyRequests: s.interagencyRequests,
-    requestThresholds: s.requestThresholds,
-  }))
-  const pending = triggerSuggestions.filter((s) => s.state === 'pending').length
-  const breaches = interagencyRequests.filter((r) => requestElapsed(r, requestThresholds).breach).length
-  const n = pending + breaches
-  const attention = n > 0 && !watchCommand
-  return (
-    <button
-      className={`chip chip-btn${watchCommand ? ' active' : ''}${attention ? ' amber active' : ''}`}
-      onClick={() => (watchCommand ? exitWatchCommand() : enterWatchCommand())}
-      title={
-        attention
-          ? `${pending ? `${pending} pending weather suggestion${pending === 1 ? '' : 's'}` : ''}${pending && breaches ? ' · ' : ''}${breaches ? `${breaches} request${breaches === 1 ? '' : 's'} past ack threshold` : ''} — open Watch Command`
-          : 'Watch Command — citywide multi-incident portfolio view (NYCEM coordination layer)'
-      }
-    >
-      <span className="dot" /> {watchCommand ? '← TACTICAL' : 'WATCH CMD'}
-      {attention && <span className="wc-chip-badge">{n}</span>}
-    </button>
-  )
-}
-
 export function TopBar() {
-  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, watchCommand, viewLock, mapMode } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, watchCommand: s.watchCommand, viewLock: s.viewLock, mapMode: s.mapMode }))
+  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, viewLock, mapMode } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, viewLock: s.viewLock, mapMode: s.mapMode }))
   const canManuals = useCapability('doctrine.manuals')
   const canMap2d = useCapability('view.map2d')
   const nextStepId = useNextStep()
   const canTactics = useCapability('tactics.engine')
-  const canWatch = useCapability('watchcommand.portfolio')
-  const canEoc = useCapability('eoc.level-chip')
   const toggleTab = (tab: 'sitrep' | 'video' | 'bio' | 'floors') =>
     setAppState((s) => ({ utilityTab: s.utilityTab === tab ? null : tab }))
   const down = (Object.keys(layers) as (keyof typeof layers)[]).filter((k) => layers[k] === 'unavailable')
@@ -729,7 +547,7 @@ export function TopBar() {
   }, [])
   return (
     <header className="topbar glass" ref={barRef}>
-      <ProfileSwitcher />
+      <BrandBlock />
       <SearchBar />
       <ScenariosMenu />
       <div className="topbar-right">
@@ -786,8 +604,6 @@ export function TopBar() {
           </span>
         )}
         {incident && activeIncidentMode && <IsolateMenu />}
-        {canWatch && <WatchCmdChip watchCommand={watchCommand} />}
-        {canEoc && <EocChip />}
         <HarborChip />
         <button
           className="chip chip-btn"

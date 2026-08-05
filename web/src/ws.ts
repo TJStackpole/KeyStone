@@ -4,28 +4,19 @@ import { getAppState, setAppState } from './state/store'
 import type {
   ChatMsg,
   CommsChannel,
-  EocChange,
-  EocLevel,
   ExposureLabel,
   FeedIncident,
   IcsShape,
   Incident,
   InteragencyRequest,
   MapAlert,
-  NwsAlert,
-  PlanActivation,
-  PortfolioIncident,
   RequestPriority,
   ScenarioStatus,
-  TickerEvent,
   TimelineEvent,
   TranscriptLine,
-  TriggerRule,
-  TriggerSuggestion,
   FeedDataWire,
   FeedHealthWire,
   Unit,
-  WeatherObsNycem,
 } from './types'
 
 interface SnapshotMsg {
@@ -38,14 +29,8 @@ interface SnapshotMsg {
   chats?: ChatMsg[]
   scenario?: ScenarioStatus
   dispatchFeed?: FeedIncident[]
-  portfolio?: PortfolioIncident[]
-  ticker?: TickerEvent[]
-  eoc?: { level: EocLevel; history: EocChange[] }
-  plans?: PlanActivation[]
   requests?: InteragencyRequest[]
   requestThresholds?: Record<RequestPriority, number>
-  weather?: { alerts: NwsAlert[]; obs: WeatherObsNycem | null; suggestions: TriggerSuggestion[] }
-  rules?: TriggerRule[]
   visibilityPolicy?: Record<string, string>
   feeds?: { health: FeedHealthWire[]; data: FeedDataWire[] }
 }
@@ -69,36 +54,9 @@ interface DispatchFeedMsg {
   type: 'dispatch.feed'
   incidents: FeedIncident[]
 }
-interface PortfolioMsg {
-  type: 'portfolio'
-  incidents: PortfolioIncident[]
-}
-interface TickerMsg {
-  type: 'ticker'
-  event: TickerEvent
-}
-interface EocMsg {
-  type: 'eoc'
-  level: EocLevel
-  history: EocChange[]
-}
-interface PlansMsg {
-  type: 'plans'
-  plans: PlanActivation[]
-}
 interface RequestsMsg {
   type: 'requests'
   requests: InteragencyRequest[]
-}
-interface WeatherMsg {
-  type: 'weather'
-  alerts: NwsAlert[]
-  obs: WeatherObsNycem | null
-  suggestions: TriggerSuggestion[]
-}
-interface RulesMsg {
-  type: 'rules'
-  rules: TriggerRule[]
 }
 interface ShapeMsg {
   type: 'shape'
@@ -179,16 +137,10 @@ type ServerMsg =
   | AarMsg
   | ChatWsMsg
   | DispatchFeedMsg
-  | PortfolioMsg
-  | TickerMsg
-  | EocMsg
-  | PlansMsg
   | RequestsMsg
-  | WeatherMsg
   | FeedHealthMsg
   | FeedDataMsg
   | FeedDataClearMsg
-  | RulesMsg
 
 let started = false
 
@@ -240,14 +192,7 @@ const REPLAY_SAFE = new Set([
   'chat',
   'snapshot',
   'dispatch.feed', // ambient citywide picture — not part of the replayed board
-  // Prompt 11 coordination layer sits ABOVE incidents — replay never gates it.
-  'portfolio',
-  'ticker',
-  'eoc',
-  'plans',
   'requests',
-  'weather',
-  'rules',
   'policy',
 ])
 
@@ -279,24 +224,9 @@ function handle(msg: ServerMsg): void {
       setAppState((s) => ({
         scenario: scenarioLoaded ? (msg.scenario ?? null) : null,
         dispatchFeed: msg.dispatchFeed ?? s.dispatchFeed,
-        // Prompt 11 coordination-layer state rides the snapshot too.
-        portfolio: msg.portfolio ?? s.portfolio,
-        tickerFeed: msg.ticker ?? s.tickerFeed,
-        eoc: msg.eoc ?? s.eoc,
-        planActivations: msg.plans ?? s.planActivations,
         interagencyRequests: msg.requests ?? s.interagencyRequests,
         requestThresholds: msg.requestThresholds ?? s.requestThresholds,
-        // The rules editor is snapshot-fed: nothing else delivers rules to a
-        // fresh client (the 'rules' broadcast only fires on another PUT).
-        triggerRules: msg.rules ?? s.triggerRules,
         visibilityPolicy: msg.visibilityPolicy ? { ...s.visibilityPolicy, ...msg.visibilityPolicy } : s.visibilityPolicy,
-        ...(msg.weather
-          ? {
-              weatherAlerts: msg.weather.alerts,
-              weatherObs: msg.weather.obs,
-              triggerSuggestions: msg.weather.suggestions,
-            }
-          : {}),
         chats: msg.chats ?? [],
         ...(!scenarioLoaded && s.commsAll ? { commsAll: false } : {}),
         ...(!scenarioLoaded &&
@@ -400,9 +330,6 @@ function handle(msg: ServerMsg): void {
       getExposureLayer()?.set(msg.labels ?? [])
       break
     case 'scenario.aar':
-      // The facilitator's HSEEP review owns the screen — the drill's generic
-      // AAR popping over it (script end fires during review) reads as a bug.
-      if (getAppState().exerciseReview) break
       setAppState({ aarOpen: true })
       break
     case 'chat':
@@ -412,24 +339,6 @@ function handle(msg: ServerMsg): void {
       break
     case 'dispatch.feed':
       setAppState({ dispatchFeed: msg.incidents })
-      break
-    case 'portfolio':
-      setAppState({ portfolio: msg.incidents })
-      break
-    case 'ticker':
-      // Dedupe by id: a reconnect snapshot plus an in-flight broadcast can
-      // deliver the same event twice (same guard the transcript stream has).
-      setAppState((s) =>
-        s.tickerFeed.some((e) => e.id === msg.event.id)
-          ? {} // empty patch engages the store's no-op short-circuit
-          : { tickerFeed: [...s.tickerFeed, msg.event].slice(-300) },
-      )
-      break
-    case 'eoc':
-      setAppState({ eoc: { level: msg.level, history: msg.history } })
-      break
-    case 'plans':
-      setAppState({ planActivations: msg.plans })
       break
     case 'requests':
       setAppState({ interagencyRequests: msg.requests })
@@ -454,12 +363,6 @@ function handle(msg: ServerMsg): void {
       })
       break
     }
-    case 'weather':
-      setAppState({ weatherAlerts: msg.alerts, weatherObs: msg.obs, triggerSuggestions: msg.suggestions })
-      break
-    case 'rules':
-      setAppState({ triggerRules: msg.rules })
-      break
     case 'policy':
       // Hot-reload: the admin editor tightened/relaxed the visibility policy —
       // every gated surface re-renders against it immediately, including the

@@ -44,10 +44,6 @@ export function openBrief(): boolean {
     )
   }
 
-  for (const a of s.weatherAlerts.slice(0, 4)) {
-    rows.push(line(`Weather — ${a.event}`, a.headline))
-  }
-
   const water = s.feedData['noaa-water'] as FeedDataWire | undefined
   if (water) {
     const stations = (water.payload as { stations?: { name: string; waterLevelFt: number; trend: string }[] })

@@ -133,55 +133,10 @@ export interface TimelineEvent {
 
 // ---------------------- Prompt 11: NYCEM coordination -----------------------
 
-export interface PortfolioIncident {
-  id: string
-  address: string
-  borough: string
-  lat: number
-  lon: number
-  type: string
-  severity: number
-  /** CIMS terminology, exactly: Primary / Supporting Agency. */
-  primaryAgency: string
-  supportingAgencies: string[]
-  /** "Tracked in KeyStone" — never authoritative citywide availability. */
-  unitsByAgency: Record<string, number>
-  startedAt: string
-  source: 'board' | 'scenario' | 'feed'
-  alarmLevel?: string
-  openRequests: number
-  focused: boolean
-}
 
-export interface TickerEvent {
-  id: string
-  ts: string
-  kind: string
-  text: string
-  incidentId?: string
-  agency?: string
-  borough?: string
-  severity?: number
-  /** Simulated origin (dispatch feed, drill script) — row shows a SIM chip. */
-  sim?: boolean
-}
 
-export type EocLevel = 1 | 2 | 3 | 4
 
-export interface EocChange {
-  level: EocLevel
-  changedBy: string
-  changedAt: string
-}
 
-export interface PlanActivation {
-  id: string
-  plan: string
-  activatedAt: string
-  activatedBy: string
-  deactivatedAt?: string
-  deactivatedBy?: string
-}
 
 export type RequestState = 'opened' | 'acknowledged' | 'assigned' | 'in_progress' | 'complete' | 'declined'
 export type RequestPriority = 'routine' | 'urgent' | 'immediate'
@@ -201,50 +156,9 @@ export interface InteragencyRequest {
   updates: { at: string; by: string; text: string }[]
 }
 
-export interface TriggerRule {
-  id: string
-  plan: string
-  enabled: boolean
-  eventMatch: string[]
-  suggestedEocLevel: EocLevel
-  suggestedActions: string[]
-  validateSme: boolean
-}
 
-export interface NwsAlert {
-  id: string
-  event: string
-  headline: string
-  severity: string
-  onset: string | null
-  ends: string | null
-  areaDesc: string
-  polygons: [number, number][][]
-  simulated?: boolean
-}
 
-export interface TriggerSuggestion {
-  id: string
-  ruleId: string
-  plan: string
-  suggestedEocLevel: EocLevel
-  suggestedActions: string[]
-  firedAt: string
-  product: NwsAlert
-  state: 'pending' | 'accepted' | 'snoozed' | 'dismissed'
-  decidedBy?: string
-  decidedAt?: string
-  validateSme: boolean
-}
 
-export interface WeatherObsNycem {
-  stationId: string
-  observedAt: string | null
-  tempC: number | null
-  windKt: number | null
-  windDirDeg: number | null
-  precipMmHr: number | null
-}
 
 export interface AarMetric {
   name: string
@@ -277,13 +191,6 @@ export interface AarDraft {
   metrics: AarMetric[]
 }
 
-export interface ExerciseSession {
-  id: string
-  scenario: string
-  startedAt: string
-  endedAt: string
-  aar: AarDraft
-}
 
 /**
  * One entry of the SIMULATED citywide dispatch feed (FDNY / NYPD / PAPD

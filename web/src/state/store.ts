@@ -7,9 +7,6 @@ import type {
   CommsConfig,
   DataLayerId,
   DrawTool,
-  EocChange,
-  EocLevel,
-  ExerciseSession,
   FeedIncident,
   GeoHit,
   IcsShape,
@@ -17,21 +14,14 @@ import type {
   InteragencyRequest,
   LayerStatus,
   MapAlert,
-  NwsAlert,
-  PlanActivation,
-  PortfolioIncident,
   ProviderMode,
   RequestPriority,
   ScenarioStatus,
-  TickerEvent,
   TimelineEvent,
   ToggleLayerId,
   TranscriptLine,
-  TriggerRule,
-  TriggerSuggestion,
   Unit,
   UnitCategory,
-  WeatherObsNycem,
 } from '../types'
 
 export interface SiteIntel {
@@ -106,8 +96,6 @@ export interface AppState {
   /** Feed entry the board is currently focused on (null = none/manual). */
   focusedFeedId: string | null
   // ------------------- Prompt 11: NYCEM coordination layer -------------------
-  /** Watch Command mode: the citywide multi-incident portfolio view. */
-  watchCommand: boolean
   /** Prompt 12 — active workspace profile. All rendering gates flow from the
    *  capability manifest keyed by this. */
   profile: 'fdny' | 'nycem'
@@ -154,12 +142,7 @@ export interface AppState {
   /** The CAD feed entry the officer pressed to respond (SIMULATED FireCAD). */
   cadIncident: import('../types').FeedIncident | null
   responsePacketOpen: boolean
-  portfolio: PortfolioIncident[]
   /** Portfolio marker the operator is hovering (drives the hover card). */
-  portfolioHoverId: string | null
-  tickerFeed: TickerEvent[]
-  eoc: { level: EocLevel; history: EocChange[] }
-  planActivations: PlanActivation[]
   interagencyRequests: InteragencyRequest[]
   requestThresholds: Record<RequestPriority, number>
   /** Prompt 13 — feed layer: health per feed id + latest pushed payloads.
@@ -170,14 +153,8 @@ export interface AppState {
   /** Shape-tool undo: stack depth + top entry's label (button tooltip). */
   undoDepth: number
   undoLabel: string | null
-  weatherAlerts: NwsAlert[]
-  weatherObs: WeatherObsNycem | null
-  triggerSuggestions: TriggerSuggestion[]
-  triggerRules: TriggerRule[]
   /** Facilitator review screen for a finished exercise (M8). */
-  exerciseReview: ExerciseSession | null
   /** Unsaved facilitator edits exist in the review — guards lossy unmounts. */
-  exerciseReviewDirty: boolean
   /** IC view <-> NYCEM Watch Command coordination view. */
   /** After-action report overlay (auto-opens at scenario end). */
   aarOpen: boolean
@@ -325,15 +302,10 @@ const initial: AppState = {
   alert: null,
   dispatchFeed: [],
   focusedFeedId: null,
-  watchCommand: false,
-  // URL param (dual-screen launcher) beats the remembered choice beats FDNY.
-  // Inlined rather than imported from profiles/ — the manifest imports THIS
-  // module's hooks, and an import back would be a runtime cycle.
-  profile: (() => {
-    const q = new URLSearchParams(window.location.search).get('profile')
-    if (q === 'fdny' || q === 'nycem') return q
-    return localStorage.getItem('ks-profile') === 'nycem' ? ('nycem' as const) : ('fdny' as const)
-  })(),
+  // Single-profile platform: the NYCEM workspace (and its ?profile= launcher)
+  // left with the exports/nycem-coordination bundle — a stored or URL-pinned
+  // nycem must not strand a browser in a profile with no UI.
+  profile: 'fdny' as const,
   visibilityPolicy: { par_member_names: 'full', riding_lists: 'full', radio_channels: 'all' },
   policyEditorOpen: false,
   targetBounds: null,
@@ -384,11 +356,6 @@ const initial: AppState = {
   parChecks: {},
   cadIncident: null,
   responsePacketOpen: false,
-  portfolio: [],
-  portfolioHoverId: null,
-  tickerFeed: [],
-  eoc: { level: 4, history: [] },
-  planActivations: [],
   interagencyRequests: [],
   requestThresholds: { immediate: 120_000, urgent: 300_000, routine: 1_800_000 },
   feedHealth: {},
@@ -396,12 +363,6 @@ const initial: AppState = {
   feedPanelOpen: false,
   undoDepth: 0,
   undoLabel: null,
-  weatherAlerts: [],
-  weatherObs: null,
-  triggerSuggestions: [],
-  triggerRules: [],
-  exerciseReview: null,
-  exerciseReviewDirty: false,
   aarOpen: false,
   chats: [],
   chatOpen: false,

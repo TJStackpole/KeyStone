@@ -24,7 +24,6 @@ function pictureIsLive(): boolean {
     !!s.incident ||
     Object.keys(s.units).length > 0 ||
     !!s.scenario?.loaded ||
-    s.watchCommand ||
     s.replay.active ||
     s.groundViewActive ||
     s.inspectedModelOn

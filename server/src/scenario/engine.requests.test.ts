@@ -1,17 +1,37 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { after, before, test } from 'node:test'
 import type { IcsShape } from '../types.js'
 import { ScenarioEngine, type EngineDeps } from './engine.js'
 
-// Regression coverage for the Prompt 11 request/alarm lifecycle across
-// rewinds, run against the real bundled exercise (pabt-flood-exercise ships
-// 8 scripted requests at t=30..240, their transitions through t=1300, and
-// alarm escalations at t=378 ('2nd') and t=626 ('3rd')).
+// Regression coverage for the request/alarm lifecycle across rewinds, run
+// against a bundled FIXTURE scenario (extracted from the retired NYCEM
+// flood exercise): 8 scripted requests at t=30..240, their transitions
+// through t=1300, and alarm escalations at t=378 ('2nd') and t=626 ('3rd').
+// The fixture installs into assets/scenarios for the run and is removed
+// after — the platform's scenario menu never sees it.
 //
 // The bugs these lock in (bug hunt #7): teardown() on a rewind used to wipe
 // the refId→REQ-id dedupe map, so every scrub-back re-opened all scripted
 // requests as persisted duplicates; and replayed alarm/transition events
 // re-announced through the deps on every scrub.
+
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const FIXTURE_SRC = resolve(HERE, 'requests.fixture.json')
+const FIXTURE_DIR = resolve(HERE, '../../../assets/scenarios')
+const FIXTURE_NAME = 'engine-requests-fixture'
+const FIXTURE_DEST = resolve(FIXTURE_DIR, `${FIXTURE_NAME}.json`)
+
+before(() => {
+  mkdirSync(FIXTURE_DIR, { recursive: true })
+  copyFileSync(FIXTURE_SRC, FIXTURE_DEST)
+})
+after(() => {
+  rmSync(FIXTURE_DEST, { force: true })
+})
 
 function makeHarness() {
   const opened: string[] = []
@@ -48,7 +68,7 @@ function makeHarness() {
 
 test('scripted requests open exactly once across rewind and re-cross; replayed transitions and alarms are suppressed', async () => {
   const { engine, opened, transitions, alarms, feedMockClears } = makeHarness()
-  await engine.load('pabt-flood-exercise')
+  await engine.load(FIXTURE_NAME)
 
   // Forward to t=400: all 8 scripted requests and the 9 transitions ≤400.
   engine.seekTo(400)
@@ -84,7 +104,7 @@ test('scripted requests open exactly once across rewind and re-cross; replayed t
 
   // Full unload resets the map: a fresh run intentionally opens NEW records.
   engine.stop()
-  await engine.load('pabt-flood-exercise')
+  await engine.load(FIXTURE_NAME)
   engine.seekTo(60)
   assert.equal(opened.length, 11, 'a new run opens fresh requests (3 scripted ≤60)')
   engine.stop()
