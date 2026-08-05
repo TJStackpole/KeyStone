@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toggleIsolateMode } from '../actions'
 import { MiniModel } from './MiniModel'
 import { GOOGLE_KEY, faceViews, loadMapsJs, nysOrthoFace } from './oblique'
 import type { FaceView, TargetFrame } from './oblique'
@@ -46,7 +47,9 @@ export function SizeUpStrip() {
   const [err, setErr] = useState<string | null>(null)
   // LIVE VIEWS (the old floating battle-view rail, docked here): the camera
   // API lazy-loads with the tab so this component keeps Cesium out of its
-  // static graph. The tab exists only while the ISOLATE view lock is armed.
+  // static graph. The tab is always on the strip — unlocked it offers the
+  // one-press ISOLATE engage (so the tool is findable), locked it holds the
+  // camera controls.
   const locked = viewLock !== 'off'
   const [vl, setVl] = useState<ViewLockApi | null>(null)
   useEffect(() => {
@@ -160,8 +163,8 @@ export function SizeUpStrip() {
       {open && (
         <>
           <div className="sizeup-tabs" role="tablist">
-            {([...(locked ? (['views'] as Tab[]) : []), 'oblique', 'street', 'model'] as Tab[]).map((t) => (
-              <button key={t} role="tab" aria-selected={tab === t} className={`sizeup-tab${tab === t ? ' on' : ''}${t === 'views' ? ' live' : ''}`} onClick={() => setTab(t)}>
+            {(['views', 'oblique', 'street', 'model'] as Tab[]).map((t) => (
+              <button key={t} role="tab" aria-selected={tab === t} className={`sizeup-tab${tab === t ? ' on' : ''}${t === 'views' && locked ? ' live' : ''}`} onClick={() => setTab(t)}>
                 {t === 'views' ? 'LIVE VIEWS' : t === 'oblique' ? 'OBLIQUE' : t === 'street' ? 'STREET' : '3D MODEL'}
               </button>
             ))}
@@ -186,6 +189,20 @@ export function SizeUpStrip() {
             </div>
           )}
 
+          {tab === 'views' && !locked && (
+            <div className="sizeup-views">
+              <button
+                className="bv-lock"
+                onClick={toggleIsolateMode}
+                title="Engage ISOLATE: clips to the fire building and locks the camera to disciplined views — TOP + head-on N/E/S/W facades with floor-by-floor stepping"
+              >
+                🔒 LOCK STRUCTURE VIEWS — ISOLATE
+              </button>
+              <div className="sizeup-views-hints">
+                Locks the camera to the fire building: TOP + N·E·S·W head-on facades, floor stepping, fire-floor jump. Same switch as ISOLATE in the top bar; the 🔓 button or ISOLATE OFF releases it.
+              </div>
+            </div>
+          )}
           {tab === 'views' && locked && (
             <div className="sizeup-views">
               <button
