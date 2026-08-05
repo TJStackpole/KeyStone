@@ -1332,6 +1332,11 @@ html, body {
 }
 .incident-btn:hover { border-color: var(--amber); box-shadow: var(--glow-amber); }
 .incident-btn svg { width: 100%; height: 100%; }
+/* On the 2D map the compass never renders (the map cannot rotate), which
+   left a dead slot between the flame and HOME — the flame drops down tight
+   above HOME there. 3D views (isolate, NYCEM globe) keep the compass and
+   the flame stays at 278. */
+body:has(.map2d-root:not(.map2d-hidden)) .incident-btn { bottom: 230px; }
 
 .staging-picker {
   position: absolute;
