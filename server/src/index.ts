@@ -21,6 +21,7 @@ import {
   type RequestState,
 } from './requests.js'
 import { OpsClock } from './opsClock.js'
+import { interpretVoice } from './voice.js'
 import { POLICY_SCHEMA, setVisibilityPolicy, visibilityPolicy } from './policy.js'
 import { allFeedHealth, clearAllFeedMocks, feedData, pushableFeedData, registerFeed, setFeedMock, startFeeds } from './feeds/registry.js'
 import dotCameras from './feeds/adapters/dotCameras.js'
@@ -1144,6 +1145,10 @@ app.post('/api/ops/par-interval', (req, res) => {
   }
   res.json({ minutes: opsClock.setParIntervalMin(minutes) })
 })
+
+// Prompt 15 Tier B: closed-schema voice intent fallback (ANTHROPIC_API_KEY
+// optional — absent key degrades to 503 and the client's grammar tier).
+app.post('/api/voice/interpret', (req, res) => void interpretVoice(req, res))
 
 app.post('/api/timeline', (req, res) => {
   const { kind, payload } = req.body as { kind?: string; payload?: unknown }

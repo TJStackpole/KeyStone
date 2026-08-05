@@ -31,7 +31,7 @@ export default defineConfig({
   // One .env at the repo root serves web + server. Only the two 3D-provider keys
   // are ever exposed to the client (they are client-side keys by design).
   envDir: path.resolve(__dirname, '..'),
-  envPrefix: ['VITE_', 'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'SOCRATA_APP_TOKEN'],
+  envPrefix: ['VITE_', 'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'SOCRATA_APP_TOKEN', 'DEEPGRAM_API_KEY'],
   server: {
     // Ports follow the same overrides the server honors, so a second stack
     // (e.g. a git worktree checkout) can run beside the main one.

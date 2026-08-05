@@ -1,0 +1,208 @@
+/* Prompt 15 — push-to-talk. Bottom-right, glove-sized, above every page. */
+.ptt-root {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 96;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none; /* children opt back in */
+}
+.ptt-root > * { pointer-events: auto; }
+
+.ptt-btn {
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 50%;
+  border: 2px solid rgba(34, 211, 238, 0.55);
+  background: radial-gradient(circle at 30% 30%, rgba(34, 211, 238, 0.16), rgba(9, 14, 23, 0.96));
+  color: var(--cyan, #22d3ee);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+.ptt-root.glove .ptt-btn { min-width: 96px; min-height: 96px; }
+.ptt-btn .ptt-mic { font-size: 22px; line-height: 1; }
+.ptt-btn .ptt-label {
+  font: 700 7.5px var(--mono, monospace);
+  letter-spacing: 0.12em;
+}
+.ptt-btn.live {
+  border-color: #f59e0b;
+  color: var(--amber-bright, #fbbf24);
+  background: radial-gradient(circle at 30% 30%, rgba(245, 158, 11, 0.22), rgba(9, 14, 23, 0.96));
+  animation: ptt-glow 1.1s ease-in-out infinite;
+}
+@keyframes ptt-glow {
+  50% { box-shadow: 0 0 22px rgba(245, 158, 11, 0.55); }
+}
+
+/* Mic-live waveform */
+.ptt-wave { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
+.ptt-wave i {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--amber-bright, #fbbf24);
+  animation: ptt-bar 0.9s ease-in-out infinite;
+}
+.ptt-wave i:nth-child(1) { animation-delay: 0s; }
+.ptt-wave i:nth-child(2) { animation-delay: 0.15s; }
+.ptt-wave i:nth-child(3) { animation-delay: 0.3s; }
+.ptt-wave i:nth-child(4) { animation-delay: 0.45s; }
+.ptt-wave i:nth-child(5) { animation-delay: 0.6s; }
+@keyframes ptt-bar {
+  0%, 100% { height: 5px; }
+  50% { height: 20px; }
+}
+
+/* Live partial transcript strip */
+.ptt-strip {
+  max-width: min(420px, 60vw);
+  padding: 8px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 6px;
+  background: rgba(9, 14, 23, 0.94);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ptt-mode {
+  font: 700 8.5px var(--mono, monospace);
+  letter-spacing: 0.16em;
+  color: var(--amber, #f59e0b);
+}
+.ptt-partial {
+  font: 600 13px var(--mono, monospace);
+  color: var(--text, #dbe4f0);
+  line-height: 1.45;
+}
+.ptt-partial.idle { color: var(--text-faint, #64748b); }
+
+/* Echo chip (2s action feedback + query answers) */
+.ptt-echo {
+  max-width: min(420px, 60vw);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  background: rgba(9, 14, 23, 0.94);
+  font: 700 12px var(--mono, monospace);
+  letter-spacing: 0.06em;
+  color: var(--cyan, #22d3ee);
+  white-space: pre-line;
+  line-height: 1.55;
+}
+.ptt-echo.warn { border-color: rgba(245, 158, 11, 0.55); color: var(--amber-bright, #fbbf24); }
+
+/* Confirm card — the safety gate for state-changing commands */
+.ptt-confirm {
+  width: min(420px, 62vw);
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.65);
+  border-radius: 8px;
+  background: rgba(20, 14, 4, 0.96);
+}
+.ptt-confirm-draft {
+  font: 700 13px var(--mono, monospace);
+  color: var(--amber-bright, #fbbf24);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.ptt-confirm-row { display: flex; gap: 8px; }
+.ptt-confirm-go,
+.ptt-confirm-no {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 6px;
+  font: 700 12px var(--mono, monospace);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.ptt-confirm-go {
+  border: 1px solid rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+.ptt-confirm-no {
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+}
+.ptt-confirm-hint {
+  margin-top: 7px;
+  font: 600 9.5px var(--mono, monospace);
+  color: var(--text-dim, #94a3b8);
+  letter-spacing: 0.06em;
+}
+
+/* Side minis: voice replies + help */
+.ptt-side { display: flex; gap: 6px; }
+.ptt-mini {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(9, 14, 23, 0.9);
+  color: var(--text-dim, #94a3b8);
+  font: 700 13px var(--mono, monospace);
+  cursor: pointer;
+}
+.ptt-mini.on { border-color: var(--cyan, #22d3ee); color: var(--cyan, #22d3ee); }
+
+/* Help panel */
+.ptt-help {
+  width: min(520px, 74vw);
+  max-height: min(560px, 70vh);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 8px;
+  background: rgba(9, 14, 23, 0.97);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ptt-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.2);
+  font: 700 11px var(--mono, monospace);
+  letter-spacing: 0.12em;
+  color: var(--cyan, #22d3ee);
+}
+.ptt-help-head button {
+  background: none;
+  border: none;
+  color: var(--text-dim, #94a3b8);
+  cursor: pointer;
+  font-size: 14px;
+  min-width: 34px;
+  min-height: 30px;
+}
+.ptt-help-body { overflow-y: auto; padding: 10px 16px 14px; }
+.ptt-help-body h4 {
+  margin: 10px 0 4px;
+  font: 700 10px var(--mono, monospace);
+  letter-spacing: 0.16em;
+  color: var(--amber, #f59e0b);
+}
+.ptt-help-body ul { margin: 0; padding-left: 16px; }
+.ptt-help-body li {
+  font: 500 12px var(--ui, 'Inter', sans-serif);
+  color: var(--text, #dbe4f0);
+  line-height: 1.65;
+}
+.ptt-help-note {
+  margin-top: 12px;
+  font: 600 10.5px var(--mono, monospace);
+  color: var(--amber-bright, #fbbf24);
+  line-height: 1.6;
+}

@@ -74,6 +74,9 @@ export interface ScenarioEvent {
     | 'request_transition'
     | 'nws_mock'
     | 'feed_mock'
+    // Prompt 15: inject a transcript straight into the client's voice intent
+    // tier — the demo shows voice control with zero ASR keys, no live audio.
+    | 'voice_command'
   unit?: SpawnDef
   callsign?: string
   path?: [number, number][]
@@ -547,6 +550,10 @@ export class ScenarioEngine extends EventEmitter {
         if (ev.bio !== undefined) u.bio = ev.bio
         this.txUnit(u)
         emitTimeline('unit.status', { callsign: u.callsign, status: u.status, drill: true })
+        break
+      }
+      case 'voice_command': {
+        this.deps.broadcast({ type: 'voice_command', transcript: ev.text ?? '' })
         break
       }
       case 'radio_tx': {

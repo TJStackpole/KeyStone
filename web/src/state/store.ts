@@ -135,6 +135,29 @@ export interface AppState {
   dashboardPage: 0 | 1 | 2 | 3 | 4 | 5
   /** Simulated dispatch audio currently speaking (DISPATCH page). */
   dispatchPlaying: 'fdny' | 'ems' | 'both' | null
+  /** Size-up strip tab + face index — in the store (not component state) so
+   *  the voice layer and scenario beats can drive them. */
+  sizeupTab: 'views' | 'oblique' | 'street'
+  sizeupFace: number
+  /** 2D basemap — lifted from TacticalMap2D for the same reason. */
+  map2dBase: 'dark' | 'light' | 'sat'
+  // ---- Prompt 15: push-to-talk voice command layer ------------------------
+  /** Mic held and streaming to the ASR tier. */
+  voiceListening: boolean
+  /** Live partial transcript while the PTT is held. */
+  voicePartial: string
+  /** Which ASR provider is active ('deepgram' | 'webspeech' | null=idle). */
+  voiceAsr: 'deepgram' | 'webspeech' | null
+  /** 2-second echo chip after an instant command executes ("→ EXPOSURE 2"). */
+  voiceEcho: { text: string; tone: 'ok' | 'warn' } | null
+  /** Pending confirm-class command: drafted action awaiting tap/voice CONFIRM.
+   *  The confirmation gate lives in the ACTION layer (registry), not here. */
+  voiceConfirm: { intent: string; slots: Record<string, string>; draft: string } | null
+  /** Speak one-sentence answers to voice queries (default OFF — a tablet
+   *  talking over radio traffic is a liability; the user opts in). */
+  voiceReplies: boolean
+  /** Voice command reference panel (the "what can I say" list). */
+  voiceHelpOpen: boolean
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
   /** Command board diagram: unit uid -> normalized {x,y} on the building. */
@@ -342,6 +365,16 @@ const initial: AppState = {
   practiceTour: false,
   dashboardPage: 0,
   dispatchPlaying: null,
+  sizeupTab: 'oblique',
+  sizeupFace: 0,
+  map2dBase: 'dark',
+  voiceListening: false,
+  voicePartial: '',
+  voiceAsr: null,
+  voiceEcho: null,
+  voiceConfirm: null,
+  voiceReplies: localStorage.getItem('ks-voice-replies') === '1',
+  voiceHelpOpen: false,
   boardAssignments: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>

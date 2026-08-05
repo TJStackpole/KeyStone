@@ -160,7 +160,7 @@ function hydrantsFC(hydrants: { id: string; lat: number; lon: number }[]): FC {
 
 export function TacticalMap2D() {
   const canMap2d = useCapability('view.map2d')
-  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles, trafficLinks } = useAppSlice((s) => ({
+  const { mode2d, incident, units, shapes, hydrants, footprintsGeo, layerToggles, trafficLinks, base } = useAppSlice((s) => ({
     mode2d: s.mapMode === '2d',
     layerToggles: s.layerToggles,
     incident: s.incident,
@@ -169,6 +169,7 @@ export function TacticalMap2D() {
     hydrants: s.intel.hydrants,
     footprintsGeo: s.footprintsGeo,
     trafficLinks: s.trafficLinks,
+    base: s.map2dBase, // in the store so the voice layer can switch basemaps
   }))
   // 2D is the tactical view ONLY where the manifest grants it (FDNY) — the
   // NYCEM profile keeps its citywide globe untouched.
@@ -176,7 +177,8 @@ export function TacticalMap2D() {
   const divRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const [ready, setReady] = useState(false)
-  const [base, setBase] = useState<'dark' | 'light' | 'sat'>('dark')
+  const setBase = (fn: (v: 'dark' | 'light' | 'sat') => 'dark' | 'light' | 'sat') =>
+    setAppState((s) => ({ map2dBase: fn(s.map2dBase) }))
 
   // Create the map once, on first activation — never for pure-3D sessions.
   useEffect(() => {

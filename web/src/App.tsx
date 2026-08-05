@@ -41,6 +41,7 @@ import { attachLayoutSwipe } from './lib/layouts'
 import { PracticeTour } from './components/PracticeTour'
 import { ResponsePacket } from './components/ResponsePacket'
 import { CommandBoardPage } from './components/CommandBoardPage'
+import { PttButton } from './components/PttButton'
 import { DispatchPage } from './components/DispatchPage'
 import { RidingListPage } from './components/RidingListPage'
 import { DashboardTabs } from './components/DashboardTabs'
@@ -211,6 +212,7 @@ export default function App() {
       </Gate>
       <MyAgencyRequestsPanel />
       <ProfileWatermark />
+      <PttButton />
       <NoticeChip />
       <WindAdvisory />
       <Compass />

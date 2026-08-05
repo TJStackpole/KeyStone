@@ -118,9 +118,14 @@ interface ChatWsMsg {
   type: 'chat'
   msg: ChatMsg
 }
+interface VoiceCommandMsg {
+  type: 'voice_command'
+  transcript: string
+}
 type ServerMsg =
   | SnapshotMsg
   | PolicyMsg
+  | VoiceCommandMsg
   | IncidentMsg
   | UnitMsg
   | UnitsBatchMsg
@@ -399,6 +404,11 @@ function handle(msg: ServerMsg): void {
       if (msg.event.kind !== 'unit.track') {
         setAppState((s) => ({ timeline: [...s.timeline, msg.event].slice(-600) }))
       }
+      break
+    case 'voice_command':
+      // Prompt 15: scripted scenario transcripts run the full intent pipeline
+      // — the demo shows voice control with zero ASR keys and no live audio.
+      void import('./voice/controller').then((m) => m.injectTranscript(msg.transcript))
       break
     case 'transcript.reset': {
       // Server-authoritative clear of the drill channels (scenario load, stop,

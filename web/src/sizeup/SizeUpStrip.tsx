@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { placeExposureLabels, toggleIsolateMode, windName } from '../actions'
 import { GOOGLE_KEY, faceViews, loadMapsJs, nysOrthoFace } from './oblique'
 import type { FaceView, TargetFrame } from './oblique'
-import { useAppSlice } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import './SizeUpStrip.css'
 
 // ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ function bearingTo(fromLat: number, fromLon: number, toLat: number, toLon: numbe
 }
 
 export function SizeUpStrip() {
-  const { incident, targetBounds, shapes, viewLock, viewLockFloor, suspended, orbitPaused, units } = useAppSlice((s) => ({
+  const { incident, targetBounds, shapes, viewLock, viewLockFloor, suspended, orbitPaused, units, tab, faceIdx } = useAppSlice((s) => ({
     incident: s.incident,
     targetBounds: s.targetBounds,
     shapes: s.shapes,
@@ -43,10 +43,15 @@ export function SizeUpStrip() {
     suspended: s.viewLockSuspended,
     orbitPaused: s.viewLockOrbitPaused,
     units: s.units,
+    // Tab + face live in the store so the voice layer can drive the strip.
+    tab: s.sizeupTab,
+    faceIdx: s.sizeupFace,
   }))
   const [open, setOpen] = useState(true)
-  const [tab, setTab] = useState<Tab>('oblique')
-  const [faceIdx, setFaceIdx] = useState(0)
+  const setTab = (t: Tab | ((prev: Tab) => Tab)) =>
+    setAppState((s) => ({ sizeupTab: typeof t === 'function' ? t(s.sizeupTab) : t }))
+  const setFaceIdx = (f: number | ((prev: number) => number)) =>
+    setAppState((s) => ({ sizeupFace: typeof f === 'function' ? f(s.sizeupFace) : f }))
   const [obliqueSrc, setObliqueSrc] = useState<'nys' | 'google45'>('nys')
   // Exposure assignment: the responding officer taps ASSIGN, then the face
   // that faces the street — it becomes EXPOSURE 1, 2-3-4 number clockwise
