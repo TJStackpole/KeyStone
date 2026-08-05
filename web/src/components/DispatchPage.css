@@ -97,7 +97,7 @@
 /* Citywide feed lives on the DISPATCH page now (was the top-bar dropdown). */
 .dispatch-page .dp-body {
   display: grid;
-  grid-template-columns: minmax(380px, 480px) 1fr;
+  grid-template-columns: minmax(440px, 560px) 1fr;
   gap: 12px;
   align-items: start;
 }
@@ -114,3 +114,51 @@
   .dispatch-page .dp-body { grid-template-columns: 1fr; }
   .dispatch-page .dp-feed { max-height: 44vh; }
 }
+
+/* Readable feed scale — the base .feed-* sizes were tuned for a cramped
+   dropdown; on a full dashboard page they read like fine print. */
+.dispatch-page .dp-feed .incidents-head {
+  font-size: 11px;
+  line-height: 1.6;
+  padding-bottom: 9px;
+  margin-bottom: 10px;
+}
+.dispatch-page .dp-feed .feed-division-head {
+  font-size: 13.5px;
+  letter-spacing: 0.16em;
+  padding: 8px 0 5px;
+  top: -12px; /* matches the dp-feed padding so the pinned head sits flush */
+  background: rgba(9, 14, 23, 0.98);
+}
+.dispatch-page .dp-feed .feed-battalion { margin-bottom: 8px; }
+.dispatch-page .dp-feed .feed-battalion-head {
+  font-size: 10.5px;
+  padding: 4px 0 3px;
+}
+.dispatch-page .dp-feed .feed-row {
+  min-height: 58px;
+  gap: 12px;
+  padding: 8px 10px;
+}
+.dispatch-page .dp-feed .feed-src {
+  font-size: 10px;
+  padding: 3px 7px;
+  letter-spacing: 0.12em;
+}
+.dispatch-page .dp-feed .feed-main { gap: 3px; }
+.dispatch-page .dp-feed .feed-main b {
+  font-size: 15px;
+  white-space: normal; /* titles wrap — never ellipsize on a full page */
+  line-height: 1.25;
+}
+.dispatch-page .dp-feed .feed-main i {
+  font-size: 11.5px;
+  white-space: normal;
+  line-height: 1.4;
+}
+.dispatch-page .dp-feed .feed-meta {
+  font-size: 10.5px;
+  gap: 3px;
+}
+.dispatch-page .dp-feed .feed-meta em { font-size: 10px; }
+.dispatch-page .dp-script { font-size: 13.5px; line-height: 1.8; }
