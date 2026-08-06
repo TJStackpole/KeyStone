@@ -16,8 +16,9 @@
 // testable table — the deny-list tests run without dragging in Cesium.
 // ---------------------------------------------------------------------------
 
+import { PANEL_IDS, resetPanelLayout, setAllPanelsMinimized, setPanelMinimized } from '../lib/movable'
 import { getAppState, setAppState } from '../state/store'
-import { exposureDigit, parseUnitPhrase } from './grammar'
+import { exposureDigit, PANEL_ALIASES, parseUnitPhrase } from './grammar'
 import type { Unit } from '../types'
 
 export type IntentClass = 'instant' | 'confirm' | 'deny' | 'query'
@@ -441,6 +442,42 @@ export const INTENTS: Record<string, IntentDef> = {
       return { ok: true, echo: `→ ${(slots.page ?? '').toUpperCase()}` }
     },
   },
+  minimize_panel: {
+    klass: 'instant',
+    description: 'Minimize (collapse to its header) a named panel on the map: comms, units, incident, site intel, video dock, tools, feeds, chat...',
+    slots: { panel: { description: 'Panel name as spoken', enum: PANEL_ALIASES } },
+    run: (slots) => setPanelMin(slots.panel ?? '', true),
+  },
+  restore_panel: {
+    klass: 'instant',
+    description: 'Restore (expand) a minimized panel by name.',
+    slots: { panel: { description: 'Panel name as spoken', enum: PANEL_ALIASES } },
+    run: (slots) => setPanelMin(slots.panel ?? '', false),
+  },
+  minimize_all: {
+    klass: 'instant',
+    description: 'Minimize every panel on the map platform — clears the screen to headers only.',
+    run: () => {
+      setAllPanelsMinimized(true)
+      return { ok: true, echo: 'ALL PANELS MINIMIZED' }
+    },
+  },
+  restore_all: {
+    klass: 'instant',
+    description: 'Restore every minimized panel.',
+    run: () => {
+      setAllPanelsMinimized(false)
+      return { ok: true, echo: 'ALL PANELS RESTORED' }
+    },
+  },
+  reset_layout: {
+    klass: 'instant',
+    description: 'Reset the panel layout: every box returns to its default position and size.',
+    run: () => {
+      resetPanelLayout()
+      return { ok: true, echo: 'LAYOUT RESET' }
+    },
+  },
   start_par: {
     klass: 'instant',
     description: 'Start a PAR check: opens the command board and logs the PAR start. (Completing PAR entries stays tap-only.)',
@@ -755,6 +792,13 @@ export const INTENTS: Record<string, IntentDef> = {
     description: 'Add/remove/edit riding list members. NEVER executable by voice.',
     denyReason: 'Riding list changes are TAP-ONLY — edit on the RIDING LIST page.',
   },
+}
+
+function setPanelMin(alias: string, minimized: boolean): ExecResult {
+  const id = Object.entries(PANEL_IDS).find(([, aliases]) => aliases.includes(alias))?.[0]
+  if (!id) return { ok: false, echo: `NO PANEL "${alias.toUpperCase()}"`, tone: 'warn' }
+  setPanelMinimized(id, minimized)
+  return { ok: true, echo: `${alias.toUpperCase()} ${minimized ? 'MINIMIZED' : 'RESTORED'}` }
 }
 
 function normalizeAlarm(word?: string): import('../types').AlarmLevel | null {

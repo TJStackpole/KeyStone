@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { clearInspected, flyToFeature, hideInspectedModel, showInspectedModel, toggleLayer } from '../actions'
+import { togglePanelMinimized, useMovable } from '../lib/movable'
 import { buildingLinks, type CofoRecord } from '../api/nyc'
 import { formatMeters } from '../lib/geo'
 import { useAppSlice } from '../state/store'
@@ -125,16 +125,25 @@ function InspectedSection() {
 }
 
 export function SiteIntelPanel() {
-  const { incident, intel, layers, layerToggles, inspected } = useAppSlice((s) => ({ incident: s.incident, intel: s.intel, layers: s.layers, layerToggles: s.layerToggles, inspected: s.inspected }))
-  const [collapsed, setCollapsed] = useState(false)
+  const { incident, intel, layers, layerToggles, inspected, collapsed } = useAppSlice((s) => ({
+    incident: s.incident,
+    intel: s.intel,
+    layers: s.layers,
+    layerToggles: s.layerToggles,
+    inspected: s.inspected,
+    collapsed: !!s.panelMinimized.intel,
+  }))
+  // Shared movable/minimize system ('intel'): drag anywhere, double-click or
+  // the header chevron collapses — one persisted state, voice-reachable.
+  const mvIntel = useMovable('intel')
 
   // No incident up: tapping a building still gets its full public record —
   // and the VIEW 3D MODEL button — in a slim standalone panel.
   if (!incident) {
     if (!inspected) return null
     return (
-      <aside className={`intel-panel glass${collapsed ? ' collapsed' : ''}`}>
-        <button className="intel-head" onClick={() => setCollapsed((c) => !c)}>
+      <aside {...mvIntel} className={`intel-panel glass${collapsed ? ' collapsed' : ''}`}>
+        <button className="intel-head" onClick={() => togglePanelMinimized('intel')}>
           <span className="card-title">Building Info</span>
           <span className="intel-bin">{inspected.hit.bin ? `BIN ${inspected.hit.bin}` : ''}</span>
           <span className={`chev${collapsed ? ' closed' : ''}`}>▾</span>
@@ -153,8 +162,8 @@ export function SiteIntelPanel() {
   const firehouses = intel.firehouses.slice(0, 3)
 
   return (
-    <aside className={`intel-panel glass${collapsed ? ' collapsed' : ''}`}>
-      <button className="intel-head" onClick={() => setCollapsed((c) => !c)}>
+    <aside {...mvIntel} className={`intel-panel glass${collapsed ? ' collapsed' : ''}`}>
+      <button className="intel-head" onClick={() => togglePanelMinimized('intel')}>
         <span className="card-title">Site Intel</span>
         <span className="intel-bin">{incident.bin ? `BIN ${incident.bin}` : ''}</span>
         <span className={`chev${collapsed ? ' closed' : ''}`}>▾</span>

@@ -55,6 +55,49 @@ export function togglePanelMinimized(id: string): void {
   })
 }
 
+/** Explicit set — the voice layer's "minimize/restore <panel>" lands here. */
+export function setPanelMinimized(id: string, minimized: boolean): void {
+  setAppState((s) => {
+    const next = { ...s.panelMinimized }
+    if (minimized) next[id] = true
+    else delete next[id]
+    persistMin(next)
+    return { panelMinimized: next }
+  })
+}
+
+/** "Minimize everything" / "restore everything" — one store write. */
+export function setAllPanelsMinimized(minimized: boolean): void {
+  const next: Record<string, boolean> = {}
+  if (minimized) for (const id of Object.keys(PANEL_IDS)) next[id] = true
+  persistMin(next)
+  setAppState({ panelMinimized: next })
+}
+
+/** Every minimizable surface on the map platform, with its spoken aliases —
+ *  drives "minimize <panel>", "minimize everything", and the help panel. */
+export const PANEL_IDS: Record<string, string[]> = {
+  'incident-card': ['incident', 'incident card'],
+  roster: ['units', 'roster', 'unit list'],
+  intel: ['intel', 'site intel', 'building info'],
+  comms: ['comms', 'radio'],
+  'utility-dock': ['dock', 'video', 'utility dock', 'video dock'],
+  'draw-toolbar': ['tools', 'draw tools', 'toolbar'],
+  'scenario-bar': ['scenario bar', 'scenarios'],
+  'feed-health': ['feeds', 'feed health', 'live feeds'],
+  streetview: ['street panel', 'street view panel'],
+  takchat: ['chat', 'tak chat'],
+  manuals: ['manuals'],
+  tactics: ['tactics'],
+  'agency-req': ['requests', 'request tracker'],
+  'response-packet': ['packet', 'response packet'],
+  wind: ['wind', 'wind advisory'],
+  practice: ['checklist', 'practice'],
+  aar: ['debrief', 'aar'],
+  'ground-height': ['height scale', 'ground height'],
+  ptt: ['ptt', 'voice button', 'mic button'],
+}
+
 /** The RESET LAYOUT button: every box returns to its default position and
  *  size, and glove-mode zoom switches off — ONE button un-messes the screen
  *  no matter what combination got someone lost. */

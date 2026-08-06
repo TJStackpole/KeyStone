@@ -128,6 +128,31 @@ describe('unit designator validation', () => {
   })
 })
 
+describe('panel minimize (everything on the map platform)', () => {
+  it('matches minimize/restore by panel name, longest alias first', () => {
+    expect(matchGrammar('minimize comms')).toEqual({ intent: 'minimize_panel', slots: { panel: 'comms' } })
+    expect(matchGrammar('collapse the site intel')?.slots.panel).toBe('site intel')
+    expect(matchGrammar('restore the units')?.intent).toBe('restore_panel')
+    expect(matchGrammar('minimize everything')?.intent).toBe('minimize_all')
+    expect(matchGrammar('reset the layout')?.intent).toBe('reset_layout')
+  })
+  it('minimize/restore drives the shared persisted panel state', async () => {
+    await executeIntent('minimize_panel', { panel: 'comms' }, meta)
+    expect(getAppState().panelMinimized.comms).toBe(true)
+    await executeIntent('restore_panel', { panel: 'comms' }, meta)
+    expect(getAppState().panelMinimized.comms).toBeUndefined()
+  })
+  it('minimize everything covers every registered panel, restore clears it', async () => {
+    await executeIntent('minimize_all', {}, meta)
+    const min = getAppState().panelMinimized
+    for (const id of ['comms', 'roster', 'incident-card', 'intel', 'utility-dock', 'ptt']) {
+      expect(min[id], id).toBe(true)
+    }
+    await executeIntent('restore_all', {}, meta)
+    expect(Object.keys(getAppState().panelMinimized)).toHaveLength(0)
+  })
+})
+
 describe('generated lexicon', () => {
   it('derives ASR keywords from the grammar (no drift possible)', () => {
     const lex = buildLexicon()

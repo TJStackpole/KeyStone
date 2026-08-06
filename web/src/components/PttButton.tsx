@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { setPanelMinimized } from '../lib/movable'
 import { setAppState, useAppSlice } from '../state/store'
 import { asrModeLabel, pickProvider, type AsrProvider } from '../voice/asr'
 import { handleFinalTranscript, tapCancel, tapConfirm } from '../voice/controller'
@@ -13,7 +14,7 @@ import './PttButton.css'
 // ---------------------------------------------------------------------------
 
 export function PttButton() {
-  const { listening, partial, asr, echo, confirm, replies, helpOpen, gloveMode } = useAppSlice((s) => ({
+  const { listening, partial, asr, echo, confirm, replies, helpOpen, gloveMode, minimized } = useAppSlice((s) => ({
     listening: s.voiceListening,
     partial: s.voicePartial,
     asr: s.voiceAsr,
@@ -22,6 +23,7 @@ export function PttButton() {
     replies: s.voiceReplies,
     helpOpen: s.voiceHelpOpen,
     gloveMode: s.gloveMode,
+    minimized: !!s.panelMinimized.ptt,
   }))
   const providerRef = useRef<AsrProvider | null>(null)
   const [asrErr, setAsrErr] = useState<string | null>(null)
@@ -152,46 +154,63 @@ export function PttButton() {
       )}
       {asrErr && !listening && !echo && <div className="ptt-echo glass warn">MIC UNAVAILABLE — {asrErr.toUpperCase()}</div>}
 
-      <div className="ptt-side">
+      {minimized ? (
+        // Minimized: a small chip — tap (or say "restore ptt") to bring the
+        // full control back. SPACE hold-to-talk keeps working while minimized.
         <button
-          className={`ptt-mini${replies ? ' on' : ''}`}
-          title="Voice replies (spoken answers to queries) — default OFF: a tablet talking over radio traffic is a liability"
-          onClick={() => {
-            const on = !replies
-            setAppState({ voiceReplies: on })
-            localStorage.setItem('ks-voice-replies', on ? '1' : '0')
-          }}
+          className={`ptt-chip${listening ? ' live' : ''}`}
+          title="Voice control (minimized) — tap to restore. Hold SPACE still talks."
+          onClick={() => setPanelMinimized('ptt', false)}
         >
-          {replies ? '🔊' : '🔇'}
+          🎙
         </button>
-        <button className="ptt-mini" title="Voice commands reference" onClick={() => setAppState({ voiceHelpOpen: true })}>
-          ?
-        </button>
-      </div>
+      ) : (
+        <>
+          <div className="ptt-side">
+            <button
+              className={`ptt-mini${replies ? ' on' : ''}`}
+              title="Voice replies (spoken answers to queries) — default OFF: a tablet talking over radio traffic is a liability"
+              onClick={() => {
+                const on = !replies
+                setAppState({ voiceReplies: on })
+                localStorage.setItem('ks-voice-replies', on ? '1' : '0')
+              }}
+            >
+              {replies ? '🔊' : '🔇'}
+            </button>
+            <button className="ptt-mini" title="Voice commands reference" onClick={() => setAppState({ voiceHelpOpen: true })}>
+              ?
+            </button>
+            <button className="ptt-mini" title="Minimize the voice control (SPACE still talks)" onClick={() => setPanelMinimized('ptt', true)}>
+              —
+            </button>
+          </div>
 
-      <button
-        className={`ptt-btn${listening ? ' live' : ''}`}
-        onPointerDown={press}
-        onPointerUp={release}
-        onPointerLeave={release}
-        onContextMenu={(e) => e.preventDefault()}
-        title="HOLD to talk (or hold SPACE) — release to execute. No wake word."
-      >
-        {listening ? (
-          <span className="ptt-wave" aria-hidden>
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-        ) : (
-          <span className="ptt-mic" aria-hidden>
-            🎙
-          </span>
-        )}
-        <span className="ptt-label">{listening ? 'RELEASE TO SEND' : 'HOLD · PTT'}</span>
-      </button>
+          <button
+            className={`ptt-btn${listening ? ' live' : ''}`}
+            onPointerDown={press}
+            onPointerUp={release}
+            onPointerLeave={release}
+            onContextMenu={(e) => e.preventDefault()}
+            title="HOLD to talk (or hold SPACE) — release to execute. No wake word."
+          >
+            {listening ? (
+              <span className="ptt-wave" aria-hidden>
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
+            ) : (
+              <span className="ptt-mic" aria-hidden>
+                🎙
+              </span>
+            )}
+            <span className="ptt-label">{listening ? 'RELEASE TO SEND' : 'HOLD · PTT'}</span>
+          </button>
+        </>
+      )}
     </div>
   )
 }

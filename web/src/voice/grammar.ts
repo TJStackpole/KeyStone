@@ -11,6 +11,8 @@
 // so the ASR vocabulary and the grammar can never drift apart.
 // ---------------------------------------------------------------------------
 
+import { PANEL_IDS } from '../lib/movable'
+
 export interface ParsedIntent {
   intent: string
   slots: Record<string, string>
@@ -143,6 +145,11 @@ const LAYER =
 const AGENCY = '(?<agency>nypd|papd|ems|fdny|oem|nycem|dot|con ed(?:ison)?)'
 const PAGE =
   '(?<page>map|tactical map|command board|board|riding lists?|decision log|log|resource ledger|resources|ledger|dispatch|dispatch comms)'
+// Spoken panel aliases, longest first so "site intel" beats "intel".
+export const PANEL_ALIASES = Object.values(PANEL_IDS)
+  .flat()
+  .sort((a, b) => b.length - a.length)
+const PANEL = `(?<panel>${PANEL_ALIASES.join('|')})`
 const UNIT_SLOT = `(?<unit>(?:${UNIT_WORDS.join('|')})\\s+\\d{1,4})`
 
 export const COMMANDS: CommandSpec[] = [
@@ -341,6 +348,36 @@ export const COMMANDS: CommandSpec[] = [
       new RegExp(`\\b(?:open|show|go to|switch to)\\s+(?:the\\s+)?${PAGE}\\b`),
     ],
     examples: ['show the command board', 'open the riding list', 'go to the map'],
+  },
+  {
+    intent: 'minimize_all',
+    group: 'PANELS',
+    patterns: [/\b(?:minimize|collapse) (?:everything|all(?: panels)?)\b/, /\bclear (?:the )?screen\b/, /\bclean (?:up )?(?:the )?screen\b/],
+    examples: ['minimize everything', 'clear the screen'],
+  },
+  {
+    intent: 'restore_all',
+    group: 'PANELS',
+    patterns: [/\b(?:restore|expand) (?:everything|all(?: panels)?)\b/, /\bbring (?:everything|it all) back\b/],
+    examples: ['restore everything'],
+  },
+  {
+    intent: 'minimize_panel',
+    group: 'PANELS',
+    patterns: [new RegExp(`\\b(?:minimize|collapse) (?:the )?${PANEL}\\b`)],
+    examples: ['minimize comms', 'collapse the site intel'],
+  },
+  {
+    intent: 'restore_panel',
+    group: 'PANELS',
+    patterns: [new RegExp(`\\b(?:restore|expand|maximize) (?:the )?${PANEL}\\b`), new RegExp(`\\bbring (?:the )?${PANEL} back\\b`)],
+    examples: ['restore comms', 'bring the units back'],
+  },
+  {
+    intent: 'reset_layout',
+    group: 'PANELS',
+    patterns: [/\breset (?:the )?(?:layout|panels|screen)\b/, /\bfix (?:the )?layout\b/],
+    examples: ['reset the layout'],
   },
   {
     intent: 'start_par',

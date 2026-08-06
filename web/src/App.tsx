@@ -38,6 +38,7 @@ import { useCapability } from './profiles/manifest'
 import { applyOverlayLod } from './cesium/overlayLod'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
+import { useMovable } from './lib/movable'
 import { PracticeTour } from './components/PracticeTour'
 import { ResponsePacket } from './components/ResponsePacket'
 import { CommandBoardPage } from './components/CommandBoardPage'
@@ -77,10 +78,11 @@ function GroundViewExit() {
  * like an aerial-platform mast).
  */
 function GroundHeightControl() {
+  const mvGroundHeight = useMovable('ground-height')
   const { drawTool, groundViewActive, groundViewFt } = useAppState()
   if (drawTool !== 'ground' && !groundViewActive) return null
   return (
-    <div className="ground-height glass">
+    <div {...mvGroundHeight} className="ground-height glass">
       <label htmlFor="gnd-ft">HEIGHT AGL</label>
       <input
         id="gnd-ft"
