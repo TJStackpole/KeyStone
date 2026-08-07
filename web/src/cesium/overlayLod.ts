@@ -1,5 +1,5 @@
 import { getAppState } from '../state/store'
-import { getLotLayer, getRoadLayer, getScene } from './scene'
+import { getLotLayer, getRoadLayer, getScene } from './registry'
 
 // ---------------------------------------------------------------------------
 // Distance-gated overlay glows. The cyan lot lines, yellow road network and

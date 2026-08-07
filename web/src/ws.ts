@@ -1,5 +1,5 @@
 import { adoptIncident, applyUnitVisibility, clearLocalIncident, flyToAlert, relocateIncidentSite, unitMapVisible } from './actions'
-import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/scene'
+import { getExposureLayer, getShapeLayer, getUnitLayer } from './cesium/registry'
 import { getAppState, setAppState } from './state/store'
 import type {
   ChatMsg,

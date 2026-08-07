@@ -1,5 +1,5 @@
 import { clearLocalIncident, unitMapVisible } from './actions'
-import { getShapeLayer, getUnitLayer } from './cesium/scene'
+import { getShapeLayer, getUnitLayer } from './cesium/registry'
 import { getAppState, setAppState } from './state/store'
 import type { IcsShape, Incident, Unit } from './types'
 

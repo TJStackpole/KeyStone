@@ -70,6 +70,10 @@ export const CAPABILITIES: Record<string, Capability> = {
   // Prompt 14: the 2D-first tactical map (Phase A). FDNY gets the toggle
   // now; the default flips to 2D when A3 lands the bundle split.
   'view.map2d': { profiles: ['fdny'] },
+  // The Cesium engine itself (P14-A3 "legacy_city3d"): profiles without it
+  // never fetch Cesium.js or the city3d chunk — pure-2D field builds drop
+  // ~1.7 MB gz + the engine's parse/eval from their lifetime, not just boot.
+  'view.city3d': { profiles: ['fdny'] },
   // The citywide 3D engine, demoted — default-off everywhere, dev-flag only
   // (?city3d=1). Config demotion, not deletion: flip this list to restore.
   'legacy_city3d': { profiles: [] },

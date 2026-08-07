@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { goHome, goToIncident, reorientNorth } from '../actions'
-import { getScene } from '../cesium/scene'
+import { getScene } from '../cesium/registry'
 import { flyTo2D } from '../map2d/controller'
 import { useCapability } from '../profiles/manifest'
 import { useAppSlice } from '../state/store'

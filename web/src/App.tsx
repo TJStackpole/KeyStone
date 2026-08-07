@@ -1,19 +1,7 @@
 import { TacticalMap2D } from './map2d/TacticalMap2D'
 import { useEffect, useRef, useState } from 'react'
-import type { Viewer } from 'cesium'
-import { initScene } from './cesium/providers'
-import { registerScene, unregisterScene } from './cesium/scene'
-import {
-  ensureTunnels,
-  exitGround,
-  reconcileProviderUpgrade,
-  refreshLots,
-  refreshRoads,
-  refreshStreetLabels,
-  restoreIncident,
-  setGroundHeightFt,
-} from './actions'
-import { setAppState, useAppSlice, useAppState } from './state/store'
+import { exitGround, restoreIncident, setGroundHeightFt } from './actions'
+import { getAppState, useAppSlice, useAppState } from './state/store'
 import { connectWs } from './ws'
 import { TopBar } from './components/TopBar'
 import { CommsPanel } from './components/CommsPanel'
@@ -33,8 +21,7 @@ import { WindAdvisory } from './components/WindAdvisory'
 import { TakChatPanel, TakLinkButton } from './components/TakChatPanel'
 import { ProfileWatermark } from './components/ProfileWatermark'
 import { NoticeChip } from './components/NoticeChip'
-import { useCapability } from './profiles/manifest'
-import { applyOverlayLod } from './cesium/overlayLod'
+import { hasCapability, useCapability } from './profiles/manifest'
 import { FeedHealthPanel } from './components/FeedHealthPanel'
 import { attachLayoutSwipe } from './lib/layouts'
 import { useMovable } from './lib/movable'
@@ -124,69 +111,48 @@ export default function App() {
   useEffect(() => {
     let disposed = false
     let idleId: number | null = null
-    let viewer: Viewer | undefined
+    let dispose: (() => void) | null = null
     if (!globeRef.current) return
     const globeEl = globeRef.current
 
     // The live picture must not wait for the 3D engine: the socket and the
     // restored incident feed the 2D tactical map (the FDNY boot view)
-    // directly — every draw call on the 3D side is getScene()-guarded.
+    // directly — every draw call on the 3D side is registry-guarded.
     connectWs()
     void restoreIncident()
     // Tablet/ATAK: edge swipes flip role layouts like dashboard pages.
     const detachSwipe = attachLayoutSwipe()
 
-    // Cesium (5.9 MB script) loads AT IDLE after first paint — see
-    // cesium/loader.ts. ISOLATE and the 3D views come up a beat later on a
-    // cold cache; everything they need re-syncs from the store below.
+    // The 3D engine is a capability: installs without view.city3d (2D-only
+    // field builds) never fetch Cesium.js or the city3d chunk AT ALL. With
+    // it, both load AT IDLE after first paint — cesium/loader.ts injects the
+    // 5.9 MB script, cesium/boot.ts is the lazy chunk with the whole 3D
+    // stack; nothing 3D ships in the boot bundle.
     const bootScene = async () => {
-      const { ensureCesiumScript } = await import('./cesium/loader')
-      await ensureCesiumScript()
-      if (disposed) return
-      performance.mark('keystone:init-scene-start')
       try {
-        const handle = await initScene(globeEl, () => {
-          // Background provider upgrade landed (or fell back to keyless) —
-          // refresh the chip and re-bake globe-window height samples.
-          if (!disposed) reconcileProviderUpgrade()
-        })
-        if (disposed) {
-          handle.viewer.destroy()
-          return
-        }
-        viewer = handle.viewer
-        registerScene(handle)
-        performance.mark('keystone:scene-ready')
-        setAppState({ sceneReady: true, providerMode: handle.mode })
-        // The incident restored before the engine existed — repeat the pass
-        // so the 3D side (camera, footprints, focus ring) catches up.
-        void restoreIncident()
-        // Camera-following overlays: lots, the yellow road network, and
-        // street labels refresh whenever a pan/zoom settles low enough
-        // (each gates on its own toggle + height + movement).
-        handle.viewer.camera.moveEnd.addEventListener(() => {
-          applyOverlayLod() // glows reveal/hide with camera distance
-          void refreshLots()
-          void refreshRoads()
-          void refreshStreetLabels()
-        })
-        // The four major vehicular tunnels are citywide + static — load once.
-        ensureTunnels()
+        const { ensureCesiumScript } = await import('./cesium/loader')
+        await ensureCesiumScript()
+        if (disposed) return
+        const boot = await import('./cesium/boot')
+        const d = await boot.bootScene(globeEl)
+        if (disposed) d()
+        else dispose = d
       } catch (err) {
         console.error('[scene] init failed:', err)
         setBootMsg('Scene init failed — see console')
       }
     }
-    const rIC: typeof requestIdleCallback | undefined = window.requestIdleCallback
-    if (rIC) idleId = rIC(() => void bootScene(), { timeout: 1500 })
-    else window.setTimeout(() => void bootScene(), 250)
+    if (hasCapability(getAppState().profile, 'view.city3d')) {
+      const rIC: typeof requestIdleCallback | undefined = window.requestIdleCallback
+      if (rIC) idleId = rIC(() => void bootScene(), { timeout: 1500 })
+      else window.setTimeout(() => void bootScene(), 250)
+    }
 
     return () => {
       disposed = true
       if (idleId !== null) window.cancelIdleCallback?.(idleId)
       detachSwipe?.()
-      unregisterScene()
-      viewer?.destroy()
+      dispose?.()
     }
   }, [])
 

@@ -35,6 +35,16 @@ export default defineConfig({
   // are ever exposed to the client (they are client-side keys by design).
   envDir: path.resolve(__dirname, '..'),
   envPrefix: ['VITE_', 'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'SOCRATA_APP_TOKEN', 'DEEPGRAM_API_KEY'],
+  build: {
+    rollupOptions: {
+      output: {
+        // maplibre-gl in its own chunk: app-code edits stop invalidating the
+        // ~800 KB map engine in browser caches, and it downloads in parallel
+        // with the app chunk on cold loads.
+        manualChunks: { maplibre: ['maplibre-gl'] },
+      },
+    },
+  },
   server: {
     // Ports follow the same overrides the server honors, so a second stack
     // (e.g. a git worktree checkout) can run beside the main one.

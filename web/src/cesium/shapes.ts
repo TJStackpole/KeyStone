@@ -1,31 +1,14 @@
 import * as Cesium from 'cesium'
 import { lazy } from './lazy'
-import type { IcsShape, PostKind, ZoneKind } from '../types'
+import type { IcsShape, PostKind } from '../types'
+import { POST_META, ZONE_STYLE } from '../ics/style'
 
 // ---------------------------------------------------------------------------
 // ICS overlay rendering: Hot/Warm/Cold zones as translucent polygons with
-// glowing borders; command posts as ICS-labeled billboards.
+// glowing borders; command posts as ICS-labeled billboards. Zone/post style
+// data lives in ics/style.ts (Cesium-free) so the DrawToolbar can use it
+// from the boot bundle.
 // ---------------------------------------------------------------------------
-
-export const ZONE_STYLE: Record<ZoneKind, { label: string; css: string }> = {
-  hot: { label: 'HOT ZONE', css: '#ef4444' },
-  warm: { label: 'WARM ZONE', css: '#f59e0b' },
-  cold: { label: 'COLD ZONE', css: '#22c55e' },
-  perimeter: { label: 'PERIMETER', css: '#22d3ee' },
-}
-
-export const POST_META: Record<PostKind, { label: string; glyph: string; css: string }> = {
-  icp: { label: 'ICP', glyph: 'ICP', css: '#f59e0b' },
-  staging: { label: 'STAGING AREA', glyph: 'STG', css: '#22d3ee' },
-  triage: { label: 'TRIAGE', glyph: 'TRI', css: '#ef4444' },
-  media: { label: 'MEDIA POINT', glyph: 'MED', css: '#a78bfa' },
-  transport: { label: 'EMS TRANSPORT CORRIDOR', glyph: 'TRN', css: '#4ade80' },
-  // IC additions (Tablet Command / ATAK / FirstDue reference set):
-  hazard: { label: 'HAZARD', glyph: 'HAZ', css: '#ef4444' },
-  water: { label: 'WATER SUPPLY', glyph: 'H2O', css: '#38bdf8' },
-  fast: { label: 'FAST / RIC', glyph: 'FST', css: '#f97316' },
-  exposure: { label: 'EXPOSURE', glyph: 'EXP', css: '#fbbf24' },
-}
 
 function postIcon(kind: PostKind): string {
   const m = POST_META[kind]

@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium'
 import { deleteShape, exitGround, inspectBuildingAt, rotateSelectedApparatus, saveShape, saveShapeWithPrior } from '../actions'
-import { ShapeLayer, ZONE_STYLE } from '../cesium/shapes'
+import { ShapeLayer } from '../cesium/shapes'
+import { ZONE_STYLE } from './style'
 import { enterGroundView } from '../cesium/viewmode'
 import { haversineMeters } from '../lib/geo'
 import { getAppState, setAppState } from '../state/store'
@@ -144,7 +145,7 @@ export class DrawController {
       const unit = getAppState().units[uid]
       // Tap a unit to toggle its callsign label (labels are hidden by default).
       // dynamic import: scene.ts owns this controller, so a static import would cycle
-      void import('../cesium/scene').then((m) => {
+      void import('../cesium/registry').then((m) => {
         m.getUnitLayer()?.toggleLabel(uid)
         if (unit && unit.agency === 'FDNY' && getAppState().utilityTab === 'video') {
           setAppState({ selectedUnitUid: uid })

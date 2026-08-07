@@ -17,54 +17,48 @@ import { StreetLabelLayer } from './streets'
 import { TacticalModelLayer } from './tactical'
 import { TrafficLayer } from './traffic'
 import { UnitLayer } from './units'
+import { _setSceneRegistry, _setTwinLayer } from './registry'
 
-/**
- * Module-level scene singleton so non-React modules (data layers, later the CoT
- * unit renderer) can reach the viewer without prop-drilling through React.
- */
-let handle: SceneHandle | null = null
-let footprintLayer: FootprintLayer | null = null
-let intelLayer: IntelMarkerLayer | null = null
-let unitLayer: UnitLayer | null = null
-let shapeLayer: ShapeLayer | null = null
-let drawController: DrawController | null = null
-let boundaryLayer: BoundaryLayer | null = null
-let focusLayer: FocusLayer | null = null
-let streetLayer: StreetLabelLayer | null = null
-let exposureLayer: ExposureLayer | null = null
-let trafficLayer: TrafficLayer | null = null
-let tacticalLayer: TacticalModelLayer | null = null
-let lotLayer: LotLayer | null = null
-let poiLayer: PoiLayer | null = null
-let roadLayer: RoadLayer | null = null
-let twinLayer: import('./twin').TwinLayer | null = null
-let hazardLayer: HazardLayer | null = null
+// ---------------------------------------------------------------------------
+// Scene CONSTRUCTION — the heavy half of the registry split. This module
+// (and through it every layer class) lives in the lazily-loaded city3d
+// chunk; the boot bundle reads the singletons through the type-only
+// cesium/registry.ts instead. registerScene() is only ever called from
+// cesium/boot.ts, after Cesium.js itself has loaded.
+// ---------------------------------------------------------------------------
 
 let detachRenderMode: (() => void) | null = null
 let detachViewLock: (() => void) | null = null
+let drawController: DrawController | null = null
 
 export function registerScene(h: SceneHandle): void {
   detachRenderMode = attachRenderModeController(h.viewer)
   detachViewLock = attachViewLockController()
-  handle = h
-  footprintLayer = new FootprintLayer(h.viewer)
-  intelLayer = new IntelMarkerLayer(h.viewer)
-  unitLayer = new UnitLayer(h)
-  shapeLayer = new ShapeLayer(h.viewer)
+  const shapeLayer = new ShapeLayer(h.viewer)
   drawController = new DrawController(h.viewer, shapeLayer)
-  boundaryLayer = new BoundaryLayer(h.viewer)
-  focusLayer = new FocusLayer(h)
-  streetLayer = new StreetLabelLayer(h.viewer)
-  exposureLayer = new ExposureLayer(h.viewer)
-  trafficLayer = new TrafficLayer(h.viewer)
-  tacticalLayer = new TacticalModelLayer(h.viewer)
-  lotLayer = new LotLayer(h.viewer)
-  poiLayer = new PoiLayer(h.viewer)
-  roadLayer = new RoadLayer(h.viewer)
-  void import('./twin').then((m) => {
-    twinLayer = new m.TwinLayer(h.viewer)
+  const unitLayer = new UnitLayer(h)
+  _setSceneRegistry({
+    handle: h,
+    footprintLayer: new FootprintLayer(h.viewer),
+    intelLayer: new IntelMarkerLayer(h.viewer),
+    unitLayer,
+    shapeLayer,
+    drawController,
+    boundaryLayer: new BoundaryLayer(h.viewer),
+    focusLayer: new FocusLayer(h),
+    streetLayer: new StreetLabelLayer(h.viewer),
+    exposureLayer: new ExposureLayer(h.viewer),
+    trafficLayer: new TrafficLayer(h.viewer),
+    tacticalLayer: new TacticalModelLayer(h.viewer),
+    lotLayer: new LotLayer(h.viewer),
+    poiLayer: new PoiLayer(h.viewer),
+    roadLayer: new RoadLayer(h.viewer),
+    hazardLayer: new HazardLayer(h.viewer),
+    twinLayer: null,
   })
-  hazardLayer = new HazardLayer(h.viewer)
+  void import('./twin').then((m) => {
+    _setTwinLayer(new m.TwinLayer(h.viewer))
+  })
   if (import.meta.env.DEV) {
     // Debug handles for DevTools poking — dev builds only.
     ;(window as unknown as Record<string, unknown>).__wt = h
@@ -79,90 +73,6 @@ export function unregisterScene(): void {
   detachViewLock?.()
   detachViewLock = null
   drawController?.destroy()
-  handle = null
-  footprintLayer = null
-  intelLayer = null
-  unitLayer = null
-  shapeLayer = null
   drawController = null
-  boundaryLayer = null
-  focusLayer = null
-  streetLayer = null
-  exposureLayer = null
-  trafficLayer = null
-  tacticalLayer = null
-  lotLayer = null
-  poiLayer = null
-  roadLayer = null
-  twinLayer = null
-  hazardLayer = null
-}
-
-export function getTrafficLayer(): TrafficLayer | null {
-  return trafficLayer
-}
-
-export function getStreetLayer(): StreetLabelLayer | null {
-  return streetLayer
-}
-
-export function getExposureLayer(): ExposureLayer | null {
-  return exposureLayer
-}
-
-export function getShapeLayer(): ShapeLayer | null {
-  return shapeLayer
-}
-
-export function getDrawController(): DrawController | null {
-  return drawController
-}
-
-export function getBoundaryLayer(): BoundaryLayer | null {
-  return boundaryLayer
-}
-
-export function getFocusLayer(): FocusLayer | null {
-  return focusLayer
-}
-
-export function getIntelLayer(): IntelMarkerLayer | null {
-  return intelLayer
-}
-
-export function getUnitLayer(): UnitLayer | null {
-  return unitLayer
-}
-
-export function getScene(): SceneHandle | null {
-  return handle
-}
-
-export function getFootprintLayer(): FootprintLayer | null {
-  return footprintLayer
-}
-
-export function getTacticalLayer(): TacticalModelLayer | null {
-  return tacticalLayer
-}
-
-export function getLotLayer(): LotLayer | null {
-  return lotLayer
-}
-
-export function getPoiLayer(): PoiLayer | null {
-  return poiLayer
-}
-
-
-export function getTwinLayer(): import('./twin').TwinLayer | null {
-  return twinLayer
-}
-
-export function getRoadLayer(): RoadLayer | null {
-  return roadLayer
-}
-
-export function getHazardLayer(): HazardLayer | null {
-  return hazardLayer
+  _setSceneRegistry(null)
 }

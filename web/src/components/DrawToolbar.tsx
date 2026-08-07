@@ -4,7 +4,7 @@ import { useMovable } from '../lib/movable'
 import { useNextStep } from '../lib/guidance'
 import { useProfile } from '../profiles/manifest'
 import { clearAllShapes, deleteSelectedShape, placeExposureLabels, rotateSelectedApparatus, setDrawTool, undoShapeAction } from '../actions'
-import { POST_META, ZONE_STYLE } from '../cesium/shapes'
+import { POST_META, ZONE_STYLE } from '../ics/style'
 import { setAppState, useAppSlice } from '../state/store'
 import type { PostKind, ZoneKind } from '../types'
 

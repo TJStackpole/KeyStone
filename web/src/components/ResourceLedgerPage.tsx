@@ -94,7 +94,7 @@ export function ResourceLedgerPage() {
   const flyTo = (u: Unit) => {
     // Dynamic import keeps this page Cesium-free; a dead 3D view fails the
     // import or returns no scene and the tap degrades to nothing, silently.
-    void import('../cesium/scene')
+    void import('../cesium/registry')
       .then((m) => {
         const scene = m.getScene()
         if (!scene) return

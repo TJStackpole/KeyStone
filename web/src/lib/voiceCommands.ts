@@ -1,5 +1,4 @@
 import { toggleIsolateMode, undoShapeAction } from '../actions'
-import { jumpViewLockFloor, setViewLockMode } from '../cesium/viewLock'
 import { getAppState } from '../state/store'
 import { openBrief } from './brief'
 
@@ -40,18 +39,18 @@ export function tryVoiceCommand(raw: string): string | null {
   }
   const side = /^(north|south|east|west)( (side|face))?$/.exec(t)
   if (side && locked) {
-    setViewLockMode(side[1] as 'north' | 'south' | 'east' | 'west')
+    void import('../cesium/viewLock').then((m) => m.setViewLockMode(side[1] as 'north' | 'south' | 'east' | 'west'))
     return `${side[1].toUpperCase()} FACE`
   }
   if (/^top( view| down)?$/.test(t) && locked) {
-    setViewLockMode('top')
+    void import('../cesium/viewLock').then((m) => m.setViewLockMode('top'))
     return 'TOP VIEW'
   }
   const floor = /^(?:floor|level) (\d{1,3}|[a-z]+)$/.exec(t)
   if (floor && locked) {
     const n = /^\d+$/.test(floor[1]) ? Number(floor[1]) : FLOOR_WORDS[floor[1]]
     if (n && Number.isFinite(n)) {
-      jumpViewLockFloor(n)
+      void import('../cesium/viewLock').then((m) => m.jumpViewLockFloor(n))
       return `FLOOR ${n}`
     }
   }

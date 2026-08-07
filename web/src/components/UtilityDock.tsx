@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react'
 import { useMovable } from '../lib/movable'
 import { flyToUnit } from '../actions'
-import { getUnitLayer } from '../cesium/scene'
+import { getUnitLayer } from '../cesium/registry'
 import { useProfile } from '../profiles/manifest'
 import { crewCompositionAllowed, usePolicy } from '../profiles/policy'
 import { setAppState, useAppSlice } from '../state/store'

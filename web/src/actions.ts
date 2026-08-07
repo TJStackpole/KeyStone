@@ -14,10 +14,9 @@ import {
 } from './api/nyc'
 import { reverseGeocode } from './api/geosearch'
 import { fetchWind } from './api/weather'
-import { fetchFootprints, footprintContaining, sampleStreetBase, type Footprint } from './cesium/footprints'
+import type { Footprint } from './cesium/footprints'
 import type { PoiKind } from './cesium/poi'
-import { flyToTactical, opsArea, TILE_CACHE_BYTES } from './cesium/providers'
-import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
+import { insideOpsBounds, TILE_CACHE_BYTES } from './cesium/constants'
 import {
   getBoundaryLayer,
   getDrawController,
@@ -36,7 +35,7 @@ import {
   getTrafficLayer,
   getTwinLayer,
   getUnitLayer,
-} from './cesium/scene'
+} from './cesium/registry'
 import { replayEngine } from './replay'
 import { hasCapability } from './profiles/manifest'
 import { crewCompositionAllowed } from './profiles/policy'
@@ -108,9 +107,9 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   if (getAppState().groundViewActive) exitGround()
   if (getAppState().viewMode === 'topdown' && scene) {
     setAppState({ viewMode: '3d' })
-    void setTopDown(scene, false)
+    void import('./cesium/viewmode').then((v) => v.setTopDown(scene, false))
   }
-  if (scene) flyToTactical(scene.viewer, hit.lat, hit.lon)
+  if (scene) void import('./cesium/providers').then((p) => p.flyToTactical(scene.viewer, hit.lat, hit.lon))
 
   // These run concurrently; each degrades independently per the CLAUDE.md rule.
   void loadFootprints(incident)
@@ -243,7 +242,7 @@ export function relocateIncidentSite(incident: Incident): void {
   getHazardLayer()?.clear()
   getUnitLayer()?.setInteriorBounds(null)
   setAppState({ targetHeightM: null, inspected: null, wind: null, floorRef: null, targetBounds: null })
-  if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
+  if (scene) void import('./cesium/providers').then((p) => p.flyToTactical(scene.viewer, incident.lat, incident.lon))
   void loadFootprints(incident)
   void loadSiteIntel(incident)
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
@@ -273,14 +272,14 @@ async function loadFootprints(incident: Incident): Promise<void> {
   const layer = getFootprintLayer()
   setLayerStatus('footprints', 'loading')
   try {
-    const feats = await fetchFootprints(incident.lat, incident.lon, 250)
+    const feats = await (await import('./cesium/footprints')).fetchFootprints(incident.lat, incident.lon, 250)
     // Stale-guard: the incident may have changed (or been ended) mid-fetch.
     if (getAppState().incident?.id !== incident.id) return
     // Prefer the PAD BIN from geocoding; fall back to point-in-polygon.
     const targetBin =
       incident.bin && feats.some((f) => f.bin === incident.bin)
         ? incident.bin
-        : footprintContaining(incident.lon, incident.lat, feats)?.bin
+        : (await import('./cesium/footprints')).footprintContaining(incident.lon, incident.lat, feats)?.bin
     lastFootprints = { incidentId: incident.id, feats, targetBin }
     // Same geometry, renderer-neutral: the 2D tactical map draws from this.
     setAppState({ footprintsGeo: { feats, targetBin: targetBin ?? null } })
@@ -408,7 +407,7 @@ export function toggleIsolateMode(): void {
   // Esri overlay don't linger under the isolate framing.
   if (on && getAppState().viewMode === 'topdown') {
     setAppState({ viewMode: '3d' })
-    void setTopDown(scene, false)
+    void import('./cesium/viewmode').then((v) => v.setTopDown(scene, false))
   }
   // Prompt 14: on the FDNY profile the 3D scene exists ONLY for ISOLATE —
   // entering reveals it, leaving returns to the 2D tactical map.
@@ -855,10 +854,11 @@ export async function restoreIncident(): Promise<void> {
     setAppState({ incident: body.incident })
     setLayerStatus('persistence', 'ok')
     const scene = getScene()
+    const restored = body.incident
     // A profile landing in Watch Command keeps its citywide frame — the
     // restored incident arrives as the focused portfolio marker instead
     // (same rule as adoption).
-    if (scene) flyToTactical(scene.viewer, body.incident.lat, body.incident.lon)
+    if (scene) void import('./cesium/providers').then((p) => p.flyToTactical(scene.viewer, restored.lat, restored.lon))
     void loadFootprints(body.incident)
     void loadSiteIntel(body.incident)
     getFocusLayer()?.apply(body.incident, getAppState().activeIncidentMode)
@@ -967,13 +967,13 @@ export async function toggleTopDownView(): Promise<void> {
   const next = getAppState().viewMode === 'topdown' ? '3d' : 'topdown'
   setAppState({ viewMode: next })
   const inc = getAppState().incident
-  await setTopDown(scene, next === 'topdown', inc ? { lat: inc.lat, lon: inc.lon } : undefined)
+  await (await import('./cesium/viewmode')).setTopDown(scene, next === 'topdown', inc ? { lat: inc.lat, lon: inc.lon } : undefined)
 }
 
 /** Leave the street-level camera and restore the view it replaced. */
 export function exitGround(): void {
   const scene = getScene()
-  if (scene) exitGroundView(scene.viewer)
+  if (scene) void import('./cesium/viewmode').then((v) => v.exitGroundView(scene.viewer))
   setAppState({ groundViewActive: false })
 }
 
@@ -982,7 +982,7 @@ export function setGroundHeightFt(ft: number): void {
   const clamped = Math.min(50, Math.max(0, Math.round(ft)))
   setAppState({ groundViewFt: clamped })
   const scene = getScene()
-  if (scene && getAppState().groundViewActive) setGroundViewHeight(scene.viewer, clamped)
+  if (scene && getAppState().groundViewActive) void import('./cesium/viewmode').then((v) => v.setGroundViewHeight(scene.viewer, clamped))
 }
 
 // ---------------------------------------------------------------------------
@@ -1233,13 +1233,13 @@ export function adoptIncident(incident: Incident): void {
   if (getAppState().groundViewActive) exitGround()
   if (getAppState().viewMode === 'topdown' && scene) {
     setAppState({ viewMode: '3d' })
-    void setTopDown(scene, false)
+    void import('./cesium/viewmode').then((v) => v.setTopDown(scene, false))
   }
   // Adoption is server-initiated (another station or a drill script stood
   // this up). An operator monitoring the citywide view keeps that view —
   // the incident arrives as the focused portfolio marker, not a camera yank
   // underneath the still-open Watch Command panels.
-  if (scene) flyToTactical(scene.viewer, incident.lat, incident.lon)
+  if (scene) void import('./cesium/providers').then((p) => p.flyToTactical(scene.viewer, incident.lat, incident.lon))
   void loadFootprints(incident)
   void loadSiteIntel(incident)
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
@@ -1406,7 +1406,7 @@ export function goHome(): void {
     // Leave top-down properly (Esri overlay + saved camera), but don't let its
     // restore flight run while we may be waiting on geolocation.
     setAppState({ viewMode: '3d' })
-    void setTopDown(scene, false)
+    void import('./cesium/viewmode').then((v) => v.setTopDown(scene, false))
     scene.viewer.camera.cancelFlight()
   }
   const clickIncident = getAppState().incident?.id
@@ -1433,7 +1433,7 @@ export function goHome(): void {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude } = pos.coords
-      const inside = Cesium.Rectangle.contains(opsArea(), Cesium.Cartographic.fromDegrees(longitude, latitude))
+      const inside = insideOpsBounds(longitude, latitude)
       if (inside) lastKnownHome = { lon: longitude, lat: latitude }
       if (!cached) fly(inside ? longitude : HOME_VIEW.lon, inside ? latitude : HOME_VIEW.lat)
     },
@@ -1454,10 +1454,10 @@ export function goToIncident(): void {
   if (getAppState().groundViewActive) exitGround()
   if (getAppState().viewMode === 'topdown') {
     setAppState({ viewMode: '3d' })
-    void setTopDown(scene, false)
+    void import('./cesium/viewmode').then((v) => v.setTopDown(scene, false))
     scene.viewer.camera.cancelFlight()
   }
-  flyToTactical(scene.viewer, inc.lat, inc.lon)
+  void import('./cesium/providers').then((p) => p.flyToTactical(scene.viewer, inc.lat, inc.lon))
 }
 
 /** Compass click: swing the camera back to north, rotating about the view center. */
@@ -1813,12 +1813,12 @@ export async function showInspectedModel(): Promise<void> {
   const seq = ++inspectedModelSeq
   const { hit } = ins
   try {
-    const feats = await fetchFootprints(hit.lat, hit.lon, 120)
+    const feats = await (await import('./cesium/footprints')).fetchFootprints(hit.lat, hit.lon, 120)
     // BIN match first, then point-in-polygon, then nearest centroid — PAD
     // address points often sit on the sidewalk outside every ring.
     let target =
       (hit.bin ? feats.find((f) => f.bin === hit.bin) : undefined) ??
-      footprintContaining(hit.lon, hit.lat, feats)
+      (await import('./cesium/footprints')).footprintContaining(hit.lon, hit.lat, feats)
     if (!target) {
       let bestD2 = Infinity
       const cosLat = Math.cos((hit.lat * Math.PI) / 180)
@@ -1836,7 +1836,7 @@ export async function showInspectedModel(): Promise<void> {
       if (Math.sqrt(bestD2) * 111_320 > 60) target = undefined
     }
     if (!target) throw new Error('no footprint under the address')
-    const base = await sampleStreetBase(scene.viewer.scene, target)
+    const base = await (await import('./cesium/footprints')).sampleStreetBase(scene.viewer.scene, target)
     const now = getAppState()
     if (seq !== inspectedModelSeq || now.inspected?.hit !== hit || now.isolateMode) return
     const heightM = target.heightM

@@ -3,7 +3,7 @@ import { notify } from '../components/NoticeChip'
 import { hasCapability } from '../profiles/manifest'
 import { getAppState, setAppState, subscribeStore } from '../state/store'
 import { flyToTactical } from './providers'
-import { getScene, getTacticalLayer, getTwinLayer } from './scene'
+import { getScene, getTacticalLayer, getTwinLayer } from './registry'
 
 // ---------------------------------------------------------------------------
 // FDNY battle-view lock. The fireground is chaos — a free-tumbling 3D camera

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium'
 import { lazy } from './lazy'
+import { OPS_BOUNDS_DEG, TILE_CACHE_BYTES } from './constants'
 import { getAppState } from '../state/store'
 import type { ProviderMode } from '../types'
 
@@ -21,13 +22,14 @@ export interface SceneHandle {
  * padded by 50 miles — the map is cropped to this. The camera can't leave it,
  * and the globe neither renders nor downloads imagery outside it.
  */
-export const opsArea = lazy(() => Cesium.Rectangle.fromDegrees(-75.22, 39.74, -72.74, 41.65))
+export const opsArea = lazy(() =>
+  Cesium.Rectangle.fromDegrees(OPS_BOUNDS_DEG.west, OPS_BOUNDS_DEG.south, OPS_BOUNDS_DEG.east, OPS_BOUNDS_DEG.north),
+)
 
 /**
  * Tile cache for the 3D-buildings tileset (google/ion). One constant so the
  * isolate boost's restore path can't drift from the creation-time tuning.
  */
-export const TILE_CACHE_BYTES = 768 * 1024 * 1024
 
 /**
  * Provider selection per CLAUDE.md constraint 2 — one function, no code edits to swap:
