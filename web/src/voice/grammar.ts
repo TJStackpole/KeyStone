@@ -144,7 +144,7 @@ const LAYER =
   '(?<layer>hydrants?|traffic|street names?|streets|roads?|road network|tunnels?|tax lots|lots|wind|collapse zones?|battalions?|divisions?|firehouses|fdny buildings|precincts|hospitals|footprints|buildings|target box)'
 const AGENCY = '(?<agency>nypd|papd|ems|fdny|oem|nycem|dot|con ed(?:ison)?)'
 const PAGE =
-  '(?<page>map|tactical map|command board|board|riding lists?|decision log|log|resource ledger|resources|ledger|dispatch|dispatch comms)'
+  '(?<page>map|tactical map|command board|board|riding lists?|decision log|log|resource ledger|resources|ledger|dispatch comms|dispatch|requests|request tracker)'
 // Spoken panel aliases, longest first so "site intel" beats "intel".
 export const PANEL_ALIASES = Object.values(PANEL_IDS)
   .flat()
@@ -175,7 +175,9 @@ export const COMMANDS: CommandSpec[] = [
   {
     intent: 'street_view',
     group: 'SIZE-UP',
-    patterns: [/\b(?:street view|show (?:me )?the street|panorama|street level)\b/],
+    // "(?! panel)" — "open the street view PANEL" belongs to the 3D-side
+    // photographic panel intent further down, not the size-up tab.
+    patterns: [/\bstreet view\b(?! panel)/, /\bshow (?:me )?the street\b(?! view panel)/, /\b(?:panorama|street level)\b/],
     examples: ['street view'],
   },
   {
@@ -213,16 +215,18 @@ export const COMMANDS: CommandSpec[] = [
     examples: ['live view'],
   },
   {
-    intent: 'orbit',
-    group: 'CAMERA',
-    patterns: [/\b(?:start |resume )?orbit\b/, /\b(?:rotate|spin) around\b/],
-    examples: ['orbit', 'resume orbit'],
-  },
-  {
+    // BEFORE 'orbit': the bare word "orbit" would otherwise shadow
+    // "pause/stop the orbit" (first grammar match wins).
     intent: 'orbit_pause',
     group: 'CAMERA',
     patterns: [/\bpause (?:the )?orbit\b/, /\bstop (?:the )?(?:orbit|rotation|rotating|spinning)\b/],
     examples: ['pause the orbit'],
+  },
+  {
+    intent: 'orbit',
+    group: 'CAMERA',
+    patterns: [/\b(?:start |resume )?orbit\b/, /\b(?:rotate|spin) around\b/],
+    examples: ['orbit', 'resume orbit'],
   },
   {
     intent: 'lock_top',
@@ -394,13 +398,14 @@ export const COMMANDS: CommandSpec[] = [
   {
     intent: 'open_tactics',
     group: 'PANELS',
-    patterns: [/\b(?:open |show )?(?:the )?tactics(?: panel| engine)?\b/],
+    // Verb required — a bare noun mid-sentence must not pop panels.
+    patterns: [/\b(?:open|show) (?:the )?tactics(?: panel| engine)?\b/],
     examples: ['show tactics'],
   },
   {
     intent: 'open_manuals',
     group: 'PANELS',
-    patterns: [/\b(?:open |show |ask )?(?:the )?manuals\b/],
+    patterns: [/\b(?:open|show|ask) (?:the )?manuals\b/],
     examples: ['open the manuals'],
   },
   {

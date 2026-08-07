@@ -7,6 +7,7 @@ import { escapeHtml, openPrintable } from '../lib/printDoc'
 import { fmtWallClock } from '../lib/time'
 import { useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
+import { AgencyRequestsBlock } from './MyAgencyRequestsPanel'
 
 // ---------------------------------------------------------------------------
 // DECISION LOG — dashboard page 3. The ICS-214 activity log, one-tap: the IC
@@ -195,6 +196,8 @@ export function DecisionLogPage() {
         </div>
         {noteFailed && <div className="dl-note-err">ENTRY DID NOT REACH THE RECORD — check the link and press LOG IT again.</div>}
       </section>
+
+      <AgencyRequestsBlock />
 
       <section className="dl-log">
         {rows.length === 0 && <div className="dl-empty">Nothing on the record yet — benchmarks and notes land here, newest first.</div>}

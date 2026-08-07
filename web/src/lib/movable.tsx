@@ -89,7 +89,6 @@ export const PANEL_IDS: Record<string, string[]> = {
   takchat: ['chat', 'tak chat'],
   manuals: ['manuals'],
   tactics: ['tactics'],
-  'agency-req': ['requests', 'request tracker'],
   'response-packet': ['packet', 'response packet'],
   wind: ['wind', 'wind advisory'],
   practice: ['checklist', 'practice'],

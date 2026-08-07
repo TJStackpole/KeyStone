@@ -149,6 +149,8 @@ const PAGES: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = {
   log: 3, 'decision log': 3,
   resources: 4, ledger: 4, 'resource ledger': 4,
   dispatch: 5, 'dispatch comms': 5,
+  // The requests tracker lives on the DECISION LOG page.
+  requests: 3, 'request tracker': 3,
 }
 
 async function showFace(faceIdx: number): Promise<ExecResult> {
@@ -750,12 +752,12 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'query',
     description: 'READ-ONLY: summarize open interagency requests and their states.',
     run: () => {
-      const reqs = (getAppState() as unknown as { requests?: { state: string; description: string; assignedAgency: string }[] }).requests ?? []
+      const reqs = getAppState().interagencyRequests
       if (!reqs.length) return { ok: true, echo: 'NO OPEN REQUESTS', speak: 'No open requests.' }
-      const open = reqs.filter((r) => r.state !== 'closed' && r.state !== 'complete')
+      const open = reqs.filter((r) => r.state !== 'complete' && r.state !== 'declined')
       const echo = open
         .slice(0, 6)
-        .map((r) => `${r.assignedAgency}: ${r.description} — ${r.state.toUpperCase()}`)
+        .map((r) => `${r.assignedAgency}: ${r.description} — ${r.state.replace('_', ' ').toUpperCase()}`)
         .join('\n')
       return { ok: true, echo: echo || 'ALL REQUESTS CLOSED', speak: `${open.length} open requests.` }
     },

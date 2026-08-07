@@ -153,6 +153,41 @@ describe('panel minimize (everything on the map platform)', () => {
   })
 })
 
+describe('grammar self-consistency (no row shadows another)', () => {
+  // Every example must route back to ITS OWN intent — this is the structural
+  // guard that catches ordering bugs like "pause the orbit" matching 'orbit'.
+  for (const cmd of COMMANDS) {
+    for (const raw of cmd.examples) {
+      const spoken = raw.split('→')[0].trim()
+      it(`"${spoken}" → ${cmd.intent}`, () => {
+        expect(matchGrammar(spoken)?.intent).toBe(cmd.intent)
+      })
+    }
+  }
+  it('fixed shadows stay fixed', () => {
+    expect(matchGrammar('pause the orbit')?.intent).toBe('orbit_pause')
+    expect(matchGrammar('stop the rotation')?.intent).toBe('orbit_pause')
+    expect(matchGrammar('open the street view panel')?.intent).toBe('open_street_panel')
+    // bare nouns mid-sentence must not pop panels
+    expect(matchGrammar('the tactics were solid')).toBeNull()
+    expect(matchGrammar('check the manuals later')).toBeNull()
+  })
+})
+
+describe('request status query reads the real slice', () => {
+  it('summarizes open interagencyRequests', async () => {
+    setAppState({
+      interagencyRequests: [
+        { id: 'r1', incidentId: null, requestingAgency: 'FDNY', assignedAgency: 'EMS', description: 'a bus', priority: 'urgent', state: 'in_progress', createdBy: 't', createdAt: new Date().toISOString(), transitions: [], updates: [] },
+        { id: 'r2', incidentId: null, requestingAgency: 'FDNY', assignedAgency: 'DOT', description: 'barriers', priority: 'routine', state: 'complete', createdBy: 't', createdAt: new Date().toISOString(), transitions: [], updates: [] },
+      ],
+    })
+    const result = await executeIntent('query_request_status', {}, meta)
+    expect(result.echo).toContain('EMS: a bus — IN PROGRESS')
+    expect(result.echo).not.toContain('barriers') // complete requests drop out
+  })
+})
+
 describe('generated lexicon', () => {
   it('derives ASR keywords from the grammar (no drift possible)', () => {
     const lex = buildLexicon()

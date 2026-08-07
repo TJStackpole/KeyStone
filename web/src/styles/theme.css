@@ -2171,23 +2171,55 @@ body:has(.map2d-root:not(.map2d-hidden)) .incident-btn { bottom: 230px; }
   letter-spacing: 0.28em; color: rgba(148, 163, 184, 0.4); text-shadow: 0 0 6px rgba(10, 14, 20, 0.9);
 }
 /* FDNY "My Agency Requests" — slim, tactical-view resident. */
-.agency-req {
-  position: absolute; left: 10px; bottom: 254px; width: 300px; z-index: 30;
-  border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;
-  max-height: 300px;
+/* "My Agency Requests" moved onto the DECISION LOG page (dl-requests) —
+   the floating map panel and its header are gone; row styles below are
+   shared by the page block. wc-req-* control styles were stranded in the
+   exported nycem.css, so they are (re)defined here. */
+.dl-requests { max-width: 900px; }
+.dl-req-count,
+.dl-req-breach {
+  font: 700 9px var(--mono);
+  margin-left: 10px;
+  color: var(--amber-bright);
 }
-.agency-req-head {
-  display: flex; align-items: center; gap: 8px; background: none; border: none;
-  cursor: pointer; padding: 0; color: var(--text);
+.dl-req-breach { color: #fca5a5; animation: pulse 1.2s ease-in-out infinite; }
+.wc-req-pri {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
 }
-.agency-req-head b { font: 700 9px var(--mono); color: var(--amber-bright); margin-left: auto; }
-.agency-req-head .agency-req-breachcount { color: #fca5a5; margin-left: auto; margin-right: 0; }
-.agency-req-head.breach { animation: pulse 1.2s ease-in-out infinite; }
+.wc-req-pri.urgent { color: var(--amber-bright); border-color: rgba(245, 158, 11, 0.55); }
+.wc-req-pri.immediate { color: #fca5a5; border-color: rgba(239, 68, 68, 0.6); }
+.wc-req-actions { display: flex; gap: 6px; margin-top: 6px; }
+.wc-req-actions button,
+.wc-req-declineform button {
+  min-height: 30px;
+  padding: 0 10px;
+  font: 700 9px var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.07);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.wc-req-declineform { display: flex; gap: 6px; margin-top: 6px; }
+.wc-req-declineform input {
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  font: 500 11px var(--ui);
+  color: var(--text);
+  background: rgba(10, 14, 20, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
 .profile-item.warn { border-color: rgba(245,158,11,0.65); }
 .profile-item.warn b { color: var(--amber-bright); }
 .scn-facilitator { font: 700 8px var(--mono); color: var(--text-faint); letter-spacing: 0.06em; padding: 0 6px; }
-.agency-req-head i { font-style: normal; color: var(--text-dim); }
-.agency-req-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.agency-req-list { overflow-y: auto; max-height: 260px; display: flex; flex-direction: column; gap: 6px; }
 .agency-req-row { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .agency-req-row.breach { border-color: rgba(239, 68, 68, 0.7); animation: pulse 1.2s ease-in-out infinite; }
 .agency-req-meta { display: flex; align-items: center; gap: 6px; font: 600 8px var(--mono); }
@@ -2393,6 +2425,18 @@ body.panel-dragging * { cursor: grabbing !important; }
   right: 8px;
   color: rgba(34, 211, 238, 0.75);
   font-size: 11px;
+  pointer-events: none;
+}
+/* The draw toolbar's first row is the bare ◂ collapse button — minimized it
+   read as an unlabeled 32px box. Name it. */
+[data-movable='draw-toolbar'][data-minimized]::before {
+  content: 'TOOLS';
+  position: absolute;
+  top: 8px;
+  left: 26px;
+  font: 700 9px var(--mono, monospace);
+  letter-spacing: 0.14em;
+  color: var(--text-dim, #94a3b8);
   pointer-events: none;
 }
 

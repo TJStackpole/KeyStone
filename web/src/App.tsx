@@ -31,7 +31,6 @@ import { ManualsPanel } from './components/ManualsPanel'
 import { TacticsPanel } from './components/TacticsPanel'
 import { WindAdvisory } from './components/WindAdvisory'
 import { TakChatPanel, TakLinkButton } from './components/TakChatPanel'
-import { MyAgencyRequestsPanel } from './components/MyAgencyRequestsPanel'
 import { ProfileWatermark } from './components/ProfileWatermark'
 import { NoticeChip } from './components/NoticeChip'
 import { useCapability } from './profiles/manifest'
@@ -212,7 +211,6 @@ export default function App() {
       <Gate cap="tactics.engine">
         <TacticsPanel />
       </Gate>
-      <MyAgencyRequestsPanel />
       <ProfileWatermark />
       <PttButton />
       <NoticeChip />
