@@ -17,14 +17,17 @@ export default defineConfig({
       cesiumBuildPath: path.join(cesiumBuildRoot, 'Cesium/'),
     }),
     {
-      // vite-plugin-cesium injects a CLASSIC script tag for the 5.9 MB
-      // Cesium.js into <head> — parser-blocking, so prod first paint waits
-      // for the full download+parse. defer keeps execution order (deferred
-      // scripts run before module scripts) while unblocking the dark shell.
-      name: 'defer-cesium-script',
+      // vite-plugin-cesium injects Cesium.js + widgets.css into <head>. Even
+      // deferred, the classic script executes BEFORE module scripts — the
+      // whole app waited on a 5.9 MB download+eval it doesn't need for the
+      // 2D-first boot. Strip both tags; src/cesium/loader.ts injects them at
+      // idle after first paint (the plugin still serves/copies /cesium/*).
+      name: 'strip-cesium-script',
       enforce: 'post' as const,
       transformIndexHtml(html: string) {
-        return html.replace(/<script src="([^"]*cesium[^"]*\.js)">/i, '<script defer src="$1">')
+        return html
+          .replace(/\s*<script[^>]*src="[^"]*cesium[^"]*\.js"[^>]*><\/script>/i, '')
+          .replace(/\s*<link[^>]*href="[^"]*cesium[^"]*widgets\.css"[^>]*\/?>/i, '')
       },
     },
   ],

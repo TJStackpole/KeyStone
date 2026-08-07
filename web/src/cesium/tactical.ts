@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import { pointInRing } from '../lib/geo'
 import type { Footprint } from './footprints'
 import { crispTextImage } from './streets'
@@ -15,16 +16,16 @@ import { crispTextImage } from './streets'
 //     and labeled as such per the no-silent-simulation rule.
 // ---------------------------------------------------------------------------
 
-const GRID = Cesium.Color.fromCssColorString('#22d3ee')
-const FIRE = Cesium.Color.fromCssColorString('#ef4444')
-const ENTRANCE = Cesium.Color.fromCssColorString('#22c55e')
-const EGRESS = Cesium.Color.fromCssColorString('#f59e0b')
-const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.78)
-const FOCUS = Cesium.Color.fromCssColorString('#22d3ee')
-const VOLUME_FILL = GRID.withAlpha(0.1)
-const SLAB_FILL = Cesium.Color.fromCssColorString('#7dd3fc').withAlpha(0.28)
-const FIRE_SLAB_FILL = FIRE.withAlpha(0.45)
-const CORE_FILL = EGRESS.withAlpha(0.55)
+const GRID = lazy(() => Cesium.Color.fromCssColorString('#22d3ee'))
+const FIRE = lazy(() => Cesium.Color.fromCssColorString('#ef4444'))
+const ENTRANCE = lazy(() => Cesium.Color.fromCssColorString('#22c55e'))
+const EGRESS = lazy(() => Cesium.Color.fromCssColorString('#f59e0b'))
+const LABEL_BG = lazy(() => Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.78))
+const FOCUS = lazy(() => Cesium.Color.fromCssColorString('#22d3ee'))
+const VOLUME_FILL = lazy(() => GRID().withAlpha(0.1))
+const SLAB_FILL = lazy(() => Cesium.Color.fromCssColorString('#7dd3fc').withAlpha(0.28))
+const FIRE_SLAB_FILL = lazy(() => FIRE().withAlpha(0.45))
+const CORE_FILL = lazy(() => EGRESS().withAlpha(0.55))
 
 const MAX_RINGS = 40 // towers get a ring every Nth storey, labels follow
 
@@ -135,8 +136,8 @@ export class TacticalModelLayer {
           positions: Cesium.Cartesian3.fromDegreesArrayHeights(ring.flatMap(([lon, lat]) => [lon, lat, z])),
           width: isFire ? 4 : 1.6,
           material: isFire
-            ? new Cesium.PolylineGlowMaterialProperty({ color: FIRE, glowPower: 0.35 })
-            : GRID.withAlpha(0.55),
+            ? new Cesium.PolylineGlowMaterialProperty({ color: FIRE(), glowPower: 0.35 })
+            : GRID().withAlpha(0.55),
         },
       })
       // Storey number on the entrance face (skip the roof ring's duplicate).
@@ -162,7 +163,7 @@ export class TacticalModelLayer {
         polyline: {
           positions: Cesium.Cartesian3.fromDegreesArrayHeights([lon, lat, z0, lon, lat, z0 + hEff]),
           width: 1.2,
-          material: GRID.withAlpha(0.35),
+          material: GRID().withAlpha(0.35),
         },
       })
     }
@@ -176,7 +177,7 @@ export class TacticalModelLayer {
         scale: 0.5,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
-      point: { pixelSize: 10, color: ENTRANCE, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+      point: { pixelSize: 10, color: ENTRANCE(), outlineColor: Cesium.Color.BLACK, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY },
     })
 
     // Estimated egress on the other bbox faces (clearly labeled EST.).
@@ -208,7 +209,7 @@ export class TacticalModelLayer {
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(150, 1, 2500, 0.5),
         },
-        point: { pixelSize: 7, color: EGRESS, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        point: { pixelSize: 7, color: EGRESS(), outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
       })
     }
 
@@ -226,7 +227,7 @@ export class TacticalModelLayer {
         font: `700 13px 'JetBrains Mono', monospace`,
         fillColor: Cesium.Color.fromCssColorString('#e2ecf7'),
         showBackground: true,
-        backgroundColor: LABEL_BG,
+        backgroundColor: LABEL_BG(),
         backgroundPadding: new Cesium.Cartesian2(8, 4),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
@@ -261,9 +262,9 @@ export class TacticalModelLayer {
           hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(outer.flat())),
           height: z0,
           extrudedHeight: z0 + hEff,
-          material: VOLUME_FILL,
+          material: VOLUME_FILL(),
           outline: true,
-          outlineColor: GRID.withAlpha(0.5),
+          outlineColor: GRID().withAlpha(0.5),
         },
       })
     }
@@ -280,7 +281,7 @@ export class TacticalModelLayer {
           hierarchy: slabHierarchy,
           height: z - 0.12,
           extrudedHeight: z + 0.12,
-          material: isFire ? FIRE_SLAB_FILL : SLAB_FILL,
+          material: isFire ? FIRE_SLAB_FILL() : SLAB_FILL(),
         },
       })
     }
@@ -350,9 +351,9 @@ export class TacticalModelLayer {
         hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(coreRing.flat())),
         height: z0,
         extrudedHeight: z0 + hEff,
-        material: CORE_FILL,
+        material: CORE_FILL(),
         outline: true,
-        outlineColor: EGRESS,
+        outlineColor: EGRESS(),
       },
     })
     this.source.entities.add({
@@ -383,9 +384,9 @@ export class TacticalModelLayer {
         hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(g.ring.flat())),
         height: g.z0 + (f - 1) * g.storey,
         extrudedHeight: g.z0 + f * g.storey,
-        material: FOCUS.withAlpha(0.22),
+        material: FOCUS().withAlpha(0.22),
         outline: true,
-        outlineColor: FOCUS.withAlpha(0.9),
+        outlineColor: FOCUS().withAlpha(0.9),
       },
     })
   }

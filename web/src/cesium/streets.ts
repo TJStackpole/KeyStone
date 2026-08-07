@@ -203,7 +203,7 @@ const MAX_HEIGHT_ATTEMPTS = 4
 
 /** Anchor drift below this keeps the existing paint (fetch-jitter, not a move). */
 const REANCHOR_M = 100
-const REROTATE_RAD = Cesium.Math.toRadians(3)
+const REROTATE_RAD = (3 * Math.PI) / 180 // Cesium-free: module evaluates before the engine loads
 
 export class StreetLabelLayer {
   private viewer: Cesium.Viewer

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import { fetchFootprints, footprintContaining, type Footprint } from '../lib/footprints'
 
 // Fetch + geometry moved to lib/footprints (renderer-neutral, Prompt 14);
@@ -8,9 +9,9 @@ export { fetchFootprints, footprintContaining, type Footprint }
 
 // Strong enough to read across the map, translucent enough to see the real
 // building through it — and independently toggleable (Fire Bldg chip).
-const TARGET_FILL = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.45)
-const TARGET_OUTLINE = Cesium.Color.fromCssColorString('#fbbf24')
-const NEIGHBOR_FILL = Cesium.Color.fromCssColorString('#334155').withAlpha(0.28)
+const TARGET_FILL = lazy(() => Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.45))
+const TARGET_OUTLINE = lazy(() => Cesium.Color.fromCssColorString('#fbbf24'))
+const NEIGHBOR_FILL = lazy(() => Cesium.Color.fromCssColorString('#334155').withAlpha(0.28))
 
 function ringToHierarchy(poly: number[][][]): Cesium.PolygonHierarchy {
   const [outer, ...holes] = poly
@@ -145,7 +146,7 @@ export class FootprintLayer {
                 extrudedHeight: f.heightM,
                 vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
               }),
-              attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(NEIGHBOR_FILL) },
+              attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(NEIGHBOR_FILL()) },
             }),
           )
         }
@@ -179,7 +180,7 @@ export class FootprintLayer {
             extrudedHeight: base + target.heightM,
             vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
           }),
-          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_FILL) },
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_FILL()) },
         }),
       )
       outlineInstances.push(
@@ -190,7 +191,7 @@ export class FootprintLayer {
             height: base,
             extrudedHeight: base + target.heightM,
           }),
-          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_OUTLINE) },
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TARGET_OUTLINE()) },
         }),
       )
     }

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import type { RoadSegment } from '../api/nyc'
 import { crispTextImage } from './streets'
 
@@ -9,10 +10,10 @@ import { crispTextImage } from './streets'
 // Holland, Queens-Midtown, Hugh L. Carey) in dashed amber with name labels.
 // ---------------------------------------------------------------------------
 
-const ROAD_YELLOW = Cesium.Color.fromCssColorString('#facc15')
-const ROAD_LOCAL = ROAD_YELLOW.withAlpha(0.55)
-const ROAD_MAJOR = ROAD_YELLOW.withAlpha(0.8)
-const TUNNEL_AMBER = Cesium.Color.fromCssColorString('#fb923c')
+const ROAD_YELLOW = lazy(() => Cesium.Color.fromCssColorString('#facc15'))
+const ROAD_LOCAL = lazy(() => ROAD_YELLOW().withAlpha(0.55))
+const ROAD_MAJOR = lazy(() => ROAD_YELLOW().withAlpha(0.8))
+const TUNNEL_AMBER = lazy(() => Cesium.Color.fromCssColorString('#fb923c'))
 
 /**
  * Dedupe + de-spike an open polyline: exact-duplicate consecutive vertices
@@ -74,7 +75,7 @@ export class RoadLayer {
               width: seg.major ? 4 : 2.2,
             }),
             attributes: {
-              color: Cesium.ColorGeometryInstanceAttribute.fromColor(seg.major ? ROAD_MAJOR : ROAD_LOCAL),
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(seg.major ? ROAD_MAJOR() : ROAD_LOCAL()),
             },
           }),
         )
@@ -108,7 +109,7 @@ export class RoadLayer {
               positions: Cesium.Cartesian3.fromDegreesArray(pts),
               width: 5,
             }),
-            attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TUNNEL_AMBER.withAlpha(0.85)) },
+            attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(TUNNEL_AMBER().withAlpha(0.85)) },
           }),
         )
         if (seg.name.includes('TUNL') || seg.name.includes('TUNNEL')) {

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import { haversineMeters, nearestOnRing, pointInRing } from '../lib/geo'
 import { getAppState } from '../state/store'
 import type { Unit, UnitCategory } from '../types'
@@ -60,9 +61,9 @@ function personIcon(color: string): string {
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
-const LABEL_FILL = Cesium.Color.fromCssColorString('#dbe4f0')
-const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.75)
-const CYAN = Cesium.Color.fromCssColorString('#22d3ee')
+const LABEL_FILL = lazy(() => Cesium.Color.fromCssColorString('#dbe4f0'))
+const LABEL_BG = lazy(() => Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.75))
+const CYAN = lazy(() => Cesium.Color.fromCssColorString('#22d3ee'))
 
 /**
  * Renders the live unit picture as Cesium billboards with callsign labels.
@@ -137,7 +138,7 @@ const STAGED_PAD = svgIcon(
   `<circle cx="13" cy="13" r="10" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="4.5 3.5"/>` +
     `<circle cx="13" cy="13" r="2.2" fill="#f59e0b"/>`,
 )
-const STAGED_LABEL_FILL = Cesium.Color.fromCssColorString('#fbbf24')
+const STAGED_LABEL_FILL = lazy(() => Cesium.Color.fromCssColorString('#fbbf24'))
 
 export class UnitLayer {
   private source = new Cesium.CustomDataSource('units')
@@ -353,9 +354,9 @@ export class UnitLayer {
           text: unit.floor && unit.floor > 0 ? `${unit.callsign} · FL ${unit.floor}` : unit.callsign,
           show: this.labeledUids.has(unit.uid), // hidden until tapped
           font: `600 11px 'JetBrains Mono', monospace`,
-          fillColor: LABEL_FILL,
+          fillColor: LABEL_FILL(),
           showBackground: true,
-          backgroundColor: LABEL_BG,
+          backgroundColor: LABEL_BG(),
           backgroundPadding: new Cesium.Cartesian2(5, 3),
           pixelOffset: new Cesium.Cartesian2(0, -24),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
@@ -431,9 +432,9 @@ export class UnitLayer {
         label: {
           text: `${unit.callsign} STAGED`,
           font: `600 9.5px 'JetBrains Mono', monospace`,
-          fillColor: STAGED_LABEL_FILL,
+          fillColor: STAGED_LABEL_FILL(),
           showBackground: true,
-          backgroundColor: LABEL_BG,
+          backgroundColor: LABEL_BG(),
           backgroundPadding: new Cesium.Cartesian2(4, 2),
           pixelOffset: new Cesium.Cartesian2(0, 14),
           verticalOrigin: Cesium.VerticalOrigin.TOP,
@@ -588,7 +589,7 @@ export class UnitLayer {
         polyline: {
           positions: [dronePos, groundPos],
           width: 2,
-          material: new Cesium.PolylineDashMaterialProperty({ color: CYAN.withAlpha(0.8), dashLength: 12 }),
+          material: new Cesium.PolylineDashMaterialProperty({ color: CYAN().withAlpha(0.8), dashLength: 12 }),
         },
       })
     } else if (proj.polyline) {
@@ -624,7 +625,7 @@ export class UnitLayer {
       if (entity.billboard) entity.billboard.scale = new Cesium.ConstantProperty(selected ? 1.5 : 1)
       if (entity.label) {
         entity.label.fillColor = new Cesium.ConstantProperty(
-          selected ? Cesium.Color.fromCssColorString('#fbbf24') : LABEL_FILL,
+          selected ? Cesium.Color.fromCssColorString('#fbbf24') : LABEL_FILL(),
         )
       }
     }, 3000)
@@ -638,7 +639,7 @@ export class UnitLayer {
       e.billboard.scale = new Cesium.ConstantProperty(isSel ? 1.5 : 1)
       if (e.label) {
         e.label.fillColor = new Cesium.ConstantProperty(
-          isSel ? Cesium.Color.fromCssColorString('#fbbf24') : LABEL_FILL,
+          isSel ? Cesium.Color.fromCssColorString('#fbbf24') : LABEL_FILL(),
         )
       }
     }

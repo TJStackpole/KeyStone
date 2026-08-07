@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import type { WindObs } from '../api/weather'
 import type { Footprint } from './footprints'
 import { crispTextImage } from './streets'
@@ -15,9 +16,9 @@ import { crispTextImage } from './streets'
 /** Default collapse-zone multiplier of building height — VALIDATE—SME. */
 export const COLLAPSE_MULTIPLIER = 1.5
 
-const COLLAPSE_FILL = Cesium.Color.fromCssColorString('#f87171').withAlpha(0.2)
-const COLLAPSE_EDGE = Cesium.Color.fromCssColorString('#f87171').withAlpha(0.75)
-const WIND_COLOR = Cesium.Color.fromCssColorString('#38bdf8')
+const COLLAPSE_FILL = lazy(() => Cesium.Color.fromCssColorString('#f87171').withAlpha(0.2))
+const COLLAPSE_EDGE = lazy(() => Cesium.Color.fromCssColorString('#f87171').withAlpha(0.75))
+const WIND_COLOR = lazy(() => Cesium.Color.fromCssColorString('#38bdf8'))
 
 const M_PER_DEG_LAT = 111_320
 
@@ -51,7 +52,7 @@ export class HazardLayer {
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray([...base, ...tip]),
         width: 5,
-        material: new Cesium.PolylineArrowMaterialProperty(WIND_COLOR),
+        material: new Cesium.PolylineArrowMaterialProperty(WIND_COLOR()),
         clampToGround: true,
       },
     })
@@ -85,7 +86,7 @@ export class HazardLayer {
         polyline: {
           positions: Cesium.Cartesian3.fromDegreesArray([...wedge, lon, lat]),
           width: 2.5,
-          material: new Cesium.PolylineDashMaterialProperty({ color: WIND_COLOR.withAlpha(0.8), dashLength: 14 }),
+          material: new Cesium.PolylineDashMaterialProperty({ color: WIND_COLOR().withAlpha(0.8), dashLength: 14 }),
           clampToGround: true,
         },
       })
@@ -151,9 +152,9 @@ export class HazardLayer {
             hierarchy: new Cesium.PolygonHierarchy(
               Cesium.Cartesian3.fromDegreesArray([ax, ay, bx, by, bx + dLon, by + dLat, ax + dLon, ay + dLat]),
             ),
-            material: COLLAPSE_FILL,
+            material: COLLAPSE_FILL(),
             outline: true,
-            outlineColor: COLLAPSE_EDGE,
+            outlineColor: COLLAPSE_EDGE(),
             classificationType: Cesium.ClassificationType.BOTH,
           },
         })

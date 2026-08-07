@@ -16,7 +16,7 @@ import { reverseGeocode } from './api/geosearch'
 import { fetchWind } from './api/weather'
 import { fetchFootprints, footprintContaining, sampleStreetBase, type Footprint } from './cesium/footprints'
 import type { PoiKind } from './cesium/poi'
-import { flyToTactical, OPS_AREA, TILE_CACHE_BYTES } from './cesium/providers'
+import { flyToTactical, opsArea, TILE_CACHE_BYTES } from './cesium/providers'
 import { exitGroundView, setGroundViewHeight, setTopDown } from './cesium/viewmode'
 import {
   getBoundaryLayer,
@@ -1433,7 +1433,7 @@ export function goHome(): void {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude } = pos.coords
-      const inside = Cesium.Rectangle.contains(OPS_AREA, Cesium.Cartographic.fromDegrees(longitude, latitude))
+      const inside = Cesium.Rectangle.contains(opsArea(), Cesium.Cartographic.fromDegrees(longitude, latitude))
       if (inside) lastKnownHome = { lon: longitude, lat: latitude }
       if (!cached) fly(inside ? longitude : HOME_VIEW.lon, inside ? latitude : HOME_VIEW.lat)
     },

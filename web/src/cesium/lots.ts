@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import type { TaxLot } from '../api/nyc'
 import { pointInRing } from '../lib/geo'
 
@@ -10,7 +11,7 @@ import { pointInRing } from '../lib/geo'
 // polylines would rebuild shadow volumes per lot and crawl.
 // ---------------------------------------------------------------------------
 
-const LOT_LINE = Cesium.Color.fromCssColorString('#22d3ee').withAlpha(0.4)
+const LOT_LINE = lazy(() => Cesium.Color.fromCssColorString('#22d3ee').withAlpha(0.4))
 
 // Instance construction (sanitize + degrees->Cartesian per ring) is the
 // main-thread cost of a refresh — ~1k lots per fetch in Lower Manhattan used
@@ -104,7 +105,7 @@ export class LotLayer {
                 width: 1.5,
                 loop: true,
               }),
-              attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(LOT_LINE) },
+              attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(LOT_LINE()) },
             }),
           )
         }

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import type { TrafficLink } from '../api/nyc'
 
 // ---------------------------------------------------------------------------
@@ -11,13 +12,13 @@ import type { TrafficLink } from '../api/nyc'
 // congestion and draws NOTHING — the map only flags what slows the response.
 export const TRAFFIC_MODERATE_MPH = 20
 export const TRAFFIC_HEAVY_MPH = 10
-const HEAVY = Cesium.Color.fromCssColorString('#ef4444').withAlpha(0.95) // <10 mph
-const MODERATE = Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.9) // 10–20
+const HEAVY = lazy(() => Cesium.Color.fromCssColorString('#ef4444').withAlpha(0.95)) // <10 mph
+const MODERATE = lazy(() => Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.9)) // 10–20
 
 function colorFor(speedMph: number): Cesium.Color | null {
   if (speedMph >= TRAFFIC_MODERATE_MPH) return null // free enough — no color
-  if (speedMph >= TRAFFIC_HEAVY_MPH) return MODERATE
-  return HEAVY
+  if (speedMph >= TRAFFIC_HEAVY_MPH) return MODERATE()
+  return HEAVY()
 }
 
 export class TrafficLayer {

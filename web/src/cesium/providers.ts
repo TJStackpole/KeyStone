@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import { getAppState } from '../state/store'
 import type { ProviderMode } from '../types'
 
@@ -20,7 +21,7 @@ export interface SceneHandle {
  * padded by 50 miles — the map is cropped to this. The camera can't leave it,
  * and the globe neither renders nor downloads imagery outside it.
  */
-export const OPS_AREA = Cesium.Rectangle.fromDegrees(-75.22, 39.74, -72.74, 41.65)
+export const opsArea = lazy(() => Cesium.Rectangle.fromDegrees(-75.22, 39.74, -72.74, 41.65))
 
 /**
  * Tile cache for the 3D-buildings tileset (google/ion). One constant so the
@@ -88,7 +89,7 @@ export async function initScene(
   scene.globe.enableLighting = false
   // Crop the world to the ops envelope — imagery tiles beyond NYC+50mi are
   // never requested, so there's simply less map to download.
-  scene.globe.cartographicLimitRectangle = OPS_AREA
+  scene.globe.cartographicLimitRectangle = opsArea()
   if (scene.skyBox) scene.skyBox.show = false
   if (scene.sun) scene.sun.show = false
   if (scene.moon) scene.moon.show = false
@@ -157,10 +158,10 @@ export async function initScene(
     const pos = viewer.camera.positionCartographic
     const lat = Cesium.Math.toDegrees(pos.latitude)
     const lon = Cesium.Math.toDegrees(pos.longitude)
-    const west = Cesium.Math.toDegrees(OPS_AREA.west)
-    const east = Cesium.Math.toDegrees(OPS_AREA.east)
-    const south = Cesium.Math.toDegrees(OPS_AREA.south)
-    const north = Cesium.Math.toDegrees(OPS_AREA.north)
+    const west = Cesium.Math.toDegrees(opsArea().west)
+    const east = Cesium.Math.toDegrees(opsArea().east)
+    const south = Cesium.Math.toDegrees(opsArea().south)
+    const north = Cesium.Math.toDegrees(opsArea().north)
     const clampedLat = Math.min(Math.max(lat, south), north)
     const clampedLon = Math.min(Math.max(lon, west), east)
     if (clampedLat !== lat || clampedLon !== lon) {

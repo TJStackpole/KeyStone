@@ -1,8 +1,9 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import type { ExposureLabel } from '../types'
 
-const FILL = Cesium.Color.fromCssColorString('#fbbf24')
-const BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.8)
+const FILL = lazy(() => Cesium.Color.fromCssColorString('#fbbf24'))
+const BG = lazy(() => Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.8))
 
 /**
  * FDNY exposure designations (1 = address side, then clockwise) around the
@@ -24,9 +25,9 @@ export class ExposureLayer {
         label: {
           text: l.text,
           font: `700 11px 'JetBrains Mono', monospace`,
-          fillColor: FILL,
+          fillColor: FILL(),
           showBackground: true,
-          backgroundColor: BG,
+          backgroundColor: BG(),
           backgroundPadding: new Cesium.Cartesian2(6, 3),
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,

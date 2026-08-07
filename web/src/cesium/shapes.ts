@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium'
+import { lazy } from './lazy'
 import type { IcsShape, PostKind, ZoneKind } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -36,8 +37,8 @@ function postIcon(kind: PostKind): string {
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
-const LABEL_FILL = Cesium.Color.fromCssColorString('#dbe4f0')
-const LABEL_BG = Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.78)
+const LABEL_FILL = lazy(() => Cesium.Color.fromCssColorString('#dbe4f0'))
+const LABEL_BG = lazy(() => Cesium.Color.fromCssColorString('#0a0e14').withAlpha(0.78))
 
 export class ShapeLayer {
   private source = new Cesium.CustomDataSource('ics-shapes')
@@ -104,7 +105,7 @@ export class ShapeLayer {
         font: `700 11px 'JetBrains Mono', monospace`,
         fillColor: Cesium.Color.fromCssColorString('#fca5a5'),
         showBackground: true,
-        backgroundColor: LABEL_BG,
+        backgroundColor: LABEL_BG(),
         backgroundPadding: new Cesium.Cartesian2(6, 3),
         pixelOffset: new Cesium.Cartesian2(0, -18),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -149,7 +150,7 @@ export class ShapeLayer {
         font: `700 12px 'JetBrains Mono', monospace`,
         fillColor: color.brighten(0.35, new Cesium.Color()),
         showBackground: true,
-        backgroundColor: LABEL_BG,
+        backgroundColor: LABEL_BG(),
         backgroundPadding: new Cesium.Cartesian2(7, 4),
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -170,9 +171,9 @@ export class ShapeLayer {
       label: {
         text: shape.label ?? POST_META[shape.post].label,
         font: `600 10.5px 'JetBrains Mono', monospace`,
-        fillColor: LABEL_FILL,
+        fillColor: LABEL_FILL(),
         showBackground: true,
-        backgroundColor: LABEL_BG,
+        backgroundColor: LABEL_BG(),
         backgroundPadding: new Cesium.Cartesian2(5, 3),
         pixelOffset: new Cesium.Cartesian2(0, -34),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,

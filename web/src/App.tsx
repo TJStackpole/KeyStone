@@ -123,17 +123,33 @@ export default function App() {
 
   useEffect(() => {
     let disposed = false
-    let detachSwipe: (() => void) | null = null
+    let idleId: number | null = null
     let viewer: Viewer | undefined
     if (!globeRef.current) return
+    const globeEl = globeRef.current
 
-    performance.mark('keystone:init-scene-start')
-    initScene(globeRef.current, () => {
-      // Background provider upgrade landed (or fell back to keyless) —
-      // refresh the chip and re-bake globe-window height samples.
-      if (!disposed) reconcileProviderUpgrade()
-    })
-      .then((handle) => {
+    // The live picture must not wait for the 3D engine: the socket and the
+    // restored incident feed the 2D tactical map (the FDNY boot view)
+    // directly — every draw call on the 3D side is getScene()-guarded.
+    connectWs()
+    void restoreIncident()
+    // Tablet/ATAK: edge swipes flip role layouts like dashboard pages.
+    const detachSwipe = attachLayoutSwipe()
+
+    // Cesium (5.9 MB script) loads AT IDLE after first paint — see
+    // cesium/loader.ts. ISOLATE and the 3D views come up a beat later on a
+    // cold cache; everything they need re-syncs from the store below.
+    const bootScene = async () => {
+      const { ensureCesiumScript } = await import('./cesium/loader')
+      await ensureCesiumScript()
+      if (disposed) return
+      performance.mark('keystone:init-scene-start')
+      try {
+        const handle = await initScene(globeEl, () => {
+          // Background provider upgrade landed (or fell back to keyless) —
+          // refresh the chip and re-bake globe-window height samples.
+          if (!disposed) reconcileProviderUpgrade()
+        })
         if (disposed) {
           handle.viewer.destroy()
           return
@@ -142,7 +158,8 @@ export default function App() {
         registerScene(handle)
         performance.mark('keystone:scene-ready')
         setAppState({ sceneReady: true, providerMode: handle.mode })
-        connectWs()
+        // The incident restored before the engine existed — repeat the pass
+        // so the 3D side (camera, footprints, focus ring) catches up.
         void restoreIncident()
         // Camera-following overlays: lots, the yellow road network, and
         // street labels refresh whenever a pan/zoom settles low enough
@@ -155,16 +172,18 @@ export default function App() {
         })
         // The four major vehicular tunnels are citywide + static — load once.
         ensureTunnels()
-        // Tablet/ATAK: edge swipes flip role layouts like dashboard pages.
-        detachSwipe = attachLayoutSwipe()
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('[scene] init failed:', err)
         setBootMsg('Scene init failed — see console')
-      })
+      }
+    }
+    const rIC: typeof requestIdleCallback | undefined = window.requestIdleCallback
+    if (rIC) idleId = rIC(() => void bootScene(), { timeout: 1500 })
+    else window.setTimeout(() => void bootScene(), 250)
 
     return () => {
       disposed = true
+      if (idleId !== null) window.cancelIdleCallback?.(idleId)
       detachSwipe?.()
       unregisterScene()
       viewer?.destroy()
