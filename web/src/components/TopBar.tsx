@@ -424,7 +424,7 @@ function BrandBlock() {
 }
 
 export function TopBar() {
-  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, viewLock, mapMode } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, viewLock: s.viewLock, mapMode: s.mapMode }))
+  const { providerMode, layers, utilityTab, incident, inspected, activeIncidentMode, viewMode, viewLock, mapMode, advanced } = useAppSlice((s) => ({ providerMode: s.providerMode, layers: s.layers, utilityTab: s.utilityTab, incident: s.incident, inspected: s.inspected, activeIncidentMode: s.activeIncidentMode, viewMode: s.viewMode, viewLock: s.viewLock, mapMode: s.mapMode, advanced: s.uiAdvanced }))
   const canManuals = useCapability('doctrine.manuals')
   const canMap2d = useCapability('view.map2d')
   const nextStepId = useNextStep()
@@ -459,8 +459,8 @@ export function TopBar() {
             <span className="dot" /> {LAYER_LABEL[k]} UNAVAILABLE
           </span>
         ))}
-        <OverlaysMenu />
-        {canManuals && (
+        {advanced && <OverlaysMenu />}
+        {advanced && canManuals && (
           <button
             className="chip chip-btn"
             onClick={() => setAppState((s) => ({ manualsOpen: !s.manualsOpen }))}
@@ -469,7 +469,7 @@ export function TopBar() {
             <span className="dot" /> MANUALS
           </button>
         )}
-        {incident && canTactics && (
+        {advanced && incident && canTactics && (
           <button
             className="chip chip-btn amber"
             onClick={() => setAppState((s) => ({ tacticsOpen: !s.tacticsOpen }))}
@@ -508,14 +508,31 @@ export function TopBar() {
         )}
         {incident && activeIncidentMode && <IsolateMenu />}
         <HarborChip />
+        {advanced && (
+          <button
+            className="chip chip-btn"
+            onClick={openBrief}
+            title="One-page plain-language situation brief in a new tab — print it, read it on the phone, or hand it over at shift change"
+          >
+            <span className="dot" /> BRIEF
+          </button>
+        )}
+        {advanced && <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />}
         <button
-          className="chip chip-btn"
-          onClick={openBrief}
-          title="One-page plain-language situation brief in a new tab — print it, read it on the phone, or hand it over at shift change"
+          className={`chip chip-btn${advanced ? ' active' : ''}`}
+          onClick={() => {
+            const next = !advanced
+            setAppState({ uiAdvanced: next })
+            localStorage.setItem('ks-advanced', next ? '1' : '0')
+          }}
+          title={
+            advanced
+              ? 'ADVANCED is on: full toolset (overlays, manuals, tactics, panels, deep intel). Tap to return to the simple COMMAND view.'
+              : 'COMMAND view shows the essentials. Tap for the full toolset — overlays, manuals, tactics, panels, deep building intel.'
+          }
         >
-          <span className="dot" /> BRIEF
+          <span className="dot" /> {advanced ? 'ADVANCED ✓' : 'ADVANCED'}
         </button>
-        <PanelsMenu utilityTab={utilityTab} toggleTab={toggleTab} />
         {providerMode && viewLock === 'off' && !(canMap2d && mapMode === '2d') && (
           // Hidden (not just disabled) while the battle-view rail owns the
           // camera — a dead chip that duplicates the rail's TOP is clutter.

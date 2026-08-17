@@ -5,7 +5,7 @@ import { ALARM_LADDER, alarmRank } from '../lib/alarms'
 import { setDashboardPage } from '../lib/layouts'
 import { escapeHtml, openPrintable } from '../lib/printDoc'
 import { fmtWallClock } from '../lib/time'
-import { useAppSlice } from '../state/store'
+import { getAppState, useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
 import { AgencyRequestsBlock } from './MyAgencyRequestsPanel'
 
@@ -86,6 +86,49 @@ function printIcs214(incident: { address: string; createdAt: string } | null, ro
   })
 }
 
+/** One-tap COMMAND PACK: the whole incident on paper — who/what/where,
+ *  units by status, water assignments, benchmarks, open requests. The
+ *  handoff document for the relieving chief or the after-action file. */
+function printCommandPack(): void {
+  const s = getAppState()
+  const inc = s.incident
+  if (!inc) return
+  const units = Object.values(s.units)
+  // 'On Scene' / 'onscene' / 'ON-SCENE' all mean the same thing on a CoT track.
+  const byStatus = (want: string[]) =>
+    units
+      .filter((u) => want.includes((u.status ?? '').toLowerCase().replace(/[^a-z]/g, '')))
+      .map((u) => u.callsign)
+      .join(', ') || '—'
+  const bench = s.timeline
+    .filter((ev) => LOG_KINDS.has(ev.kind) && !NOISE_KINDS.has(ev.kind))
+    .map((ev) => `<tr><td class="t">${escapeHtml(fmtWallClock(ev.t))}</td><td>${escapeHtml(rowText(ev))}</td></tr>`)
+    .join('')
+  const water = s.timeline
+    .filter((ev) => ev.kind === 'water.assign')
+    .map((ev) => {
+      const p = (ev.payload ?? {}) as Record<string, unknown>
+      return `<tr><td class="t">${escapeHtml(fmtWallClock(ev.t))}</td><td>${escapeHtml(String(p.unit))} → HYDRANT ${escapeHtml(String(p.hydrant))}</td></tr>`
+    })
+    .join('')
+  const reqs = s.interagencyRequests
+    .filter((r) => r.state !== 'complete' && r.state !== 'declined')
+    .map((r) => `<tr><td class="t">${escapeHtml(r.assignedAgency)}</td><td>${escapeHtml(r.description)} — ${escapeHtml(r.state.replace('_', ' ').toUpperCase())}</td></tr>`)
+    .join('')
+  openPrintable({
+    title: 'KeyStone Command Pack',
+    heading: 'COMMAND PACK',
+    sub: `${inc.address} · ${inc.type}${inc.alarmLevel ? ` · ${inc.alarmLevel.toUpperCase()}` : ''} · stood up ${new Date(inc.createdAt).toLocaleString()} · printed ${new Date().toLocaleString()} — KeyStone FDNY`,
+    bodyHtml:
+      `<h2>UNITS</h2><table>` +
+      `<tr><td class="t">ON SCENE / OPERATING</td><td>${escapeHtml(byStatus(['onscene', 'operating', 'staged']))}</td></tr>` +
+      `<tr><td class="t">ENROUTE</td><td>${escapeHtml(byStatus(['enroute']))}</td></tr></table>` +
+      (water ? `<h2>WATER SUPPLY</h2><table>${water}</table>` : '') +
+      `<h2>ACTIVITY (ICS-214)</h2><table>${bench || '<tr><td>No entries.</td></tr>'}</table>` +
+      (reqs ? `<h2>OPEN INTERAGENCY REQUESTS</h2><table>${reqs}</table>` : ''),
+  })
+}
+
 export function DecisionLogPage() {
   const { page, incident, timeline, alarmLevel } = useAppSlice((s) => ({
     page: s.dashboardPage,
@@ -139,6 +182,14 @@ export function DecisionLogPage() {
           title="ICS-214 activity log, print or save as PDF — decisions, benchmarks, notes and PAR lapses; the 10-minute drumbeat is omitted"
         >
           PRINT ICS-214
+        </button>
+        <button
+          className="dl-print"
+          disabled={!incident}
+          onClick={printCommandPack}
+          title="The whole incident on one printout: units by status, water assignments, the activity log, and open interagency requests — the relieving chief's handoff"
+        >
+          PRINT COMMAND PACK
         </button>
       </header>
 

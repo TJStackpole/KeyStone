@@ -66,7 +66,7 @@ export function DrawToolbar() {
   // tactical map they hide; ISOLATE (which flips to 3D) brings them back.
   const on2d = dtCanMap2d && dtMapMode === '2d'
   const mvDrawtoolbar = useMovable('draw-toolbar')
-  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes, undoDepth, undoLabel, replayActive } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes, undoDepth: s.undoDepth, undoLabel: s.undoLabel, replayActive: s.replay.active }))
+  const { drawTool, selectedShapeId, incident, streetViewOpen, shapes, undoDepth, undoLabel, replayActive, advanced } = useAppSlice((s) => ({ drawTool: s.drawTool, selectedShapeId: s.selectedShapeId, incident: s.incident, streetViewOpen: s.streetViewOpen, shapes: s.shapes, undoDepth: s.undoDepth, undoLabel: s.undoLabel, replayActive: s.replay.active, advanced: s.uiAdvanced }))
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return
@@ -126,7 +126,10 @@ export function DrawToolbar() {
           </button>
         ))}
         <div className="tool-section-label">POSTS</div>
-        {(profile === 'fdny' ? POSTS_FDNY : POSTS_NYCEM).map((p) => (
+        {(profile === 'fdny' ? POSTS_FDNY : POSTS_NYCEM)
+          // COMMAND mode: the three posts every box needs. ADVANCED: all of them.
+          .filter((p) => advanced || ['icp', 'staging', 'water'].includes(p))
+          .map((p) => (
           <button
             key={p}
             className={`tool-btn${drawTool === p ? ' on' : ''}`}
@@ -151,6 +154,7 @@ export function DrawToolbar() {
           MEAS
         </button>
         )}
+        {advanced && (
         <button
           className={`tool-btn${drawTool === 'collapse' ? ' on' : ''}`}
           style={{ ['--tool-color' as string]: '#ef4444' }}
@@ -161,6 +165,7 @@ export function DrawToolbar() {
           <span className="tool-swatch zone" />
           CLPS
         </button>
+        )}
         <button
           className="tool-btn"
           style={{ ['--tool-color' as string]: '#fbbf24' }}

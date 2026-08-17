@@ -512,6 +512,12 @@ export const COMMANDS: CommandSpec[] = [
     examples: ['voice replies off'],
   },
   {
+    intent: 'advanced_toggle',
+    group: 'VOICE',
+    patterns: [/\badvanced (?:mode )?(?<state>on|off)\b/, /\b(?<state>command) (?:mode|view)\b/],
+    examples: ['advanced mode on', 'command mode'],
+  },
+  {
     intent: 'glove_toggle',
     group: 'VOICE',
     patterns: [/\bglove mode (?<state>on|off)\b/, /\bbig buttons (?<state>on|off)\b/],

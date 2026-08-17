@@ -1,0 +1,103 @@
+/* SIZE-UP — the chief's arrival card. Top-right resident; SITE INTEL (the
+   deep-links power panel, advanced mode) sits below it. */
+.sizeup-card {
+  position: absolute;
+  top: calc(var(--topbar-h, 52px) + 22px);
+  right: 10px;
+  width: 320px;
+  z-index: 21;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.suc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.suc-head b {
+  font: 700 12px var(--mono, monospace);
+  letter-spacing: 0.16em;
+  color: var(--amber-bright, #fbbf24);
+}
+.suc-alarm {
+  font: 700 10px var(--mono, monospace);
+  letter-spacing: 0.1em;
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  border-radius: 3px;
+  padding: 2px 7px;
+}
+.suc-grid { display: flex; flex-direction: column; gap: 5px; }
+.suc-row { display: flex; align-items: baseline; gap: 8px; }
+.suc-k {
+  flex: none;
+  width: 84px;
+  font: 700 9px var(--mono, monospace);
+  letter-spacing: 0.12em;
+  color: var(--text-faint, #64748b);
+}
+.suc-v {
+  font: 600 11.5px var(--mono, monospace);
+  color: var(--text, #dbe4f0);
+  line-height: 1.45;
+}
+.suc-v.ok { color: #4ade80; }
+.suc-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  font: 700 10px var(--mono, monospace);
+  letter-spacing: 0.1em;
+  color: var(--amber-bright, #fbbf24);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-radius: 4px;
+  cursor: pointer;
+  animation: sizeup-pick-pulse 1.4s ease-in-out infinite;
+}
+.suc-water-label {
+  margin-top: 3px;
+  font: 700 9px var(--mono, monospace);
+  letter-spacing: 0.14em;
+  color: #38bdf8;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding-top: 7px;
+}
+.suc-empty { font: 600 10px var(--mono, monospace); color: var(--text-faint, #64748b); }
+.suc-hydrant {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.suc-hyd-loc {
+  min-height: 30px;
+  padding: 0 8px;
+  font: 700 11px var(--mono, monospace);
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.suc-hyd-id { font: 600 10px var(--mono, monospace); color: var(--text-dim, #94a3b8); flex: 1; }
+.suc-hyd-assigned { font: 700 10.5px var(--mono, monospace); color: #4ade80; }
+.suc-hyd-assign {
+  min-height: 30px;
+  font: 700 9.5px var(--mono, monospace);
+  color: var(--cyan, #22d3ee);
+  background: rgba(9, 14, 23, 0.9);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  border-radius: 4px;
+}
+
+/* SITE INTEL yields the top-right spot to SIZE-UP — but only while the card
+   is actually mounted (SizeUpCard sets body.has-sizeup). The body-scoped
+   selector also outranks theme.css's bare .intel-panel regardless of CSS
+   load order. */
+body.has-sizeup .intel-panel {
+  top: calc(var(--topbar-h, 52px) + 22px + 258px);
+  max-height: calc(100vh - 380px);
+}

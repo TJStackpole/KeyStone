@@ -1,0 +1,63 @@
+/* First-run hero — center of the map, one obvious action. */
+.firstrun {
+  position: fixed;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: min(520px, 86vw);
+  padding: 26px 30px 22px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 10px;
+  background: rgba(9, 14, 23, 0.96);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+.firstrun-x {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  min-width: 34px;
+  min-height: 30px;
+  background: none;
+  border: none;
+  color: var(--text-faint, #64748b);
+  cursor: pointer;
+  font-size: 14px;
+}
+.firstrun-mark {
+  font: 700 26px var(--mono, monospace);
+  letter-spacing: 0.34em;
+  color: var(--cyan, #22d3ee);
+}
+.firstrun-sub {
+  font: 600 10px var(--mono, monospace);
+  letter-spacing: 0.18em;
+  color: var(--text-dim, #94a3b8);
+}
+.firstrun-primary {
+  min-height: 56px;
+  margin-top: 6px;
+  font: 700 14px var(--mono, monospace);
+  letter-spacing: 0.08em;
+  color: #0a0e14;
+  background: var(--amber, #f59e0b);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.firstrun-primary:hover { background: var(--amber-bright, #fbbf24); }
+.firstrun-or {
+  font: 500 12.5px var(--ui, 'Inter', sans-serif);
+  color: var(--text, #dbe4f0);
+  line-height: 1.6;
+}
+.firstrun-or b { color: var(--cyan, #22d3ee); }
+.firstrun-hint {
+  font: 600 10px var(--mono, monospace);
+  letter-spacing: 0.06em;
+  color: var(--text-faint, #64748b);
+}

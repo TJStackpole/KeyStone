@@ -158,6 +158,10 @@ export interface AppState {
   voiceReplies: boolean
   /** Voice command reference panel (the "what can I say" list). */
   voiceHelpOpen: boolean
+  /** COMMAND mode (default) shows only what a chief touches in the first ten
+   *  minutes of a box; ADVANCED reveals the full toolset. Nothing is deleted
+   *  either way — one switch, persisted. */
+  uiAdvanced: boolean
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
   /** Command board diagram: unit uid -> normalized {x,y} on the building. */
@@ -375,6 +379,7 @@ const initial: AppState = {
   voiceConfirm: null,
   voiceReplies: localStorage.getItem('ks-voice-replies') === '1',
   voiceHelpOpen: false,
+  uiAdvanced: localStorage.getItem('ks-advanced') === '1',
   boardAssignments: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>

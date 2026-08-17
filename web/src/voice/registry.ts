@@ -696,6 +696,24 @@ export const INTENTS: Record<string, IntentDef> = {
       return { ok: true, echo: 'VOICE REPLIES OFF' }
     },
   },
+  advanced_toggle: {
+    klass: 'instant',
+    description: 'Switch between the simple COMMAND view and the full ADVANCED toolset.',
+    slots: { state: { description: 'on, off, or command (= off)', enum: ['on', 'off', 'command'] } },
+    run: (slots) => {
+      // Tier-B may omit the slot entirely — treat that as a toggle rather
+      // than silently forcing COMMAND mode.
+      const st = typeof slots.state === 'string' ? slots.state : ''
+      const on = st === 'on' ? true : st === 'off' || st === 'command' ? false : !getAppState().uiAdvanced
+      setAppState({ uiAdvanced: on })
+      try {
+        localStorage.setItem('ks-advanced', on ? '1' : '0')
+      } catch {
+        /* private-mode storage — session-only is fine */
+      }
+      return { ok: true, echo: on ? 'ADVANCED MODE' : 'COMMAND MODE' }
+    },
+  },
   glove_toggle: {
     klass: 'instant',
     description: 'Toggle glove mode (scaled-up UI chrome).',

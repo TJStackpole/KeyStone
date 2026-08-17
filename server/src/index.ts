@@ -1,7 +1,7 @@
 import express from 'express'
 import { createServer } from 'node:http'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
@@ -45,7 +45,7 @@ import { buildGeoChatXml, extractGeoChat, type ChatMsg } from './tak/chat.js'
 import { CHAT_ROOMS, SimUnitChatter } from './simChat.js'
 import { doctrine, MIN_RELEVANT_SCORE } from './doctrine.js'
 import { TakClient } from './tak/client.js'
-import { isUnitEvent } from './tak/cot.js'
+import { isUnitEvent, parseCotXml } from './tak/cot.js'
 import { shapeDeleteCot, shapeToCot } from './tak/shapes.js'
 import type { IcsShape, Incident } from './types.js'
 import { UnitRegistry, type Unit } from './units.js'
@@ -202,7 +202,7 @@ function recordChat(msg: ChatMsg): void {
   broadcast({ type: 'chat', msg })
 }
 
-tak.on('event', (ev) => {
+const handleTakEvent = (ev: import('./tak/cot.js').CotEvent): void => {
   if (INTERNAL_UIDS.has(ev.uid)) return
   // GeoChat from any EUD on the server (including our own fan-out echo,
   // which the id-dedupe drops).
@@ -220,7 +220,8 @@ tak.on('event', (ev) => {
     console.log(`[cot] rx ${(ev.raw ?? '').replace(/\s+/g, ' ').slice(0, 240)}`)
   }
   if (isUnitEvent(ev)) registry.upsertFromCot(ev)
-})
+}
+tak.on('event', handleTakEvent)
 
 app.get('/api/chat', (_req, res) => res.json({ chats: chatLog.slice(-200) }))
 
@@ -293,8 +294,6 @@ app.post('/api/chat', (req, res) => {
   const msgId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
   const sender = { uid: 'KEYSTONE-COP', callsign: 'OEM WATCH CMD' }
   const xml = buildGeoChatXml(trimmed, sender, msgId, targetRoom)
-  const sent = publishCot(xml)
-  if (!sent) return res.status(503).json({ error: 'TAK link down — message not sent' })
   const msg: ChatMsg = {
     id: `GeoChat.${sender.uid}.${targetRoom}.${msgId}`,
     from: sender.callsign,
@@ -303,7 +302,11 @@ app.post('/api/chat', (req, res) => {
     ts: new Date().toISOString(),
     self: true,
   }
+  // Record the authoritative self-attributed message BEFORE publishing: both
+  // the TAK echo and the TAK-down loopback re-ingest this same id, and
+  // whichever lands first wins the seenChatIds dedupe — self:true must win.
   recordChat(msg)
+  publishCot(xml)
   res.status(201).json(msg)
 })
 
@@ -409,9 +412,26 @@ registry.on('unit', (unit) => simChatter.onUnit(unit))
 tak.start()
 simTak.start()
 
-/** Publish CoT XML into the TAK server (used by the simulator and shape tools). */
+/** Publish CoT XML into the TAK server (used by the simulator and shape
+ *  tools). When the TAK docker sidecar isn't running — the hosted
+ *  single-process deployment, or a laptop without docker — the SAME XML
+ *  loops back into our own subscriber pipeline instead: identical parsing,
+ *  namespacing, and fan-out to dashboards. The demo keeps its full unit
+ *  picture; real EUD interop resumes automatically when TAK returns. */
+let warnedLoopback = false
 export function publishCot(xml: string): boolean {
-  return simTak.send(xml)
+  // The publisher and subscriber sockets reconnect independently — loop back
+  // unless BOTH links are up, or CoT sent while the subscriber is down would
+  // vanish into TAK with no echo. Re-ingest is idempotent (registry upsert,
+  // seenChatIds), so a late echo after reconnect is harmless.
+  if (simTak.send(xml) && tak.connected) return true
+  if (!warnedLoopback) {
+    warnedLoopback = true
+    console.warn('[cot] TAK link down — looping sim CoT internally (units stay live; EUD fan-out resumes when TAK returns)')
+  }
+  const ev = parseCotXml(xml)
+  if (ev) handleTakEvent(ev)
+  return true
 }
 
 // ---------------------------------------------------------------------------
@@ -434,7 +454,8 @@ const simulator = new FirstAlarmSimulator(
 app.post('/api/dispatch', async (req, res) => {
   const state = getState()
   if (!state.incident) return res.status(400).json({ error: 'no active incident to dispatch to' })
-  if (!tak.connected) return res.status(503).json({ error: 'TAK link down — cannot publish CoT' })
+  // No TAK guard: without the docker sidecar, publishCot loops sim CoT
+  // through our own ingest — the first alarm rolls either way.
   simChatter.reset() // a fresh assignment announces its arrivals anew
   try {
     const body = (req.body ?? {}) as { floors?: number; demo?: boolean }
@@ -1310,6 +1331,24 @@ app.post('/api/scenario/stop', (_req, res) => {
   scenario.stop()
   res.json(scenario.status())
 })
+
+// ---------------------------------------------------------------------------
+// SHIP MODE: when web/dist exists (npm run build), this ONE process serves
+// the whole platform — static app + /api + /ws — so `npm start` (or a quick
+// tunnel in front of it) is the entire deployment. Dev keeps using Vite on
+// 5173; this block simply never matches there because dist/ isn't built.
+// Registered AFTER every API route; anything that isn't /api or /ws falls
+// through to the SPA's index.html.
+// ---------------------------------------------------------------------------
+const WEB_DIST = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist')
+if (existsSync(join(WEB_DIST, 'index.html'))) {
+  app.use(express.static(WEB_DIST, { maxAge: '1h', setHeaders: (res, p) => {
+    // Hashed assets are immutable; the HTML shell must always revalidate.
+    if (p.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache')
+  } }))
+  app.get(/^\/(?!api\b|ws\b).*/, (_req, res) => res.sendFile(join(WEB_DIST, 'index.html')))
+  console.log(`[keystone-server] SHIP MODE — serving built web from ${WEB_DIST}`)
+}
 
 // Node's default kills the process on any unhandled rejection — for a
 // long-running demo server, log LOUDLY and keep serving instead.

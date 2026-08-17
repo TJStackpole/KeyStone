@@ -10,6 +10,8 @@ import { DrawToolbar } from './components/DrawToolbar'
 import { IncidentCard } from './components/IncidentCard'
 import { RosterPanel } from './components/RosterPanel'
 import { SiteIntelPanel } from './components/SiteIntelPanel'
+import { SizeUpCard } from './components/SizeUpCard'
+import { FirstRun } from './components/FirstRun'
 import { ScenarioBar } from './components/ScenarioBar'
 import { MaydayAlert } from './components/MaydayAlert'
 import { AarPanel } from './components/AarPanel'
@@ -165,7 +167,9 @@ export default function App() {
         <RosterPanel />
       </div>
       <DrawToolbar />
+      <SizeUpCard />
       <SiteIntelPanel />
+      <FirstRun />
       <UtilityDock />
       <CommsPanel />
       <GroundViewExit />

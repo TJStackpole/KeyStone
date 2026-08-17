@@ -125,17 +125,24 @@ function InspectedSection() {
 }
 
 export function SiteIntelPanel() {
-  const { incident, intel, layers, layerToggles, inspected, collapsed } = useAppSlice((s) => ({
+  const { incident, intel, layers, layerToggles, inspected, collapsed, advanced } = useAppSlice((s) => ({
     incident: s.incident,
     intel: s.intel,
     layers: s.layers,
     layerToggles: s.layerToggles,
     inspected: s.inspected,
     collapsed: !!s.panelMinimized.intel,
+    advanced: s.uiAdvanced,
   }))
   // Shared movable/minimize system ('intel'): drag anywhere, double-click or
   // the header chevron collapses — one persisted state, voice-reachable.
   const mvIntel = useMovable('intel')
+
+  // COMMAND mode with a live box: the SIZE-UP card carries the arrival
+  // picture; this deep panel (C of O, DOB links, layer chips) is the ADVANCED
+  // counterpart. With NO incident there is no SIZE-UP, so tap-a-building
+  // Building Info (and its VIEW 3D MODEL) stays available in both modes.
+  if (!advanced && incident) return null
 
   // No incident up: tapping a building still gets its full public record —
   // and the VIEW 3D MODEL button — in a slim standalone panel.

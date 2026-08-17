@@ -80,6 +80,7 @@ export const PANEL_IDS: Record<string, string[]> = {
   'incident-card': ['incident', 'incident card'],
   roster: ['units', 'roster', 'unit list'],
   intel: ['intel', 'site intel', 'building info'],
+  'sizeup-card': ['size up', 'size up card', 'sizeup'],
   comms: ['comms', 'radio'],
   'utility-dock': ['dock', 'video', 'utility dock', 'video dock'],
   'draw-toolbar': ['tools', 'draw tools', 'toolbar'],

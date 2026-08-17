@@ -24,7 +24,8 @@ const ROOMS = [
  * COMMS panel. Green dot = link up (click for GeoChat); amber = link down.
  */
 export function TakLinkButton() {
-  const { takConnected } = useAppSlice((s) => ({ takConnected: s.takConnected }))
+  const { takConnected, advanced } = useAppSlice((s) => ({ takConnected: s.takConnected, advanced: s.uiAdvanced }))
+  if (!advanced) return null // COMMAND mode: TAK plumbing is an advanced surface
   if (takConnected === null) return null
   if (takConnected === false) {
     return (
