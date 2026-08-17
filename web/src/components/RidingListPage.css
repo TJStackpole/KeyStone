@@ -312,3 +312,21 @@
   min-height: 56px;
   font-size: 20px;
 }
+
+.riding-page .rp-total.overdue {
+  color: #f87171;
+  font-weight: 800;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 3px;
+  padding: 1px 8px;
+  margin-left: 8px;
+}
+
+.riding-page .rp-total.stale {
+  color: var(--rp-amber, #f59e0b);
+  font-weight: 800;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 3px;
+  padding: 1px 8px;
+  margin-left: 8px;
+}

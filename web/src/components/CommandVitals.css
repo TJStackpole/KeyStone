@@ -1,0 +1,99 @@
+/* COMMAND VITALS — the one-line incident pulse pinned under every
+   full-screen page header. Mono, glanceable, glove-friendly heights. */
+
+.cmd-vitals {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 7px 16px;
+  background: rgba(10, 14, 20, 0.92);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.22);
+  font: 600 11.5px var(--mono, 'JetBrains Mono', monospace);
+  letter-spacing: 0.04em;
+  color: #cbd5e1;
+}
+
+.cmd-vitals .cv-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.cmd-vitals .cv-item i {
+  font-style: normal;
+  font-size: 9.5px;
+  color: #64748b;
+}
+
+.cmd-vitals .cv-item b {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.cmd-vitals .cv-item.alarm {
+  color: var(--amber, #f59e0b);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 3px;
+  padding: 1px 7px;
+}
+
+.cmd-vitals .cv-item.ok {
+  color: #34d399;
+}
+
+.cmd-vitals .cv-item.amber {
+  color: var(--amber, #f59e0b);
+}
+.cmd-vitals .cv-item.amber b {
+  color: var(--amber, #f59e0b);
+}
+
+.cmd-vitals .cv-item.red {
+  color: #f87171;
+  font-weight: 800;
+  animation: cv-blink 1.6s ease-in-out infinite;
+}
+
+.cmd-vitals .cv-item.dim,
+.cmd-vitals .cv-item.dim b {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.cmd-vitals .cv-mayday {
+  color: #fecaca;
+  background: rgba(220, 38, 38, 0.28);
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  border-radius: 3px;
+  padding: 2px 9px;
+  font-weight: 800;
+  animation: cv-blink 1.1s ease-in-out infinite;
+}
+
+@keyframes cv-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Tab attention badges (DashboardTabs) share the vitals derivations. */
+.dash-tab {
+  position: relative;
+}
+.dash-tab .tab-dot {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.9);
+  animation: cv-blink 1.2s ease-in-out infinite;
+}

@@ -18,6 +18,26 @@ export function edgeClassFor(category: string): string {
   return EDGE_CLASS[category] ?? 'edge-other'
 }
 
+/** 'On Scene' / 'onscene' / 'ON-SCENE' all mean the same thing on a CoT
+ *  track — one normalization for every board that counts by status. */
+export function normStatus(s: string | undefined): string {
+  return (s ?? '').toLowerCase().replace(/[^a-z]/g, '')
+}
+
+// The full status vocabulary the pipelines emit (sim, scenarios, real EUDs):
+// one definition of "at the box" / "coming" so the vitals strip, SIZE-UP,
+// COMMAND PACK and ledger never disagree about the same rig.
+const AT_BOX_SET = new Set(['onscene', 'operating', 'staged', 'command', 'arrived', 'mayday', 'rehab', 'released'])
+const ENROUTE_SET = new Set(['enroute', 'dispatched', 'responding'])
+
+export function isAtBox(status: string | undefined): boolean {
+  return AT_BOX_SET.has(normStatus(status))
+}
+
+export function isEnroute(status: string | undefined): boolean {
+  return ENROUTE_SET.has(normStatus(status))
+}
+
 export function isApparatus(u: Unit): boolean {
   // Slash callsigns are crew MEMBERS (E-6/1); medic is a personnel category.
   if (u.callsign.includes('/')) return false

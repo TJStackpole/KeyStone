@@ -101,3 +101,18 @@ body.has-sizeup .intel-panel {
   top: calc(var(--topbar-h, 52px) + 22px + 258px);
   max-height: calc(100vh - 380px);
 }
+
+.sizeup-card .suc-hyd-clear {
+  margin-left: 6px;
+  padding: 0 5px;
+  font: 700 10px var(--mono, monospace);
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.sizeup-card .suc-hyd-clear:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.6);
+}

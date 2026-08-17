@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { setDashboardPage } from '../lib/layouts'
 import { setAppState, useAppSlice } from '../state/store'
 import { edgeClassFor, isApparatus } from '../lib/crews'
+import { CommandVitals } from './CommandVitals'
 import type { Unit } from '../types'
 import './CommandBoardPage.css'
 
@@ -298,6 +299,7 @@ export function CommandBoardPage() {
           <span className="cb-clock-val">{startMs === null ? '--:--' : fmtElapsed(nowMs - startMs)}</span>
         </div>
       </header>
+      <CommandVitals />
 
       <div className="cb-body">
         <aside

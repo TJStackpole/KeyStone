@@ -5,6 +5,8 @@ import { alarmLabel } from '../lib/alarms'
 import { buildDispatchScript, playDispatch, stopDispatch } from '../lib/dispatchAudio'
 import { setDashboardPage } from '../lib/layouts'
 import { useAppSlice } from '../state/store'
+import { edgeClassFor, isApparatus } from '../lib/crews'
+import { CommandVitals } from './CommandVitals'
 import './DispatchPage.css'
 
 // ---------------------------------------------------------------------------
@@ -34,6 +36,15 @@ export function DispatchPage() {
   // reads the CURRENT assignment.
   const script = useMemo(() => buildDispatchScript(), [incident, units])
   void units
+  // The rigs actually tracked on this box — the assignment the audio reads,
+  // visible without pressing play.
+  const responding = useMemo(
+    () =>
+      Object.values(units)
+        .filter(isApparatus)
+        .sort((a, b) => a.callsign.localeCompare(b.callsign, undefined, { numeric: true })),
+    [units],
+  )
   // Division -> Battalion -> boxes (moved here from the old top-bar menu).
   const divisions = useMemo(() => {
     if (page !== 5) return []
@@ -90,6 +101,17 @@ export function DispatchPage() {
           </button>
         )}
       </header>
+      <CommandVitals />
+      {incident && responding.length > 0 && (
+        <div className="dp-assignment" title="The apparatus actually tracked on this box — the same list the dispatch audio reads">
+          <span className="dp-assign-label">RESPONDING</span>
+          {responding.map((u) => (
+            <span key={u.uid} className={`dp-assign-chip ${edgeClassFor(u.category)}`}>
+              {u.callsign}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="dp-note">
         Announcements are generated from the live box — address, alarm level, and the actual responding apparatus — and
         spoken with the browser's speech synthesis. Every announcement identifies itself as simulated.

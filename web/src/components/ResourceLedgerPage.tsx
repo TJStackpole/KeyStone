@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import './ResourceLedgerPage.css'
-import { transmitAlarm } from '../actions'
+import { flyToFeature, transmitAlarm } from '../actions'
 import { alarmLabel } from '../lib/alarms'
 import { edgeClassFor, isApparatus } from '../lib/crews'
 import { setDashboardPage } from '../lib/layouts'
 import { useAppSlice } from '../state/store'
 import type { Unit } from '../types'
+import { CommandVitals } from './CommandVitals'
 
 // ---------------------------------------------------------------------------
 // RESOURCE LEDGER — dashboard page 4. Who is where (status board), what the
@@ -92,21 +93,10 @@ export function ResourceLedgerPage() {
   for (const u of apparatus) byBucket.get(bucketOf(u))!.push(u)
 
   const flyTo = (u: Unit) => {
-    // Dynamic import keeps this page Cesium-free; a dead 3D view fails the
-    // import or returns no scene and the tap degrades to nothing, silently.
-    void import('../cesium/registry')
-      .then((m) => {
-        const scene = m.getScene()
-        if (!scene) return
-        setDashboardPage(0)
-        void import('cesium').then((C) => {
-          scene.viewer.camera.flyTo({
-            destination: C.Cartesian3.fromDegrees(u.lon, u.lat, 500),
-            duration: 1.0,
-          })
-        })
-      })
-      .catch(() => {})
+    // The canonical camera path: flyToFeature drives whichever map is live
+    // (2D MapLibre or 3D Cesium) — a tap here must never be a silent no-op.
+    setDashboardPage(0)
+    flyToFeature(u.lat, u.lon)
   }
 
   const committed = new Set(apparatus.map((u) => u.callsign))
@@ -165,6 +155,7 @@ export function ResourceLedgerPage() {
           <div className="rl-sub">{incident ? incident.address : 'NO ACTIVE INCIDENT — the board still reads standing resources'}</div>
         </div>
       </header>
+      <CommandVitals />
 
       <section className="rl-board">
         {BUCKETS.map((b) => {

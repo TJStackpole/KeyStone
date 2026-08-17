@@ -162,6 +162,11 @@ export interface AppState {
    *  minutes of a box; ADVANCED reveals the full toolset. Nothing is deleted
    *  either way — one switch, persisted. */
   uiAdvanced: boolean
+  /** PAR cycle minutes — the OPS CLOCK chip's operator setting (10/15/20/30),
+   *  mirrored to the server. Single source for every PAR indicator. */
+  parIntervalMin: number
+  /** Server clock's last-PAR anchor (ms) — survives the truncated timeline. */
+  parAnchorSrv: number
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
   /** Command board diagram: unit uid -> normalized {x,y} on the building. */
@@ -380,6 +385,11 @@ const initial: AppState = {
   voiceReplies: localStorage.getItem('ks-voice-replies') === '1',
   voiceHelpOpen: false,
   uiAdvanced: localStorage.getItem('ks-advanced') === '1',
+  parIntervalMin: (() => {
+    const v = Number(localStorage.getItem('ks-par-interval'))
+    return [10, 15, 20, 30].includes(v) ? v : 20
+  })(),
+  parAnchorSrv: 0,
   boardAssignments: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>

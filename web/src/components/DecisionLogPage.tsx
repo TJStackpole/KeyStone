@@ -3,10 +3,12 @@ import './DecisionLogPage.css'
 import { transmitAlarm } from '../actions'
 import { ALARM_LADDER, alarmRank } from '../lib/alarms'
 import { setDashboardPage } from '../lib/layouts'
+import { isApparatus, isAtBox, isEnroute } from '../lib/crews'
 import { escapeHtml, openPrintable } from '../lib/printDoc'
 import { fmtWallClock } from '../lib/time'
 import { getAppState, useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
+import { CommandVitals } from './CommandVitals'
 import { AgencyRequestsBlock } from './MyAgencyRequestsPanel'
 
 // ---------------------------------------------------------------------------
@@ -93,11 +95,10 @@ function printCommandPack(): void {
   const s = getAppState()
   const inc = s.incident
   if (!inc) return
-  const units = Object.values(s.units)
-  // 'On Scene' / 'onscene' / 'ON-SCENE' all mean the same thing on a CoT track.
-  const byStatus = (want: string[]) =>
-    units
-      .filter((u) => want.includes((u.status ?? '').toLowerCase().replace(/[^a-z]/g, '')))
+  const rigs = Object.values(s.units).filter(isApparatus)
+  const byStatus = (pred: (status: string | undefined) => boolean) =>
+    rigs
+      .filter((u) => pred(u.status))
       .map((u) => u.callsign)
       .join(', ') || '—'
   const bench = s.timeline
@@ -121,8 +122,8 @@ function printCommandPack(): void {
     sub: `${inc.address} · ${inc.type}${inc.alarmLevel ? ` · ${inc.alarmLevel.toUpperCase()}` : ''} · stood up ${new Date(inc.createdAt).toLocaleString()} · printed ${new Date().toLocaleString()} — KeyStone FDNY`,
     bodyHtml:
       `<h2>UNITS</h2><table>` +
-      `<tr><td class="t">ON SCENE / OPERATING</td><td>${escapeHtml(byStatus(['onscene', 'operating', 'staged']))}</td></tr>` +
-      `<tr><td class="t">ENROUTE</td><td>${escapeHtml(byStatus(['enroute']))}</td></tr></table>` +
+      `<tr><td class="t">ON SCENE / OPERATING</td><td>${escapeHtml(byStatus(isAtBox))}</td></tr>` +
+      `<tr><td class="t">ENROUTE</td><td>${escapeHtml(byStatus(isEnroute))}</td></tr></table>` +
       (water ? `<h2>WATER SUPPLY</h2><table>${water}</table>` : '') +
       `<h2>ACTIVITY (ICS-214)</h2><table>${bench || '<tr><td>No entries.</td></tr>'}</table>` +
       (reqs ? `<h2>OPEN INTERAGENCY REQUESTS</h2><table>${reqs}</table>` : ''),
@@ -192,6 +193,7 @@ export function DecisionLogPage() {
           PRINT COMMAND PACK
         </button>
       </header>
+      <CommandVitals />
 
       <section className="dl-benchmarks">
         <div className="dl-zone-label">ALARMS — escalate + log in one press</div>

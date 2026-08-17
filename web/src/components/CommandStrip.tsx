@@ -3,7 +3,7 @@ import { transmitAlarm } from '../actions'
 import { ALARM_LADDER, alarmRank } from '../lib/alarms'
 import { fmtElapsed } from '../lib/time'
 import { replayEngine } from '../replay'
-import { useAppSlice } from '../state/store'
+import { setAppState, useAppSlice } from '../state/store'
 import type { Agency } from '../types'
 
 const AGENCIES: Agency[] = ['FDNY', 'EMS', 'NYPD', 'PAPD', 'OEM']
@@ -47,24 +47,26 @@ const PAR_PRESETS = [10, 15, 20, 30]
  *  Interval default 20 min — VALIDATE—SME (FDNY's real cadence TBC); the
  *  preference persists locally and mirrors to the server clock. */
 function OpsChips({ incident, timeline }: { incident: { createdAt: string }; timeline: { t: string; kind: string; payload?: unknown }[] }) {
-  const [parMin, setParMin] = useState(() => {
-    const v = Number(localStorage.getItem('ks-par-interval'))
-    return PAR_PRESETS.includes(v) ? v : 20
-  })
-  // The server clock is authoritative: adopt its interval AND its anchors on
+  // The PAR interval and server anchors live in the STORE (single source with
+  // the vitals strip and tab dots — two PAR clocks must never disagree). The
+  // server clock is authoritative: adopt its interval AND its anchors on
   // mount. The client's timeline window is truncated (~600 events) — on a
   // long box the last mark/PAR can fall out of it, which would pin the MK
   // chip at a past mark and show a false PAR-overdue. Anchors only move
   // forward, so max(client-derived, server snapshot) is always right.
-  const [anchors, setAnchors] = useState<{ lastMark: number; lastParAt: number }>({ lastMark: 0, lastParAt: 0 })
+  const { parMin, parAnchorSrv } = useAppSlice((s) => ({ parMin: s.parIntervalMin, parAnchorSrv: s.parAnchorSrv }))
+  const [lastMarkSrv, setLastMarkSrv] = useState(0)
   useEffect(() => {
     let dead = false
     fetch('/api/ops/par-interval')
       .then((r) => (r.ok ? r.json() : null))
       .then((p: { minutes?: number; lastMark?: number; lastParAt?: number } | null) => {
         if (dead || !p) return
-        if (PAR_PRESETS.includes(Number(p.minutes))) setParMin(Number(p.minutes))
-        setAnchors({ lastMark: Number(p.lastMark) || 0, lastParAt: Number(p.lastParAt) || 0 })
+        setAppState({
+          ...(PAR_PRESETS.includes(Number(p.minutes)) ? { parIntervalMin: Number(p.minutes) } : {}),
+          parAnchorSrv: Number(p.lastParAt) || 0,
+        })
+        setLastMarkSrv(Number(p.lastMark) || 0)
       })
       .catch(() => {})
     return () => {
@@ -73,8 +75,8 @@ function OpsChips({ incident, timeline }: { incident: { createdAt: string }; tim
   }, [])
 
   const started = Date.parse(incident.createdAt)
-  let lastPar = Math.max(started, anchors.lastParAt || 0)
-  let lastMark = anchors.lastMark
+  let lastPar = Math.max(started, parAnchorSrv || 0)
+  let lastMark = lastMarkSrv
   for (const ev of timeline) {
     if (ev.kind === 'ic.par-complete') {
       const t = Date.parse(ev.t)
@@ -101,7 +103,7 @@ function OpsChips({ incident, timeline }: { incident: { createdAt: string }; tim
         className={`strip-mono par-chip${parTone}`}
         onClick={() => {
           const next = PAR_PRESETS[(PAR_PRESETS.indexOf(parMin) + 1) % PAR_PRESETS.length]
-          setParMin(next)
+          setAppState({ parIntervalMin: next })
           try {
             localStorage.setItem('ks-par-interval', String(next))
           } catch {

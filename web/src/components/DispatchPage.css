@@ -162,3 +162,34 @@
 }
 .dispatch-page .dp-feed .feed-meta em { font-size: 10px; }
 .dispatch-page .dp-script { font-size: 13.5px; line-height: 1.8; }
+
+/* RESPONDING — the tracked assignment for this box, readable without audio. */
+.dispatch-page .dp-assignment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.14);
+}
+.dispatch-page .dp-assign-label {
+  font: 700 10px var(--mono, monospace);
+  color: #64748b;
+  letter-spacing: 0.08em;
+  margin-right: 4px;
+}
+.dispatch-page .dp-assign-chip {
+  font: 700 11px var(--mono, monospace);
+  color: #e2e8f0;
+  background: rgba(15, 23, 36, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-left-width: 3px;
+  border-radius: 3px;
+  padding: 2px 8px;
+}
+.dispatch-page .dp-assign-chip.edge-engine { border-left-color: #dc2626; }
+.dispatch-page .dp-assign-chip.edge-ladder { border-left-color: #ef4444; }
+.dispatch-page .dp-assign-chip.edge-battalion { border-left-color: #f8fafc; }
+.dispatch-page .dp-assign-chip.edge-rescue { border-left-color: #7f1d1d; }
+.dispatch-page .dp-assign-chip.edge-ems { border-left-color: #1d4ed8; }
+.dispatch-page .dp-assign-chip.edge-other { border-left-color: #475569; }

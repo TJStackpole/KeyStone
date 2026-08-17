@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { flyToFeature, placeExposureLabels, windName } from '../actions'
+import { isApparatus, isAtBox, isEnroute } from '../lib/crews'
 import { useMovable } from '../lib/movable'
+import { waterAssignments } from '../lib/vitals'
 import { useAppSlice } from '../state/store'
 import { notify } from './NoticeChip'
 import './SizeUpCard.css'
@@ -44,8 +46,6 @@ const BLDG_CLASS: Record<string, string> = {
 
 const ftFromM = (m: number) => Math.round((m * 3.28084) / 10) * 10
 const mphFromKt = (kt: number) => Math.round(kt * 1.15078)
-/** 'On Scene' / 'onscene' / 'ON-SCENE' all mean the same thing on a CoT track. */
-const normStatus = (s: string | undefined) => (s ?? '').toLowerCase().replace(/[^a-z]/g, '')
 
 export function SizeUpCard() {
   const mvSizeup = useMovable('sizeup-card')
@@ -72,22 +72,18 @@ export function SizeUpCard() {
   const exposures = Object.values(shapes).filter(
     (sh) => sh.kind === 'post' && (sh as { post?: string }).post === 'exposure',
   )
-  const roster = Object.values(units)
+  // Rigs only — crew members (E-6/1) would double-count every arrival.
+  const roster = Object.values(units).filter(isApparatus)
   const engines = roster.filter((u) => u.category === 'engine').map((u) => u.callsign)
-  const onScene = roster.filter((u) => ['onscene', 'operating', 'staged'].includes(normStatus(u.status))).length
-  const enroute = roster.filter((u) => normStatus(u.status) === 'enroute').length
+  const onScene = roster.filter((u) => isAtBox(u.status)).length
+  const enroute = roster.filter((u) => isEnroute(u.status)).length
   const near = [...hydrants].sort((a, b) => a.distanceM - b.distanceM).slice(0, 3)
   const classLabel = pluto?.bldgClass ? BLDG_CLASS[pluto.bldgClass[0]?.toUpperCase() ?? ''] : undefined
   const windMph = wind ? mphFromKt(wind.speedKt) : 0
 
   // Assignments come from the incident record itself — every dashboard shows
   // the same water picture, it survives reloads, and it resets with the box.
-  const assigned: Record<string, string> = {}
-  for (const ev of timeline) {
-    if (ev.kind !== 'water.assign') continue
-    const p = (ev.payload ?? {}) as { hydrant?: string; unit?: string }
-    if (p.hydrant && p.unit) assigned[p.hydrant] = p.unit
-  }
+  const assigned = waterAssignments(timeline)
 
   const assignHydrant = (hydrantId: string, unit: string) => {
     if (!unit) return
@@ -169,7 +165,22 @@ export function SizeUpCard() {
           </button>
           <span className="suc-hyd-id">H-{h.id.slice(-4).toUpperCase()}</span>
           {assigned[h.id] ? (
-            <span className="suc-hyd-assigned">{assigned[h.id]} ✓</span>
+            <span className="suc-hyd-assigned">
+              {assigned[h.id]} ✓
+              <button
+                className="suc-hyd-clear"
+                title={`Release ${assigned[h.id]} from this hydrant (stays on the log as history)`}
+                onClick={() =>
+                  void fetch('/api/timeline', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ kind: 'water.clear', payload: { hydrant: h.id, by: 'IC' } }),
+                  }).catch(() => notify('RELEASE DID NOT REACH THE LOG'))
+                }
+              >
+                ✕
+              </button>
+            </span>
           ) : (
             <select
               className="suc-hyd-assign"

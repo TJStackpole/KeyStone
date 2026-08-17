@@ -9,6 +9,7 @@ import { crewCompositionAllowed } from '../profiles/policy'
 import { useProfile } from '../profiles/manifest'
 import { crewOf } from '../types'
 import type { Unit } from '../types'
+import { CommandVitals } from './CommandVitals'
 import './RidingListPage.css'
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,16 @@ export function RidingListPage() {
   }, [page])
 
   const cards = useMemo(() => buildCards(units), [units])
+  // Header rollup mirrors the CARD tones exactly (same floored-minute math,
+  // same >20 stale / >30 overdue thresholds) — a red chip must always have a
+  // matching highlighted card below it. Never-stamped cards are covered by
+  // the vitals strip's incident-level PAR clock, not per card.
+  const cardAges = cards
+    .map((c) => parChecks[c.callsign])
+    .filter((t): t is number => t !== undefined)
+    .map((t) => Math.max(0, Math.floor((now - t) / 60_000)))
+  const stalePar = cardAges.filter((a) => a > 20).length
+  const overduePar = cardAges.filter((a) => a > 30).length
   const totals = useMemo(() => {
     let membersTotal = 0
     let interior = 0
@@ -218,6 +229,11 @@ export function RidingListPage() {
           <span className="rp-total">{totals.membersTotal} MEMBERS</span>
           <span className="rp-sep">/</span>
           <span className="rp-total in">{totals.interior} INTERIOR</span>
+          {stalePar > 0 && (
+            <span className={`rp-total ${overduePar > 0 ? 'overdue' : 'stale'}`} title="Cards whose last PAR stamp has aged past 20 minutes — the matching cards below carry the same tone (red past 30)">
+              {stalePar} PAR &gt; 20 MIN
+            </span>
+          )}
         </div>
         <button
           className="rp-btn rp-par-all"
@@ -227,6 +243,7 @@ export function RidingListPage() {
           PAR ALL ({cards.length})
         </button>
       </header>
+      <CommandVitals />
       {cards.length === 0 ? (
         <div className="rp-empty">NO UNITS TRACKED — riding lists build as companies check in</div>
       ) : (
