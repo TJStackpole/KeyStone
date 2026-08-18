@@ -2315,12 +2315,28 @@ let demoDispatchTimer: ReturnType<typeof setTimeout> | null = null
 /** Next dispatchAssignment() call runs in compressed DEMO timing. */
 let demoDispatchPending = false
 
+// The demo button must NEVER dead-end: if NYC GeoSearch is slow or down on
+// the demo network, fall back to the known record for the seed address.
+const DEMO_HIT: GeoHit = {
+  label: '100 GOLD STREET, New York, NY, USA',
+  name: '100 GOLD STREET',
+  borough: 'Manhattan',
+  lat: 40.710156,
+  lon: -74.00324,
+  bin: '1001289',
+  bbl: '1000940025',
+}
+
 export async function runDemoScenario(): Promise<void> {
   try {
-    const { autocompleteAddress } = await import('./api/geosearch')
-    const hits = await autocompleteAddress('100 Gold Street')
-    const hit = hits.find((h) => h.borough === 'Manhattan') ?? hits[0]
-    if (!hit) throw new Error('geocoder returned nothing for 100 Gold Street')
+    let hit: GeoHit = DEMO_HIT
+    try {
+      const { autocompleteAddress } = await import('./api/geosearch')
+      const hits = await autocompleteAddress('100 Gold Street')
+      hit = hits.find((h) => h.borough === 'Manhattan') ?? hits[0] ?? DEMO_HIT
+    } catch {
+      console.warn('[demo] geocoder unavailable — using the baked-in 100 Gold St record')
+    }
     await standUpIncident(hit, 'Structural Fire')
     const armedFor = getAppState().incident?.id
     // Let the fly-in land before units start rolling — but only dispatch if

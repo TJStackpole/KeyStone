@@ -321,6 +321,22 @@ export function TacticalMap2D() {
     const detachDraw = attachDraw2D(map)
     void detachDraw // map lives for the session; torn down with the page
     mapRef.current = map
+    // Resize hardening: MapLibre's ResizeObserver can miss a container that
+    // grows while the tab is backgrounded or the window moves to a projector
+    // (the demo-day path). A window listener plus a cheap canvas-vs-container
+    // watchdog guarantees the map never sits letterboxed in a black frame.
+    const forceResize = () => {
+      const el = divRef.current
+      const canvas = map.getCanvas()
+      if (!el || el.clientWidth === 0) return
+      const dpr = window.devicePixelRatio || 1
+      if (Math.abs(canvas.width - el.clientWidth * dpr) > 4 || Math.abs(canvas.height - el.clientHeight * dpr) > 4) {
+        map.resize()
+      }
+    }
+    window.addEventListener('resize', forceResize)
+    document.addEventListener('visibilitychange', forceResize)
+    window.setInterval(forceResize, 3000)
     return undefined // map persists across 2D/3D flips — cheap, keeps camera
   }, [active, incident])
 
