@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { transmitAlarm } from '../actions'
 import { ALARM_LADDER, alarmRank } from '../lib/alarms'
+import { isApparatus, isAtBox } from '../lib/crews'
 import { fmtElapsed } from '../lib/time'
 import { replayEngine } from '../replay'
 import { setAppState, useAppSlice } from '../state/store'
@@ -142,9 +143,12 @@ export function CommandStrip() {
       OEM: { onScene: 0, total: 0 },
       TAK: { onScene: 0, total: 0 },
     }
+    // Rigs only, shared status vocabulary — these chips must agree with the
+    // SIZE-UP card and the vitals strip on the same screen.
     for (const u of Object.values(units)) {
+      if (!isApparatus(u)) continue
       out[u.agency].total++
-      if (u.status && u.status !== 'Enroute') out[u.agency].onScene++
+      if (isAtBox(u.status)) out[u.agency].onScene++
     }
     return out
   }, [units])

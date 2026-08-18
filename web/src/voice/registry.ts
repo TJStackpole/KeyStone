@@ -17,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import { PANEL_IDS, resetPanelLayout, setAllPanelsMinimized, setPanelMinimized } from '../lib/movable'
+import { isApparatus, isAtBox } from '../lib/crews'
 import { getAppState, setAppState } from '../state/store'
 import { exposureDigit, PANEL_ALIASES, parseUnitPhrase } from './grammar'
 import type { Unit } from '../types'
@@ -120,7 +121,14 @@ function setLayer(layerWord: string, on: boolean): ExecResult {
   }
   const id = aliases[layerWord]
   if (!id) return { ok: false, echo: `NO LAYER "${layerWord.toUpperCase()}"`, tone: 'warn' }
-  const cur = getAppState().layerToggles[id]
+  // The 2D tactical map renders a subset of the 3D overlays — claiming a
+  // layer is ON while nothing changes on screen makes voice look broken.
+  const ON_2D = new Set(['hydrants', 'traffic', 'footprints', 'targetbox'])
+  const st = getAppState()
+  if (on && st.mapMode === '2d' && !ON_2D.has(id)) {
+    return { ok: false, echo: `${id.replace(/^poi/, '').toUpperCase()} IS A 3D-VIEW LAYER — SWITCH TO THE 3D MAP FIRST`, tone: 'warn' }
+  }
+  const cur = st.layerToggles[id]
   if (cur !== on) {
     void import('../actions').then((a) => a.toggleLayer(id))
   }
@@ -163,6 +171,23 @@ async function showFace(faceIdx: number): Promise<ExecResult> {
 }
 
 // ---- the registry -----------------------------------------------------------
+
+/** The rooms that actually exist on the TAK server — anything else reroutes
+ *  to ALL and the echo says so instead of claiming a private room. */
+const TAK_ROOMS = ['FDNY', 'NYPD', 'EMS', 'PAPD', 'OEM'] as const
+function takRoom(agency?: string): string | null {
+  const up = (agency ?? '').toUpperCase()
+  return (TAK_ROOMS as readonly string[]).includes(up) ? up : null
+}
+
+/** Camera locks only mean anything with the ISOLATE 3D view up — writing
+ *  lock state with no visible effect makes voice look broken. */
+function requireIsolate(): { ok: false; echo: string; tone: 'warn' } | null {
+  if (!getAppState().isolateMode) {
+    return { ok: false, echo: 'ISOLATE THE BUILDING FIRST — say "isolate the building"', tone: 'warn' }
+  }
+  return null
+}
 
 export const INTENTS: Record<string, IntentDef> = {
   // ---- size-up -------------------------------------------------------------
@@ -250,6 +275,8 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Start or resume the auto-rotating orbit around the isolated building.',
     run: async () => {
+      const denied = requireIsolate()
+      if (denied) return denied
       const vl = await import('../cesium/viewLock')
       if (getAppState().viewLock !== 'orbit') vl.setViewLockMode('orbit')
       vl.setOrbitPaused(false)
@@ -260,6 +287,8 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Pause the auto-rotating orbit.',
     run: async () => {
+      const denied = requireIsolate()
+      if (denied) return denied
       ;(await import('../cesium/viewLock')).setOrbitPaused(true)
       return { ok: true, echo: 'ORBIT PAUSED' }
     },
@@ -268,6 +297,8 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Lock the camera to the top-down plan view of the building.',
     run: async () => {
+      const denied = requireIsolate()
+      if (denied) return denied
       ;(await import('../cesium/viewLock')).setViewLockMode('top')
       return { ok: true, echo: 'TOP-DOWN' }
     },
@@ -277,6 +308,8 @@ export const INTENTS: Record<string, IntentDef> = {
     description: 'Lock the camera head-on to a cardinal facade of the building.',
     slots: { side: { description: 'Facade', enum: ['north', 'east', 'south', 'west'] } },
     run: async (slots) => {
+      const denied = requireIsolate()
+      if (denied) return denied
       const side = slots.side as 'north' | 'east' | 'south' | 'west'
       if (!side) return { ok: false, echo: 'WHICH FACE?', tone: 'warn' }
       ;(await import('../cesium/viewLock')).setViewLockMode(side)
@@ -295,6 +328,8 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Move the facade view up one floor.',
     run: async () => {
+      const denied = requireIsolate()
+      if (denied) return denied
       ;(await import('../cesium/viewLock')).stepViewLockFloor(1)
       return { ok: true, echo: `FLOOR ${getAppState().viewLockFloor}` }
     },
@@ -303,6 +338,8 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Move the facade view down one floor.',
     run: async () => {
+      const denied = requireIsolate()
+      if (denied) return denied
       ;(await import('../cesium/viewLock')).stepViewLockFloor(-1)
       return { ok: true, echo: `FLOOR ${getAppState().viewLockFloor}` }
     },
@@ -312,6 +349,8 @@ export const INTENTS: Record<string, IntentDef> = {
     description: 'Jump the facade view to a specific floor number.',
     slots: { floor: { description: 'Floor number (1-based)' } },
     run: async (slots) => {
+      const denied = requireIsolate()
+      if (denied) return denied
       const fl = Number(slots.floor)
       if (!Number.isFinite(fl) || fl < 1) return { ok: false, echo: 'WHICH FLOOR?', tone: 'warn' }
       ;(await import('../cesium/viewLock')).jumpViewLockFloor(fl)
@@ -324,8 +363,10 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Pan/zoom the map to the incident building.',
     run: async () => {
-      if (!getAppState().incident) return { ok: false, echo: 'NO ACTIVE INCIDENT', tone: 'warn' }
-      ;(await import('../actions')).goToIncident()
+      const inc = getAppState().incident
+      if (!inc) return { ok: false, echo: 'NO ACTIVE INCIDENT', tone: 'warn' }
+      // flyToFeature drives whichever map is live (2D MapLibre or 3D Cesium).
+      ;(await import('../actions')).flyToFeature(inc.lat, inc.lon)
       return { ok: true, echo: '→ BUILDING' }
     },
   },
@@ -381,7 +422,10 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Return the map to the citywide home view.',
     run: async () => {
-      ;(await import('../actions')).goHome()
+      const st = getAppState()
+      const { map2dActive, flyTo2D } = await import('../map2d/controller')
+      if (st.mapMode === '2d' && map2dActive()) flyTo2D(40.7127, -74.006, 11.5)
+      else (await import('../actions')).goHome()
       return { ok: true, echo: '→ HOME' }
     },
   },
@@ -389,6 +433,9 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'instant',
     description: 'Reorient the camera to north-up.',
     run: async () => {
+      const st = getAppState()
+      const { map2dActive } = await import('../map2d/controller')
+      if (st.mapMode === '2d' && map2dActive()) return { ok: true, echo: 'NORTH IS ALWAYS UP ON THE TACTICAL MAP' }
       ;(await import('../actions')).reorientNorth()
       return { ok: true, echo: 'NORTH UP' }
     },
@@ -482,10 +529,10 @@ export const INTENTS: Record<string, IntentDef> = {
   },
   start_par: {
     klass: 'instant',
-    description: 'Start a PAR check: opens the command board and logs the PAR start. (Completing PAR entries stays tap-only.)',
+    description: 'Open the RIDING LIST where PAR is taken. (PAR stamps themselves stay tap-only.)',
     run: async () => {
-      ;(await import('../lib/layouts')).setDashboardPage(1)
-      return { ok: true, echo: 'PAR STARTED — BOARD UP · ENTRIES ARE TAP-ONLY' }
+      ;(await import('../lib/layouts')).setDashboardPage(2)
+      return { ok: true, echo: 'RIDING LIST UP — STAMP PAR ✓ PER COMPANY (TAP-ONLY)' }
     },
   },
   open_comms: {
@@ -564,10 +611,11 @@ export const INTENTS: Record<string, IntentDef> = {
     klass: 'confirm',
     description: 'Open TAK GeoChat scoped to an agency room. Initiates comms, so it is drafted and requires confirmation.',
     slots: { agency: { description: 'Agency room', enum: ['nypd', 'papd', 'ems', 'fdny', 'oem', 'nycem'] } },
-    draft: (slots) => `OPEN TAK CHAT — ${(slots.agency ?? '').toUpperCase()} ROOM`,
+    draft: (slots) => `OPEN TAK CHAT — ${takRoom(slots.agency) ?? 'ALL CHAT ROOMS'}`,
     commit: (slots) => {
-      setAppState({ chatOpen: true })
-      return { ok: true, echo: `TAK CHAT OPEN · ${(slots.agency ?? '').toUpperCase()}` }
+      const room = takRoom(slots.agency)
+      setAppState({ chatOpen: true, chatRoomRequest: room ?? 'All Chat Rooms' })
+      return { ok: true, echo: `TAK CHAT OPEN · ${room ?? 'ALL ROOMS'}` }
     },
   },
   tak_send: {
@@ -579,16 +627,18 @@ export const INTENTS: Record<string, IntentDef> = {
     },
     draft: (slots) => (slots.message ? `TAK → ${(slots.agency ?? '').toUpperCase()}: “${slots.message}”` : null),
     commit: async (slots) => {
-      const room = (slots.agency ?? '').toUpperCase()
+      const room = takRoom(slots.agency)
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: slots.message, room }),
+        body: JSON.stringify({ text: slots.message, room: room ?? 'All Chat Rooms' }),
       })
-      setAppState({ chatOpen: true })
-      return res.ok
+      setAppState({ chatOpen: true, chatRoomRequest: room ?? 'All Chat Rooms' })
+      if (!res.ok) return { ok: false, echo: 'TAK SEND FAILED', tone: 'warn' }
+      // No dedicated room for that agency on the server — say where it went.
+      return room
         ? { ok: true, echo: `SENT → ${room}` }
-        : { ok: false, echo: 'TAK SEND FAILED', tone: 'warn' }
+        : { ok: true, echo: `SENT → ALL CHAT ROOMS (NO ${(slots.agency ?? '').toUpperCase()} ROOM)` }
     },
   },
   request_resource: {
@@ -627,8 +677,10 @@ export const INTENTS: Record<string, IntentDef> = {
     commit: async (slots) => {
       const lv = normalizeAlarm(slots.alarm)
       if (!lv) return { ok: false, echo: 'WHICH ALARM?', tone: 'warn' }
-      await (await import('../actions')).transmitAlarm(lv)
-      return { ok: true, echo: `${lv.toUpperCase()} ALARM TRANSMITTED` }
+      const sent = await (await import('../actions')).transmitAlarm(lv)
+      return sent
+        ? { ok: true, echo: `${lv.toUpperCase()} ALARM TRANSMITTED` }
+        : { ok: false, echo: `${lv.toUpperCase()} ALARM REFUSED — see the notice`, tone: 'warn' }
     },
   },
   respond_box: {
@@ -757,9 +809,7 @@ export const INTENTS: Record<string, IntentDef> = {
     description: 'READ-ONLY: report which units have a completed PAR check and which are outstanding.',
     run: () => {
       const s = getAppState()
-      const onScene = Object.values(s.units).filter((u) =>
-        ['onscene', 'operating', 'staged'].includes((u.status ?? '').toLowerCase()),
-      )
+      const onScene = Object.values(s.units).filter((u) => isApparatus(u) && isAtBox(u.status))
       const done = onScene.filter((u) => s.parChecks[u.callsign])
       const missing = onScene.filter((u) => !s.parChecks[u.callsign]).map((u) => u.callsign)
       const echo = `PAR ${done.length}/${onScene.length}${missing.length ? `\nOUTSTANDING: ${missing.slice(0, 8).join(', ')}` : ' — COMPLETE'}`
@@ -836,8 +886,15 @@ function findFeedIncident(spoken?: string): import('../types').FeedIncident | nu
   if (!feed.length) return null
   if (spoken) {
     const num = spoken.replace(/\D/g, '')
-    const byBn = feed.find((f) => String(f.battalion) === num)
-    if (byBn) return byBn
+    if (num) {
+      // Box number first — that's what the dispatch announcement reads out;
+      // a battalion number would grab an arbitrary row in that battalion.
+      const byBox = feed.find((f) => f.id.replace(/\D/g, '') === num)
+      if (byBox) return byBox
+      const byBn = feed.find((f) => String(f.battalion) === num)
+      if (byBn) return byBn
+      return null // a number was spoken and nothing matched — never guess
+    }
   }
   // No number match: the most recent DISPATCHED row is what "respond" means.
   return feed.find((f) => f.status === 'Dispatched') ?? feed[0] ?? null

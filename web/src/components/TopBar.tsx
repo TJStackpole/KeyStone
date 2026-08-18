@@ -139,6 +139,7 @@ function ScenariosMenu() {
             className="panel-item practice-item no-drag"
             onClick={() => {
               setAppState({ practiceTour: true })
+              setOpen(false) // the tour panel must not sit under an open menu
             }}
             title="A five-step guided practice run in plain language — fully simulated, nothing can break"
           >

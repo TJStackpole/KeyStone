@@ -1,4 +1,5 @@
 import { alarmLabel } from './alarms'
+import { isApparatus, isAtBox } from './crews'
 import { escapeHtml as esc, openPrintable } from './printDoc'
 import { getAppState } from '../state/store'
 import type { FeedDataWire } from '../types'
@@ -33,7 +34,7 @@ export function openBrief(): boolean {
     for (const u of units) {
       const rec = byAgency.get(u.agency) ?? { on: 0, total: 0 }
       rec.total++
-      if (u.status && u.status !== 'Enroute') rec.on++
+      if (isApparatus(u) && isAtBox(u.status)) rec.on++
       byAgency.set(u.agency, rec)
     }
     rows.push(

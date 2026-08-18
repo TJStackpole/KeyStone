@@ -193,3 +193,12 @@
 .dispatch-page .dp-assign-chip.edge-rescue { border-left-color: #7f1d1d; }
 .dispatch-page .dp-assign-chip.edge-ems { border-left-color: #1d4ed8; }
 .dispatch-page .dp-assign-chip.edge-other { border-left-color: #475569; }
+
+.dispatch-page .dp-feed .feed-row.armed {
+  border-color: rgba(245, 158, 11, 0.8);
+  background: rgba(245, 158, 11, 0.12);
+}
+.dispatch-page .dp-feed .feed-row.armed .feed-meta em {
+  color: var(--amber, #f59e0b);
+  font-weight: 800;
+}

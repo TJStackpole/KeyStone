@@ -167,6 +167,8 @@ export interface AppState {
   parIntervalMin: number
   /** Server clock's last-PAR anchor (ms) — survives the truncated timeline. */
   parAnchorSrv: number
+  /** Voice-requested TAK chat room — the panel adopts it once and clears. */
+  chatRoomRequest: string | null
   /** Command board: unit uid -> assigned position (ATTACK, SEARCH...). */
   boardAssignments: Record<string, string>
   /** Command board diagram: unit uid -> normalized {x,y} on the building. */
@@ -390,6 +392,7 @@ const initial: AppState = {
     return [10, 15, 20, 30].includes(v) ? v : 20
   })(),
   parAnchorSrv: 0,
+  chatRoomRequest: null,
   boardAssignments: (() => {
     try {
       return JSON.parse(localStorage.getItem('ks-board') ?? '{}') as Record<string, string>

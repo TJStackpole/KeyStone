@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { alarmLabel } from '../lib/alarms'
+import { isApparatus, isAtBox } from '../lib/crews'
 import { useAppSlice } from '../state/store'
 import type { Agency } from '../types'
 
@@ -53,7 +54,7 @@ export function SitrepContent() {
     for (const u of Object.values(units)) {
       const rec = byAgency.get(u.agency) ?? { onScene: 0, total: 0 }
       rec.total++
-      if (u.status && u.status !== 'Enroute') rec.onScene++
+      if (isApparatus(u) && isAtBox(u.status)) rec.onScene++
       byAgency.set(u.agency, rec)
       if (u.status === 'Operating') operating++
       if (u.category === 'drone' && u.hae > 20) dronesAloft++

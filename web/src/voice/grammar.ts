@@ -177,7 +177,9 @@ export const COMMANDS: CommandSpec[] = [
     group: 'SIZE-UP',
     // "(?! panel)" — "open the street view PANEL" belongs to the 3D-side
     // photographic panel intent further down, not the size-up tab.
-    patterns: [/\bstreet view\b(?! panel)/, /\bshow (?:me )?the street\b(?! view panel)/, /\b(?:panorama|street level)\b/],
+    // "(?! names?)" — "show the street NAMES" is the labels layer, not the
+    // photographic street view; locked by the grammar self-consistency suite.
+    patterns: [/\bstreet view\b(?! panel)/, /\bshow (?:me )?the street\b(?! view panel)(?! names?)/, /\b(?:panorama|street level)\b/],
     examples: ['street view'],
   },
   {

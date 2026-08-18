@@ -49,5 +49,9 @@ off.
 > "The full depth is one switch away, but a chief never needs a training
 > class for the first ten minutes — that's the point."
 
-**Reset between runs:** END the incident (incident card ✕ END), or say
-*"end the incident"* and confirm.
+**Reset between runs:** END the incident (incident card ✕ END — tap twice,
+the second tap confirms), or say *"end the incident"* and confirm.
+
+**Bring the welcome card back after rehearsing:** the RUN THE DEMO hero shows
+once per browser. Before the real run, open the app with `?hero` on the URL
+(e.g. `http://localhost:4010/?hero`) and it returns.

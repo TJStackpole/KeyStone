@@ -27,7 +27,9 @@ export function normStatus(s: string | undefined): string {
 // The full status vocabulary the pipelines emit (sim, scenarios, real EUDs):
 // one definition of "at the box" / "coming" so the vitals strip, SIZE-UP,
 // COMMAND PACK and ledger never disagree about the same rig.
-const AT_BOX_SET = new Set(['onscene', 'operating', 'staged', 'command', 'arrived', 'mayday', 'rehab', 'released'])
+// 'released' is deliberately NOT here — a released rig is leaving the box,
+// and counting it as on-scene overstates the IC's resources.
+const AT_BOX_SET = new Set(['onscene', 'operating', 'staged', 'command', 'arrived', 'mayday', 'rehab'])
 const ENROUTE_SET = new Set(['enroute', 'dispatched', 'responding'])
 
 export function isAtBox(status: string | undefined): boolean {

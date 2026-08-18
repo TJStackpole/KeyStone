@@ -6,6 +6,7 @@ import { setDashboardPage } from '../lib/layouts'
 import { isApparatus, isAtBox, isEnroute } from '../lib/crews'
 import { escapeHtml, openPrintable } from '../lib/printDoc'
 import { fmtWallClock } from '../lib/time'
+import { waterAssignments } from '../lib/vitals'
 import { getAppState, useAppSlice } from '../state/store'
 import type { TimelineEvent } from '../types'
 import { CommandVitals } from './CommandVitals'
@@ -105,11 +106,16 @@ function printCommandPack(): void {
     .filter((ev) => LOG_KINDS.has(ev.kind) && !NOISE_KINDS.has(ev.kind))
     .map((ev) => `<tr><td class="t">${escapeHtml(fmtWallClock(ev.t))}</td><td>${escapeHtml(rowText(ev))}</td></tr>`)
     .join('')
+  // The pack shows the CURRENT water picture (releases respected), not the
+  // raw event stream — a released hydrant printed as active misleads the
+  // relieving chief. The activity log below still carries full history.
+  const activeWater = waterAssignments(s.timeline)
   const water = s.timeline
     .filter((ev) => ev.kind === 'water.assign')
     .map((ev) => {
       const p = (ev.payload ?? {}) as Record<string, unknown>
-      return `<tr><td class="t">${escapeHtml(fmtWallClock(ev.t))}</td><td>${escapeHtml(String(p.unit))} → HYDRANT ${escapeHtml(String(p.hydrant))}</td></tr>`
+      const released = activeWater[String(p.hydrant)] !== String(p.unit)
+      return `<tr><td class="t">${escapeHtml(fmtWallClock(ev.t))}</td><td>${escapeHtml(String(p.unit))} → HYDRANT ${escapeHtml(String(p.hydrant))}${released ? ' — RELEASED' : ''}</td></tr>`
     })
     .join('')
   const reqs = s.interagencyRequests
@@ -179,6 +185,7 @@ export function DecisionLogPage() {
         </button>
         <button
           className="dl-print"
+          disabled={!incident}
           onClick={() => printIcs214(incident, timeline.filter((ev) => LOG_KINDS.has(ev.kind) && !NOISE_KINDS.has(ev.kind)))}
           title="ICS-214 activity log, print or save as PDF — decisions, benchmarks, notes and PAR lapses; the 10-minute drumbeat is omitted"
         >

@@ -1044,6 +1044,9 @@ app.post('/api/incident', (req, res) => {
   issuedStaging.clear()
   stagingFlip = 0
   simChatter.reset() // fresh incident — units announce their next arrival
+  // The previous box's radio chatter must not open the new one's chat panel.
+  chatLog.length = 0
+  seenChatIds.clear()
   const state = createIncident(incident)
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
@@ -1066,6 +1069,8 @@ app.delete('/api/incident', (_req, res) => {
   issuedStaging.clear()
   stagingFlip = 0
   simChatter.reset()
+  chatLog.length = 0
+  seenChatIds.clear()
   for (const u of registry.all()) registry.remove(u.uid)
   const prevIncident = getState().incident
   const state = clearIncident()
@@ -1144,9 +1149,11 @@ app.get('/api/ops/par-interval', (_req, res) => {
   // Anchors derive from the FULL server timeline — the client's window is
   // truncated (~600 events) and a long box can push the last mark/PAR out
   // of it, which would false-alarm the strip chips.
-  const inc = getState().incident
+  // lastParAt is 0 until a PAR actually lands on the record — clients fold
+  // incident start into their timing math themselves, and a non-zero value
+  // here must never make a vitals strip claim accountability was confirmed.
   let lastMark = 0
-  let lastParAt = inc ? Date.parse(inc.createdAt) : 0
+  let lastParAt = 0
   for (const ev of getState().timeline) {
     if (ev.kind === 'ops.duration-mark') {
       const m = Number((ev.payload as { minutes?: number } | undefined)?.minutes)
@@ -1208,6 +1215,10 @@ const scenario = new ScenarioEngine({
   },
   createIncident: (incident) => {
     simulator.stop()
+    // Same purge POST /api/incident does — without it the previous demo's
+    // sim fleet sits duplicated next to the drill's units for ~2.5 min
+    // until the stale-sweep catches up.
+    for (const u of registry.all()) if (u.uid.startsWith('WT-SIM-')) registry.remove(u.uid)
     issuedStaging.clear()
     stagingFlip = 0
     simChatter.reset() // drill units announce their arrivals too
@@ -1219,6 +1230,15 @@ const scenario = new ScenarioEngine({
   removeShape,
   removeUnit: (uid, opts) => registry.remove(uid, opts?.tombstone !== false),
   setAlarm: (level, replay) => {
+    // Ladder guard, same as POST /api/alarm: a drill script firing a LOWER
+    // scripted level after the IC manually escalated must never silently
+    // downgrade the board. Replays are exempt — a rewind restores exactly
+    // the scripted level for that point in time.
+    if (!replay && level) {
+      const ladder = ['10-75', 'all-hands', '2nd', '3rd', '4th', '5th']
+      const cur = getState().incident?.alarmLevel
+      if (cur && ladder.indexOf(level) <= ladder.indexOf(cur)) return
+    }
     const updated = updateIncident({ alarmLevel: level })
     broadcast({ type: 'incident', incident: updated.incident })
     // Rewind replays restore the board's alarm level but must not re-announce

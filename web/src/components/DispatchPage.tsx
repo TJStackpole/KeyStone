@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { focusFeedIncident } from '../actions'
 import type { FeedIncident } from '../types'
 import { alarmLabel } from '../lib/alarms'
@@ -32,6 +32,22 @@ export function DispatchPage() {
     dispatchFeed: s.dispatchFeed,
     focusedFeedId: s.focusedFeedId,
   }))
+  // With a live box up, responding to a feed row REPLACES the whole board —
+  // that must never happen on one stray tap. First tap arms, second commits.
+  const [armedFeedId, setArmedFeedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!armedFeedId) return
+    const t = setTimeout(() => setArmedFeedId(null), 3500)
+    return () => clearTimeout(t)
+  }, [armedFeedId])
+  const respond = (fi: FeedIncident) => {
+    if (incident && armedFeedId !== fi.id) {
+      setArmedFeedId(fi.id)
+      return
+    }
+    setArmedFeedId(null)
+    void focusFeedIncident(fi)
+  }
   // Rebuilds when the box or the responding units change — the audio always
   // reads the CURRENT assignment.
   const script = useMemo(() => buildDispatchScript(), [incident, units])
@@ -131,9 +147,13 @@ export function DispatchPage() {
                     {list.map((fi) => (
                       <button
                         key={fi.id}
-                        className={`feed-row${focusedFeedId === fi.id ? ' focused' : ''}`}
-                        onClick={() => void focusFeedIncident(fi)}
-                        title={`Respond to this box — stands it up at ${fi.address} and builds the response packet; the dispatch audio on the right reads its assignment`}
+                        className={`feed-row${focusedFeedId === fi.id ? ' focused' : ''}${armedFeedId === fi.id ? ' armed' : ''}`}
+                        onClick={() => respond(fi)}
+                        title={
+                          incident
+                            ? `Respond to this box — REPLACES the active incident at ${fi.address}. First tap arms, second tap commits.`
+                            : `Respond to this box — stands it up at ${fi.address} and builds the response packet; the dispatch audio on the right reads its assignment`
+                        }
                       >
                         <span className={`feed-src ${fi.source.toLowerCase()}`}>{fi.source}</span>
                         <span className="feed-main">
@@ -142,7 +162,7 @@ export function DispatchPage() {
                         </span>
                         <span className="feed-meta">
                           {fi.units} UNIT{fi.units === 1 ? '' : 'S'} · {feedElapsed(fi.startedAt)}
-                          <em>{focusedFeedId === fi.id ? 'FOCUSED' : fi.status.toUpperCase()}</em>
+                          <em>{armedFeedId === fi.id ? '⚠ TAP AGAIN TO REPLACE' : focusedFeedId === fi.id ? 'FOCUSED' : fi.status.toUpperCase()}</em>
                         </span>
                       </button>
                     ))}

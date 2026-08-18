@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import { useMovable } from '../lib/movable'
 import { dispatchAssignment, flyToUnit, runDemoScenario, toggleGpsTracking, toggleMemberCrew, toggleUnitCategory } from '../actions'
+import { isApparatus, isAtBox } from '../lib/crews'
 import { useProfile } from '../profiles/manifest'
 import { crewCompositionAllowed, usePolicy } from '../profiles/policy'
 import { useAppSlice } from '../state/store'
@@ -99,9 +100,13 @@ export function RosterPanel() {
         {incident && (
           <button
             className="dispatch-btn"
-            disabled={dispatching || takConnected !== true}
+            disabled={dispatching}
             onClick={() => void dispatchAssignment()}
-            title={takConnected !== true ? 'TAK link down' : 'Simulated first-alarm assignment'}
+            title={
+              takConnected === true
+                ? 'Simulated first-alarm assignment'
+                : 'Simulated first-alarm assignment — TAK link down, positions loop through the server directly'
+            }
           >
             {dispatching ? 'DISPATCHING…' : 'DISPATCH ASSIGNMENT'}
           </button>
@@ -132,7 +137,7 @@ export function RosterPanel() {
         {AGENCY_ORDER.filter((a) => grouped.has(a)).map((agency) => {
           const byCat = grouped.get(agency)!
           const agencyUnits = [...byCat.values()].flat()
-          const onScene = agencyUnits.filter((u) => u.status && u.status !== 'Enroute').length
+          const onScene = agencyUnits.filter((u) => isApparatus(u) && isAtBox(u.status)).length
           return (
             <div key={agency} className="roster-agency">
               <div className="agency-head">

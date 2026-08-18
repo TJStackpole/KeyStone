@@ -47,11 +47,23 @@ export function TakLinkButton() {
 
 export function TakChatPanel() {
   const mvTakchat = useMovable('takchat')
-  const { chatOpen, chats, takConnected } = useAppSlice((s) => ({ chatOpen: s.chatOpen, chats: s.chats, takConnected: s.takConnected }))
+  const { chatOpen, chats, takConnected, roomRequest } = useAppSlice((s) => ({
+    chatOpen: s.chatOpen,
+    chats: s.chats,
+    takConnected: s.takConnected,
+    roomRequest: s.chatRoomRequest,
+  }))
   const [room, setRoom] = useState('All Chat Rooms')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Voice ("open TAK chat to NYPD") lands the panel on the requested room.
+  useEffect(() => {
+    if (!roomRequest) return
+    setRoom(roomRequest)
+    setAppState({ chatRoomRequest: null })
+  }, [roomRequest])
 
   // The ALL tab is the OEM overview: every room's traffic, tagged by room.
   const visible = room === 'All Chat Rooms' ? chats : chats.filter((c) => c.room === room)
@@ -137,19 +149,17 @@ export function TakChatPanel() {
           value={draft}
           maxLength={500}
           placeholder={
-            takConnected
-              ? room === 'All Chat Rooms'
-                ? 'Message all units…'
-                : `Message ${activeLabel} units…`
-              : 'TAK link down'
+            room === 'All Chat Rooms' ? 'Message all units…' : `Message ${activeLabel} units…`
           }
-          disabled={!takConnected}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') void send()
           }}
         />
-        <button disabled={!takConnected || !draft.trim()} onClick={() => void send()}>
+        {/* Sends work with TAK down — the server loops GeoChat through its
+            own pipeline; the LIVE/TAK OFFLINE chip above stays honest about
+            whether real EUDs are receiving. */}
+        <button disabled={!draft.trim()} onClick={() => void send()}>
           SEND
         </button>
       </div>

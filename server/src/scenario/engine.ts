@@ -388,6 +388,10 @@ export class ScenarioEngine extends EventEmitter {
       )
       this.teardown(true, respawning)
       this.file = fileRef
+      // Rewind resets the alarm ladder too — catchUp will replay the scripted
+      // levels up to the target; without this a backward scrub keeps the
+      // FUTURE alarm level on the board (replay flag suppresses re-announce).
+      this.deps.setAlarm(undefined, true)
       // The dashboards already hold everything up to the old clock — clear the
       // drill channels so the silent replay rebuilds them without duplicates.
       this.resetTranscripts()

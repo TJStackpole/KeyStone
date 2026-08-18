@@ -15,7 +15,11 @@ export function FirstRun() {
     cadIncident: s.cadIncident,
     page: s.dashboardPage,
   }))
-  const [dismissed, setDismissed] = useState(localStorage.getItem('ks-firstrun') === '1')
+  // ?hero forces the card back after rehearsals — presenters open
+  // http://localhost:4010/?hero right before the real run.
+  const [dismissed, setDismissed] = useState(
+    () => !new URLSearchParams(location.search).has('hero') && localStorage.getItem('ks-firstrun') === '1',
+  )
   const done = () => {
     localStorage.setItem('ks-firstrun', '1')
     setDismissed(true)

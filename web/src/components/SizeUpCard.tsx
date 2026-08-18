@@ -49,11 +49,12 @@ const mphFromKt = (kt: number) => Math.round(kt * 1.15078)
 
 export function SizeUpCard() {
   const mvSizeup = useMovable('sizeup-card')
-  const { incident, pluto, plutoStatus, hydrants, wind, shapes, units, alarmLevel, timeline } = useAppSlice((s) => ({
+  const { incident, pluto, plutoStatus, hydrants, hydrantStatus, wind, shapes, units, alarmLevel, timeline } = useAppSlice((s) => ({
     incident: s.incident,
     pluto: s.intel.pluto,
     plutoStatus: s.layers.pluto,
     hydrants: s.intel.hydrants,
+    hydrantStatus: s.layers.hydrants,
     wind: s.wind,
     shapes: s.shapes,
     units: s.units,
@@ -157,7 +158,15 @@ export function SizeUpCard() {
       </div>
 
       <div className="suc-water-label">WATER — NEAREST HYDRANTS</div>
-      {near.length === 0 && <div className="suc-empty">Hydrant layer loading (NYC Open Data)…</div>}
+      {near.length === 0 && (
+        <div className="suc-empty">
+          {hydrantStatus === 'idle' || hydrantStatus === 'loading'
+            ? 'Hydrant layer loading (NYC Open Data)…'
+            : hydrantStatus === 'unavailable'
+              ? 'HYDRANT DATA UNAVAILABLE — NYC Open Data not answering'
+              : 'NO HYDRANTS ON RECORD NEAR THIS SITE'}
+        </div>
+      )}
       {near.map((h) => (
         <div key={h.id} className="suc-hydrant">
           <button className="suc-hyd-loc" onClick={() => flyToFeature(h.lat, h.lon)} title="Show this hydrant on the map">

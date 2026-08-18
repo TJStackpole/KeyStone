@@ -131,6 +131,8 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     selectedShapeId: null,
     drawTool: null,
     targetHeightM: null,
+    targetBounds: null, // stale frame would place EXPOSURES on the OLD building
+    tacticsOverride: null, // a forced building type must not classify the new box
     inspected: null,
     timeline: [],
     stagingPick: 'auto',
@@ -387,7 +389,12 @@ async function loadFootprints(incident: Incident): Promise<void> {
 export function toggleIsolateMode(): void {
   const scene = getScene()
   const on = !getAppState().isolateMode
-  if (!scene) return
+  if (!scene) {
+    // Cesium idle-loads after first paint — a dead tap with no feedback
+    // reads as a broken control in front of a stakeholder.
+    notify('3D VIEW STILL LOADING — try ISOLATE again in a few seconds')
+    return
+  }
   const current = getAppState().incident
   const cacheValid = !!lastFootprints?.targetBin && lastFootprints.incidentId === current?.id
   if (on && !cacheValid) {
@@ -1343,6 +1350,7 @@ export function clearLocalIncident(): void {
     selectedShapeId: null,
     drawTool: null,
     targetHeightM: null,
+    targetBounds: null, // next box must not inherit this building's frame
     inspected: null,
     scenario: null,
     alert: null,
@@ -1361,7 +1369,14 @@ export function clearLocalIncident(): void {
     floorRef: null,
     memberCrewToggles: {},
     focusedFeedId: null,
+    utilityTab: null, // an empty SITREP/video dock outlives its box otherwise
   })
+  // The dead box must fall silent and forget its pending work: dispatch
+  // audio snapshots the OLD assignment, and an interrupted demo's 4s timer
+  // would latch compressed timing onto the next real dispatch.
+  cancelDemoDispatch()
+  void import('./lib/dispatchAudio').then((m) => m.stopDispatch()).catch(() => {})
+  clearVoiceDraft()
   getUnitLayer()?.setInteriorBounds(null)
   getHazardLayer()?.clear()
   getShapeLayer()?.clear()
@@ -2269,7 +2284,7 @@ export async function placeExposureLabels(frontHeading?: number): Promise<void> 
  *  POST /api/alarm — the server appends the ic.benchmark row on the same
  *  request. Failures are VISIBLE: a silent 409 after a re-tap reads as
  *  "the alarm never went out", the opposite of the truth. */
-export async function transmitAlarm(level: import('./types').AlarmLevel): Promise<void> {
+export async function transmitAlarm(level: import('./types').AlarmLevel): Promise<boolean> {
   try {
     const res = await fetch('/api/alarm', {
       method: 'POST',
@@ -2283,10 +2298,13 @@ export async function transmitAlarm(level: import('./types').AlarmLevel): Promis
           : 'ALARM DID NOT REACH DISPATCH — check the link and try again',
         'red',
       )
+      return false
     }
+    return true
   } catch (err) {
     console.error('[alarm] failed:', err)
     notify('ALARM DID NOT REACH DISPATCH — check the link and try again', 'red')
+    return false
   }
 }
 
@@ -2314,6 +2332,19 @@ export function deleteSelectedShape(): void {
 let demoDispatchTimer: ReturnType<typeof setTimeout> | null = null
 /** Next dispatchAssignment() call runs in compressed DEMO timing. */
 let demoDispatchPending = false
+
+/** Ending a box mid-demo must forget the pending dispatch AND the compressed
+ *  timing latch — else the next real dispatch inherits demo pacing. */
+function cancelDemoDispatch(): void {
+  if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
+  demoDispatchTimer = null
+  demoDispatchPending = false
+}
+
+/** A drafted confirm-class voice action must die with its incident. */
+function clearVoiceDraft(): void {
+  if (getAppState().voiceConfirm) setAppState({ voiceConfirm: null })
+}
 
 // The demo button must NEVER dead-end: if NYC GeoSearch is slow or down on
 // the demo network, fall back to the known record for the seed address.
@@ -2344,11 +2375,14 @@ export async function runDemoScenario(): Promise<void> {
     if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
     demoDispatchTimer = setTimeout(() => {
       demoDispatchTimer = null
-      demoDispatchPending = true
-      if (armedFor && getAppState().incident?.id === armedFor) void dispatchAssignment()
+      if (armedFor && getAppState().incident?.id === armedFor) {
+        demoDispatchPending = true
+        void dispatchAssignment()
+      }
     }, 4000)
   } catch (err) {
     console.error('[demo] scenario failed:', err)
+    notify('DEMO COULD NOT START — check the server link and try SCENARIOS ▸ DEMO', 'red')
   }
 }
 
