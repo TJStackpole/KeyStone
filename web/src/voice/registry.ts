@@ -121,12 +121,16 @@ function setLayer(layerWord: string, on: boolean): ExecResult {
   }
   const id = aliases[layerWord]
   if (!id) return { ok: false, echo: `NO LAYER "${layerWord.toUpperCase()}"`, tone: 'warn' }
-  // The 2D tactical map renders a subset of the 3D overlays — claiming a
-  // layer is ON while nothing changes on screen makes voice look broken.
-  const ON_2D = new Set(['hydrants', 'traffic', 'footprints', 'targetbox'])
+  // Only wind arrows and the TB collapse advisory are genuinely 3D-only;
+  // street names are always-on basemap furniture on the 2D map. Everything
+  // else renders on both surfaces (map2d/overlays.ts).
   const st = getAppState()
-  if (on && st.mapMode === '2d' && !ON_2D.has(id)) {
-    return { ok: false, echo: `${id.replace(/^poi/, '').toUpperCase()} IS A 3D-VIEW LAYER — SWITCH TO THE 3D MAP FIRST`, tone: 'warn' }
+  const on2d = st.mapMode === '2d'
+  if (on && on2d && (id === 'wind' || id === 'collapsezones')) {
+    return { ok: false, echo: `${id.toUpperCase()} IS A 3D-VIEW LAYER — SWITCH TO THE 3D MAP FIRST`, tone: 'warn' }
+  }
+  if (on && on2d && id === 'streets') {
+    return { ok: true, echo: 'STREET NAMES ARE ALWAYS ON THE TACTICAL MAP' }
   }
   const cur = st.layerToggles[id]
   if (cur !== on) {
@@ -365,8 +369,13 @@ export const INTENTS: Record<string, IntentDef> = {
     run: async () => {
       const inc = getAppState().incident
       if (!inc) return { ok: false, echo: 'NO ACTIVE INCIDENT', tone: 'warn' }
-      // flyToFeature drives whichever map is live (2D MapLibre or 3D Cesium).
-      ;(await import('../actions')).flyToFeature(inc.lat, inc.lon)
+      const { map2dActive } = await import('../map2d/controller')
+      if (getAppState().mapMode === '2d' && map2dActive()) {
+        ;(await import('../actions')).flyToFeature(inc.lat, inc.lon)
+      } else {
+        // goToIncident also unwinds ground view / top-down before flying.
+        ;(await import('../actions')).goToIncident()
+      }
       return { ok: true, echo: '→ BUILDING' }
     },
   },
@@ -887,13 +896,12 @@ function findFeedIncident(spoken?: string): import('../types').FeedIncident | nu
   if (spoken) {
     const num = spoken.replace(/\D/g, '')
     if (num) {
-      // Box number first — that's what the dispatch announcement reads out;
-      // a battalion number would grab an arbitrary row in that battalion.
-      const byBox = feed.find((f) => f.id.replace(/\D/g, '') === num)
-      if (byBox) return byBox
+      // Battalion is the only number a feed row actually shows — the feed's
+      // internal ids are never spoken anywhere. A numbered miss NEVER falls
+      // through to an arbitrary row; the confirm draft names type+address.
       const byBn = feed.find((f) => String(f.battalion) === num)
       if (byBn) return byBn
-      return null // a number was spoken and nothing matched — never guess
+      return null
     }
   }
   // No number match: the most recent DISPATCHED row is what "respond" means.

@@ -32,9 +32,12 @@ export function openBrief(): boolean {
   if (units.length) {
     const byAgency = new Map<string, { on: number; total: number }>()
     for (const u of units) {
+      // Rigs only on BOTH sides — members/drones in the denominator would
+      // print as units unaccounted for on the handoff sheet.
+      if (!isApparatus(u)) continue
       const rec = byAgency.get(u.agency) ?? { on: 0, total: 0 }
       rec.total++
-      if (isApparatus(u) && isAtBox(u.status)) rec.on++
+      if (isAtBox(u.status)) rec.on++
       byAgency.set(u.agency, rec)
     }
     rows.push(

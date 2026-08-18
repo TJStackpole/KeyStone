@@ -137,13 +137,17 @@ export function RosterPanel() {
         {AGENCY_ORDER.filter((a) => grouped.has(a)).map((agency) => {
           const byCat = grouped.get(agency)!
           const agencyUnits = [...byCat.values()].flat()
-          const onScene = agencyUnits.filter((u) => isApparatus(u) && isAtBox(u.status)).length
+          // Header ratio is rigs/rigs — the member rows below have their own
+          // per-crew accounting; a member in the denominator reads as a
+          // missing unit.
+          const rigs = agencyUnits.filter(isApparatus)
+          const onScene = rigs.filter((u) => isAtBox(u.status)).length
           return (
             <div key={agency} className="roster-agency">
               <div className="agency-head">
                 <b>{agency}</b>
                 <span className="agency-counts">
-                  {onScene}/{agencyUnits.length} ON SCENE
+                  {onScene}/{rigs.length} ON SCENE
                 </span>
               </div>
               {[...byCat.entries()].map(([cat, list]) => (

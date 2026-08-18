@@ -52,12 +52,15 @@ export function SitrepContent() {
     let operating = 0
     let dronesAloft = 0
     for (const u of Object.values(units)) {
+      if (u.category === 'drone' && u.hae > 20) dronesAloft++
+      // Rigs only, on BOTH sides of the ratio — crew members and drones in
+      // the denominator would read as units unaccounted for.
+      if (!isApparatus(u)) continue
       const rec = byAgency.get(u.agency) ?? { onScene: 0, total: 0 }
       rec.total++
-      if (isApparatus(u) && isAtBox(u.status)) rec.onScene++
+      if (isAtBox(u.status)) rec.onScene++
       byAgency.set(u.agency, rec)
       if (u.status === 'Operating') operating++
-      if (u.category === 'drone' && u.hae > 20) dronesAloft++
     }
     const zones = Object.values(shapes).filter((s) => s.kind === 'zone').length
     const posts = Object.values(shapes).filter((s) => s.kind === 'post').length

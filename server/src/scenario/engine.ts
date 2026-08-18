@@ -159,8 +159,10 @@ export interface EngineDeps {
    *  tombstone would swallow the respawn's TAK echo (empty drill board). */
   removeUnit: (uid: string, opts?: { tombstone?: boolean }) => void
   /** replay=true when re-applying an already-seen event (rewind restore) —
-   *  the board updates but side channels (ticker) must not re-announce. */
-  setAlarm: (level: Incident['alarmLevel'], replay?: boolean) => void
+   *  the board updates but side channels (ticker) must not re-announce.
+   *  Returns false when the ladder guard refused the change (scripted level
+   *  at/below the board) so the caller can skip its own record entry. */
+  setAlarm: (level: Incident['alarmLevel'], replay?: boolean) => boolean | void
   // Prompt 11 — NYCEM coordination layer hooks (all optional so older
   // single-incident scenarios keep running untouched):
   portfolioChanged?: () => void
@@ -388,10 +390,12 @@ export class ScenarioEngine extends EventEmitter {
       )
       this.teardown(true, respawning)
       this.file = fileRef
-      // Rewind resets the alarm ladder too — catchUp will replay the scripted
-      // levels up to the target; without this a backward scrub keeps the
-      // FUTURE alarm level on the board (replay flag suppresses re-announce).
-      this.deps.setAlarm(undefined, true)
+      // Rewind resets the alarm ladder to the drill's baked 10-75 baseline —
+      // catchUp then replays the scripted levels up to the target; without
+      // this a backward scrub keeps the FUTURE alarm level on the board
+      // (replay flag suppresses re-announce, and never to undefined: a drill
+      // box is by definition at least a 10-75).
+      this.deps.setAlarm('10-75', true)
       // The dashboards already hold everything up to the old clock — clear the
       // drill channels so the silent replay rebuilds them without duplicates.
       this.resetTranscripts()
@@ -593,8 +597,10 @@ export class ScenarioEngine extends EventEmitter {
       case 'alarm_level': {
         // Replays must still restore the board's alarm level, but the dep's
         // side channels (ticker) suppress on replay like the timeline does.
-        this.deps.setAlarm(ev.level!, rewind || replayed)
-        emitTimeline('alarm', { level: ev.level, drill: true })
+        // When the ladder guard refuses (IC already escalated higher), the
+        // record must not carry an alarm row the board never adopted.
+        const applied = this.deps.setAlarm(ev.level!, rewind || replayed)
+        if (applied !== false) emitTimeline('alarm', { level: ev.level, drill: true })
         break
       }
       case 'exposure': {

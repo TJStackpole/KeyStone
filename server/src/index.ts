@@ -1233,11 +1233,12 @@ const scenario = new ScenarioEngine({
     // Ladder guard, same as POST /api/alarm: a drill script firing a LOWER
     // scripted level after the IC manually escalated must never silently
     // downgrade the board. Replays are exempt — a rewind restores exactly
-    // the scripted level for that point in time.
+    // the scripted level for that point in time. Returns false on refusal
+    // so the engine skips its own timeline row (board and record agree).
     if (!replay && level) {
       const ladder = ['10-75', 'all-hands', '2nd', '3rd', '4th', '5th']
       const cur = getState().incident?.alarmLevel
-      if (cur && ladder.indexOf(level) <= ladder.indexOf(cur)) return
+      if (cur && ladder.indexOf(level) <= ladder.indexOf(cur)) return false
     }
     const updated = updateIncident({ alarmLevel: level })
     broadcast({ type: 'incident', incident: updated.incident })

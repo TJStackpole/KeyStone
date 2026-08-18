@@ -27,8 +27,10 @@ function bucketOf(u: Unit): Bucket {
   if (s === 'operating' || s === 'mayday') return 'OPERATING'
   if (s === 'staged') return 'STAGED'
   if (s === 'enroute' || s === 'en route' || s === 'dispatched' || s === 'responding') return 'ENROUTE'
-  // Scenario/EUD vocabulary that means "this rig is at the box":
-  if (s === 'on scene' || s === 'onscene' || s === 'arrived' || s === 'command' || s === 'released') return 'ON SCENE'
+  // Scenario/EUD vocabulary that means "this rig is at the box". 'released'
+  // deliberately falls through to ASSIGNED — a released rig is leaving, and
+  // every other surface (vitals, SIZE-UP, prints) stopped counting it.
+  if (s === 'on scene' || s === 'onscene' || s === 'arrived' || s === 'command') return 'ON SCENE'
   // Anything else (a real ATAK EUD can send any word) files as ASSIGNED,
   // never as ON SCENE — accountability must not overstate who's arrived.
   return 'ASSIGNED'
