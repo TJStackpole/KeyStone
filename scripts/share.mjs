@@ -31,6 +31,26 @@ if (!skipBuild || !existsSync(join(root, 'web/dist/index.html')) || !existsSync(
   if (build.status !== 0) process.exit(build.status ?? 1)
 }
 
+// Port preflight: the most likely morning-of mistake is running `npm run
+// share` while the dev stack still holds the port — fail with the fix, not
+// a stack trace.
+const portBusy = await new Promise((resolveBusy) => {
+  import('node:net').then(({ createServer }) => {
+    const probe = createServer()
+    probe.once('error', () => resolveBusy(true))
+    probe.once('listening', () => probe.close(() => resolveBusy(false)))
+    // No host: bind dual-stack (::) exactly like the server does — a
+    // 127.0.0.1 probe reports free while the dev stack holds :::PORT.
+    probe.listen(PORT)
+  })
+})
+if (portBusy) {
+  console.error(`\n✗ port ${PORT} is already in use — probably the dev stack (npm run dev).`)
+  console.error(`  Stop it first, or run on another port:`)
+  console.error(`  WATCHTOWER_SERVER_PORT=4011 npm run share\n`)
+  process.exit(1)
+}
+
 console.log(`▸ starting ship-mode server on :${PORT}…`)
 const server = spawn('node', ['server/dist/index.js'], {
   cwd: root,

@@ -191,8 +191,19 @@ export function useMovable(id: string): {
   }
 
   const moved = !!off && (off.x !== 0 || off.y !== 0)
+  // Boot clamp: offsets persisted on a bigger monitor can place a panel
+  // entirely off this screen with no way to grab it back. The drag clamp
+  // only runs during drags — cap restored offsets to the live viewport too.
+  let ox = off?.x ?? 0
+  let oy = off?.y ?? 0
+  if (moved && typeof window !== 'undefined' && window.innerWidth > 0) {
+    const capX = Math.max(64, window.innerWidth - KEEP_VISIBLE_PX)
+    const capY = Math.max(64, window.innerHeight - KEEP_VISIBLE_PX)
+    ox = Math.min(capX, Math.max(-capX, ox))
+    oy = Math.min(capY, Math.max(-capY, oy))
+  }
   return {
-    style: moved ? { translate: `${off.x}px ${off.y}px` } : {},
+    style: moved ? { translate: `${ox}px ${oy}px` } : {},
     onPointerDown,
     onDoubleClick,
     title: minimized ? 'Double-click to restore this panel' : undefined,

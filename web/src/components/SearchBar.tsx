@@ -165,8 +165,17 @@ export function SearchBar() {
   }
 
   function select(hit: GeoHit) {
+    // Kill anything still in flight: a pending debounce timer or fetch that
+    // resolves AFTER the pick would pop the dropdown back open over the
+    // fly-in — and a habit Enter would then stand up a second incident.
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = null
+    abortRef.current?.abort()
+    abortRef.current = null
+    setHits([])
     setOpen(false)
     setQuery(hit.label)
+    inputRef.current?.blur() // frees SPACE for push-to-talk right away
     void standUpIncident(hit)
   }
 
@@ -194,7 +203,7 @@ export function SearchBar() {
       maxAlternatives: number
       onresult: ((e: RecResult) => void) | null
       onend: (() => void) | null
-      onerror: (() => void) | null
+      onerror: ((e: { error?: string }) => void) | null
       start: () => void
       stop: () => void
     })()
@@ -220,7 +229,16 @@ export function SearchBar() {
       onChange(normalizeSpoken(transcript))
     }
     rec.onend = () => setListening(false)
-    rec.onerror = () => setListening(false)
+    rec.onerror = (e: { error?: string }) => {
+      setListening(false)
+      // A dead mic button with no message reads as a broken product.
+      const code = e?.error ?? ''
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        notify('MICROPHONE BLOCKED — allow mic access in the browser address bar', 'red')
+      } else if (code && code !== 'no-speech' && code !== 'aborted') {
+        notify('VOICE INPUT UNAVAILABLE IN THIS BROWSER — type the address instead')
+      }
+    }
     recRef.current = rec
     rec.start()
     setListening(true)

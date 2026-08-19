@@ -161,10 +161,33 @@ class WebSpeechProvider implements AsrProvider {
       this.cb?.onPartial(`${this.finals}${this.interim}`.trim())
     }
     rec.onerror = (e) => {
-      if (e.error !== 'aborted' && e.error !== 'no-speech') this.cb?.onError(`asr: ${e.error}`)
+      if (e.error === 'aborted' || e.error === 'no-speech') return
+      // Raw Web Speech codes read as gibberish on the chip — translate the
+      // ones an operator can act on.
+      const msg =
+        e.error === 'not-allowed' || e.error === 'service-not-allowed'
+          ? 'microphone blocked — allow mic access in the browser bar'
+          : e.error === 'network'
+            ? 'speech service unreachable — check the connection'
+            : `asr: ${e.error}`
+      this.cb?.onError(msg)
     }
     rec.onend = () => {
-      if (this.stopping) this.cb?.onFinal(`${this.finals}${this.interim}`.trim())
+      if (this.stopping) {
+        this.cb?.onFinal(`${this.finals}${this.interim}`.trim())
+        return
+      }
+      // Chrome self-ends continuous recognition after a few quiet seconds —
+      // while the PTT is still HELD that must not wedge the chip in
+      // LISTENING with the utterance dropped. Restart and keep capturing;
+      // accumulated finals survive because they live on `this`, not on rec.
+      try {
+        rec.start()
+      } catch {
+        // Restart refused (tab losing focus, service gone) — deliver what
+        // we have instead of nothing.
+        this.cb?.onFinal(`${this.finals}${this.interim}`.trim())
+      }
     }
     rec.start()
   }

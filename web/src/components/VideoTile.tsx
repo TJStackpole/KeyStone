@@ -2,7 +2,15 @@ import type Hls from 'hls.js'
 import { useEffect, useRef, useState } from 'react'
 import { hlsUrl, playWhep, type WhepSession } from '../video/whep'
 
-type FeedState = 'connecting' | 'live' | 'lost'
+type FeedState = 'connecting' | 'live' | 'lost' | 'offline'
+
+/** The video sidecar can't be reached at all when the app is served over
+ *  https (mixed content blocks http://host:8889 outright) — and endless
+ *  FEED LOST retries read as a broken product. Detect the hopeless cases
+ *  up front and show a calm, labeled offline card instead. */
+function sidecarHopeless(): boolean {
+  return location.protocol === 'https:'
+}
 
 /**
  * One video feed: WebRTC (WHEP) with auto-retry and a FEED LOST state, always
@@ -29,12 +37,24 @@ export function VideoTile({
     let hls: Hls | null = null
     let dead = false
     let retry: ReturnType<typeof setTimeout> | null = null
+    let attempts = 0
+
+    if (sidecarHopeless()) {
+      setState('offline')
+      return () => undefined
+    }
 
     const scheduleRetry = () => {
-      if (!dead) {
-        setState('lost')
-        retry = setTimeout(connect, 4000)
+      if (dead) return
+      attempts += 1
+      // Three strikes: MediaMTX clearly isn't running (keyless/no-docker
+      // deployment) — stop churning and say so honestly.
+      if (attempts >= 3) {
+        setState('offline')
+        return
       }
+      setState('lost')
+      retry = setTimeout(connect, 4000)
     }
 
     // Fallback for environments where WebRTC media can't flow: MediaMTX HLS.
@@ -131,8 +151,12 @@ export function VideoTile({
         {chip && <i>{chip}</i>}
       </span>
       {state !== 'live' && (
-        <span className={`tile-state${state === 'lost' ? ' lost' : ''}`}>
-          {state === 'connecting' ? 'CONNECTING…' : 'FEED LOST — RETRYING'}
+        <span className={`tile-state${state === 'lost' ? ' lost' : state === 'offline' ? ' offline' : ''}`}>
+          {state === 'connecting'
+            ? 'CONNECTING…'
+            : state === 'offline'
+              ? 'VIDEO SIDECAR OFFLINE — feeds attach when MediaMTX is running'
+              : 'FEED LOST — RETRYING'}
         </span>
       )}
     </div>

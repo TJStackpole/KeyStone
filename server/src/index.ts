@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
-import { SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
+import { setSimCommsContext, SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
 import { DispatchFeed, type FeedIncident } from './dispatchFeed.js'
 import { env } from './env.js'
 import {
@@ -79,7 +79,16 @@ const DROPPABLE_TYPES = new Set(['units.batch', 'unit'])
 const SOFT_BUFFER_LIMIT = 256 * 1024
 const HARD_BUFFER_LIMIT = 4 * 1024 * 1024
 
+// Late joiners and reconnecting dashboards must see the SAME picture as
+// everyone else — a mayday banner or exposure labels broadcast before they
+// connected would otherwise be invisible to them.
+let lastAlert: unknown = null
+let lastExposureLabels: unknown[] = []
+
 export function broadcast(message: unknown): void {
+  const m = message as { type?: string; alert?: { kind?: string }; labels?: unknown[] }
+  if (m.type === 'alert') lastAlert = m.alert?.kind === 'clear' ? null : m.alert
+  else if (m.type === 'exposure') lastExposureLabels = m.labels ?? []
   const raw = JSON.stringify(message)
   const droppable = DROPPABLE_TYPES.has((message as { type?: string }).type ?? '')
   for (const client of wss.clients) {
@@ -122,6 +131,11 @@ setInterval(() => {
   }
 }, 30_000).unref()
 
+// App-level heartbeat: browsers cannot observe protocol pings, so a quiet
+// board (no incident, no traffic) gives the client watchdog nothing to
+// measure. One tiny frame every 25s keeps the liveness check honest.
+setInterval(() => broadcast({ type: 'ping' }), 25_000).unref()
+
 // Prompt 13 — feed ingestion layer: register every adapter, then start the
 // staggered polling loops. Each feed degrades alone; keys are all optional.
 for (const adapter of [mtaSubway, dotCameras, noaaWater]) registerFeed(adapter)
@@ -160,6 +174,9 @@ wss.on('connection', (socket) => {
       feeds: { health: allFeedHealth(), data: pushableFeedData() },
       // Prompt 12 — cross-agency visibility policy (hot-reloads via PUT).
       visibilityPolicy: visibilityPolicy(),
+      // Late joiners see the live mayday banner + exposure labels too.
+      alert: lastAlert,
+      exposureLabels: lastExposureLabels,
     }),
   )
 })
@@ -959,6 +976,7 @@ app.put('/api/policy', (req, res) => {
   res.json({ policy: next })
 })
 
+setSimCommsContext(getState().incident?.address ?? null)
 const simComms = new SimComms()
 simComms.on('line', (channel: CommsChannel, line: TranscriptLine) => {
   broadcast({ type: 'transcript', channel, line })
@@ -1048,6 +1066,7 @@ app.post('/api/incident', (req, res) => {
   chatLog.length = 0
   seenChatIds.clear()
   const state = createIncident(incident)
+  setSimCommsContext(incident.address)
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
   ticker('new-incident', `${incident.type} — ${incident.address}`, {
@@ -1073,6 +1092,7 @@ app.delete('/api/incident', (_req, res) => {
   seenChatIds.clear()
   for (const u of registry.all()) registry.remove(u.uid)
   const prevIncident = getState().incident
+  setSimCommsContext(null)
   const state = clearIncident()
   broadcast({ type: 'incident', incident: null })
   broadcast({ type: 'exposure', labels: [] })
@@ -1223,6 +1243,7 @@ const scenario = new ScenarioEngine({
     stagingFlip = 0
     simChatter.reset() // drill units announce their arrivals too
     const state = createIncident(incident)
+    setSimCommsContext(incident.address)
     console.log(`[scenario] incident ${incident.id} — ${incident.address}`)
     broadcast({ type: 'incident', incident: state.incident })
   },

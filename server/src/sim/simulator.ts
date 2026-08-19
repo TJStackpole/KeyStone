@@ -160,17 +160,29 @@ export class FirstAlarmSimulator {
    * Alarm escalation (Phase 8): each level adds reinforcements from the next-
    * nearest real companies not already assigned.
    */
+  // Escalations serialize behind each other — two rapid ladder taps each
+  // snapshot the assigned set, and concurrent builds would dispatch the
+  // SAME companies twice.
+  private escalating: Promise<unknown> = Promise.resolve()
+
   async escalate(level: 'all-hands' | '2nd' | '3rd' | '4th' | '5th'): Promise<{ added: string[] }> {
-    if (!this.active || !this.incident) return { added: [] }
-    const plan = ESCALATION_PLAN[level]
-    const assigned = new Set(this.units.map((u) => u.spec.callsign))
-    const extra = await buildReinforcements(this.incident.lat, this.incident.lon, plan, assigned)
-    const built = await Promise.all(extra.map((spec) => this.buildSimUnit(spec, this.incident!.lat, this.incident!.lon)))
-    this.units.push(...built)
-    const added = built.map((u) => u.spec.callsign)
-    console.log(`[sim] ${level} escalation: ${added.join(', ') || 'no companies available'}`)
-    this.onEvent?.('sim.escalated', { level, added })
-    return { added }
+    const run = this.escalating.catch(() => undefined).then(async () => {
+      if (!this.active || !this.incident) return { added: [] as string[] }
+      const gen = this.dispatchGen // END/new-box mid-build must strand this escalation
+      const plan = ESCALATION_PLAN[level]
+      const assigned = new Set(this.units.map((u) => u.spec.callsign))
+      const extra = await buildReinforcements(this.incident.lat, this.incident.lon, plan, assigned)
+      if (gen !== this.dispatchGen || !this.active || !this.incident) return { added: [] as string[] }
+      const built = await Promise.all(extra.map((spec) => this.buildSimUnit(spec, this.incident!.lat, this.incident!.lon)))
+      if (gen !== this.dispatchGen || !this.active) return { added: [] as string[] }
+      this.units.push(...built)
+      const added = built.map((u) => u.spec.callsign)
+      console.log(`[sim] ${level} escalation: ${added.join(', ') || 'no companies available'}`)
+      this.onEvent?.('sim.escalated', { level, added })
+      return { added }
+    })
+    this.escalating = run
+    return run
   }
 
   /** What the given escalation WOULD add — same plan, same reinforcement

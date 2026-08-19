@@ -1,4 +1,9 @@
+import { readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Incident, TimelineEvent } from './types.js'
+
+const OPS_SETTINGS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../data/ops-settings.json')
 
 // ---------------------------------------------------------------------------
 // OPS CLOCK — server-authoritative elapsed-time + PAR discipline, so every
@@ -32,7 +37,15 @@ export interface OpsClockDeps {
 
 export class OpsClock {
   private timer: NodeJS.Timeout | null = null
-  private parIntervalMin = DEFAULT_PAR_INTERVAL_MIN
+  private parIntervalMin = (() => {
+    try {
+      const v = (JSON.parse(readFileSync(OPS_SETTINGS_PATH, 'utf8')) as { parIntervalMin?: number }).parIntervalMin
+      if (typeof v === 'number' && v >= 5 && v <= 60) return Math.round(v)
+    } catch {
+      // no settings file yet — default cadence
+    }
+    return DEFAULT_PAR_INTERVAL_MIN
+  })()
 
   constructor(private deps: OpsClockDeps) {}
 
@@ -50,6 +63,13 @@ export class OpsClock {
   /** Clamped 5..60 — a sub-5-minute PAR cycle is alert spam, not discipline. */
   setParIntervalMin(min: number): number {
     this.parIntervalMin = Math.max(5, Math.min(60, Math.round(min)))
+    // The operator's cadence choice must survive a mid-incident server
+    // bounce — snapping back to 20 silently would corrupt PAR discipline.
+    try {
+      writeFileSync(OPS_SETTINGS_PATH, JSON.stringify({ parIntervalMin: this.parIntervalMin }))
+    } catch {
+      // read-only disk — session-only setting
+    }
     return this.parIntervalMin
   }
 

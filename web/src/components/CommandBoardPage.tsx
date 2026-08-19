@@ -87,7 +87,9 @@ function UnitTile({ unit, assignments, struck }: { unit: Unit; assignments: Reco
       onDragStart={(e) => e.dataTransfer.setData('text/plain', unit.uid)}
       onClick={() => advance(assignments, unit.uid)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') advance(assignments, unit.uid)
+        // Enter only — SPACE is global push-to-talk; a held PTT with a tile
+        // focused would rapid-cycle that unit through every ICS position.
+        if (e.key === 'Enter' && !e.repeat) advance(assignments, unit.uid)
       }}
       title={
         assigned

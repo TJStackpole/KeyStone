@@ -48,6 +48,12 @@ export function SizeUpStrip() {
     faceIdx: s.sizeupFace,
   }))
   const [open, setOpen] = useState(true)
+  const hasStreetKey = Boolean((import.meta.env.GOOGLE_MAPS_API_KEY ?? '').trim())
+  // A persisted 'street' tab from a keyed session must not strand the strip
+  // on a tab that no longer exists keyless.
+  useEffect(() => {
+    if (!hasStreetKey && tab === 'street') setAppState({ sizeupTab: 'views' })
+  }, [hasStreetKey, tab])
   const setTab = (t: Tab | ((prev: Tab) => Tab)) =>
     setAppState((s) => ({ sizeupTab: typeof t === 'function' ? t(s.sizeupTab) : t }))
   const setFaceIdx = (f: number | ((prev: number) => number)) =>
@@ -226,7 +232,9 @@ export function SizeUpStrip() {
       {open && (
         <>
           <div className="sizeup-tabs" role="tablist">
-            {(['views', 'oblique', 'street'] as Tab[]).map((t) => (
+            {/* STREET is a keyed upgrade — a permanently dead tab keyless
+                would greet stakeholders with an .env nag. */}
+            {((hasStreetKey ? ['views', 'oblique', 'street'] : ['views', 'oblique']) as Tab[]).map((t) => (
               <button key={t} role="tab" aria-selected={tab === t} className={`sizeup-tab${tab === t ? ' on' : ''}${t === 'views' && locked ? ' live' : ''}`} onClick={() => setTab(t)}>
                 {t === 'views' ? 'LIVE VIEWS' : t === 'oblique' ? 'OBLIQUE' : 'STREET'}
               </button>

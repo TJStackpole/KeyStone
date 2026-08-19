@@ -163,6 +163,40 @@ const SIM_SCRIPTS: Record<Exclude<LiveChannel, 'fdny'>, SimScriptLine[]> = {
   ],
 }
 
+// The scripts above carry real Gold Street geography (Fulton, Beekman,
+// Frankfort…) — perfect for the seed demo, wrong-address radio noise for any
+// other box. When the live incident is elsewhere, localize: swap the street
+// and address in, genericize the cross-street references.
+let ctxAddress: string | null = null
+let ctxStreet: string | null = null
+
+/** Called on incident create/clear so scripted traffic names the live box. */
+export function setSimCommsContext(address: string | null): void {
+  ctxAddress = address
+  if (!address) {
+    ctxStreet = null
+    return
+  }
+  // "100 GOLD STREET, New York…" -> "Gold Street"
+  const m = address.match(/^\s*\d+\s+([^,]+)/)
+  ctxStreet = m ? m[1].trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : null
+}
+
+function localize(text: string): string {
+  // The seed address keeps the rich script verbatim.
+  if (!ctxStreet || /gold/i.test(ctxStreet)) return text
+  return text
+    .replace(/hold traffic at Fulton and Gold/g, `hold traffic at the near corner of ${ctxStreet}`)
+    .replace(/the frozen zone at Frankfort and Gold/g, `the frozen zone at the corner of ${ctxStreet}`)
+    .replace(/Spruce Street is shut down at Park Row/g, 'the parallel street is shut down at the corner')
+    .replace(/the intersection at Beekman/g, 'the near intersection')
+    .replace(/stage on Beekman/g, 'stage one block out')
+    .replace(/staging at South Street/g, 'staging one block out')
+    .replace(/on the Fulton side/g, 'on the far side')
+    .replace(/100 Gold Street/g, ctxAddress ?? 'the incident address')
+    .replace(/Gold Street/g, ctxStreet)
+}
+
 /** Loops the scripted channels on their own clocks. Emits ('line', channel, line). */
 export class SimComms extends EventEmitter {
   start(): void {
@@ -171,11 +205,12 @@ export class SimComms extends EventEmitter {
       const run = () => {
         for (const item of script) {
           setTimeout(() => {
+            const text = localize(item.text)
             const line: TranscriptLine = {
               id: `sim-${randomUUID()}`,
               ts: new Date().toISOString(),
-              text: item.text,
-              keywords: extractKeywords(item.text),
+              text,
+              keywords: extractKeywords(text),
               live: false,
             }
             this.emit('line', channel as CommsChannel, line)

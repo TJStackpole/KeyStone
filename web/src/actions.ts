@@ -114,7 +114,9 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
   // These run concurrently; each degrades independently per the CLAUDE.md rule.
   void loadFootprints(incident)
   void loadSiteIntel(incident)
-  lastPersist = persistIncident(incident)
+  // Chain, never overwrite: two quick stand-ups must persist in order, or a
+  // late-landing old-address POST reverts the server behind the UI's back.
+  lastPersist = lastPersist.catch(() => undefined).then(() => persistIncident(incident))
 
   // ACTIVE INCIDENT focus: sharpen the fire building, de-emphasize >4 blocks.
   getFocusLayer()?.apply(incident, getAppState().activeIncidentMode)
@@ -137,11 +139,17 @@ export async function standUpIncident(hit: GeoHit, type: IncidentType = 'Structu
     timeline: [],
     stagingPick: 'auto',
     isolateView: 'model', // a LIVE pick must not straddle incidents
+    sizeupTab: 'views', // the strip opens on live views for every new box
+    sizeupFace: 0,
     focusedFeedId: null, // manual stand-up — not tracking a feed entry
     wind: null, // refreshWind repaints for the new site
     floorRef: null, // loadFootprints republishes for the new target
   })
   getShapeLayer()?.clear()
+  // A half-drawn 2D perimeter must die with the site it was drawn on — a
+  // dangling draft would save at the OLD address into the NEW incident.
+  cancelDraw2DDraft()
+  getDrawController()?.cancelDraft()
 }
 
 /**
@@ -168,7 +176,9 @@ export async function focusFeedIncident(fi: FeedIncident): Promise<void> {
     focusedFeedId: fi.id,
     cadIncident: fi,
     responsePacketOpen: true,
-    streetViewOpen: true,
+    // Street view is a keyed upgrade — auto-opening it keyless would greet
+    // the respond flow with an .env configuration nag.
+    streetViewOpen: Boolean((import.meta.env.GOOGLE_MAPS_API_KEY ?? '').trim()),
     utilityTab: 'sitrep',
   })
   // The feed reported units responding — put them on the picture.
@@ -386,14 +396,14 @@ async function loadFootprints(incident: Incident): Promise<void> {
 // the neighbors. Available while ACTIVE INCIDENT focus is on.
 // ---------------------------------------------------------------------------
 
-export function toggleIsolateMode(): void {
+export function toggleIsolateMode(): boolean {
   const scene = getScene()
   const on = !getAppState().isolateMode
   if (!scene) {
     // Cesium idle-loads after first paint — a dead tap with no feedback
     // reads as a broken control in front of a stakeholder.
     notify('3D VIEW STILL LOADING — try ISOLATE again in a few seconds')
-    return
+    return false
   }
   const current = getAppState().incident
   const cacheValid = !!lastFootprints?.targetBin && lastFootprints.incidentId === current?.id
@@ -402,7 +412,7 @@ export function toggleIsolateMode(): void {
       `[isolate] refused: footprint cache ${lastFootprints ? `is for ${lastFootprints.incidentId} (current ${current?.id})` : 'is empty'}`,
     )
     notify('BUILDING FOOTPRINT STILL LOADING — try ISOLATE again in a moment')
-    return
+    return false
   }
   // ISOLATE owns the tactical layer — a tapped-building schematic in it
   // would be clobbered mid-session; clear it up front.
@@ -421,6 +431,7 @@ export function toggleIsolateMode(): void {
   if (getAppState().profile === 'fdny') setAppState({ mapMode: on ? '3d' : '2d' })
   setAppState({ isolateMode: on })
   applyIsolate(on, { frame: on })
+  return true
 }
 
 if (import.meta.env.DEV) {
@@ -1387,6 +1398,8 @@ export function clearLocalIncident(): void {
   getExposureLayer()?.clear()
   getTrafficLayer()?.clear()
   getTacticalLayer()?.clear()
+  cancelDraw2DDraft() // a dangling perimeter draft dies with the box
+  getDrawController()?.cancelDraft()
   getFocusLayer()?.apply(null, false)
   if (getAppState().groundViewActive) exitGround()
 }
@@ -2363,7 +2376,10 @@ export async function runDemoScenario(): Promise<void> {
     let hit: GeoHit = DEMO_HIT
     try {
       const { autocompleteAddress } = await import('./api/geosearch')
-      const hits = await autocompleteAddress('100 Gold Street')
+      // 4s cap — on stalled venue Wi-Fi the button must fall back to the
+      // baked-in record, not hang silently on the browser's network timeout.
+      const timeout = new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('geocoder timeout')), 4000))
+      const hits = await Promise.race([autocompleteAddress('100 Gold Street'), timeout])
       hit = hits.find((h) => h.borough === 'Manhattan') ?? hits[0] ?? DEMO_HIT
     } catch {
       console.warn('[demo] geocoder unavailable — using the baked-in 100 Gold St record')

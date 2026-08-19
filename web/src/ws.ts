@@ -155,14 +155,20 @@ export function connectWs(): void {
   started = true
   let retryMs = 1000
 
+  let lastMsgAt = Date.now()
+  let live: WebSocket | null = null
+
   const open = () => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${proto}://${location.host}/ws`)
+    live = ws
 
     ws.onopen = () => {
       retryMs = 1000
+      lastMsgAt = Date.now()
     }
     ws.onmessage = (e) => {
+      lastMsgAt = Date.now()
       try {
         handle(JSON.parse(e.data as string) as ServerMsg)
       } catch (err) {
@@ -170,12 +176,33 @@ export function connectWs(): void {
       }
     }
     ws.onclose = () => {
+      if (live === ws) live = null
       setAppState({ takConnected: null })
       setTimeout(open, retryMs)
       retryMs = Math.min(retryMs * 1.6, 10_000)
     }
   }
   open()
+
+  // Liveness watchdog: a laptop that slept through the demo break wakes with
+  // a half-open socket that never fires onclose — the board silently freezes.
+  // The server heartbeats every 25s, so >75s of silence means the socket is
+  // dead; closing it kicks the reconnect-forever loop (fresh snapshot).
+  const kickIfStale = () => {
+    if (live && Date.now() - lastMsgAt > 75_000) {
+      console.warn('[ws] no traffic for 75s — forcing reconnect')
+      try {
+        live.close()
+      } catch {
+        // already dying — the onclose path still runs
+      }
+    }
+  }
+  setInterval(kickIfStale, 15_000)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) kickIfStale()
+  })
+  window.addEventListener('online', kickIfStale)
 }
 
 // Message types that must flow even while REPLAY owns the globe: history-safe
@@ -200,6 +227,20 @@ const REPLAY_SAFE = new Set([
   'requests',
   'policy',
 ])
+
+/** A completed PAR belongs to every station and survives reloads — fold the
+ *  record's ic.par-complete events into the riding list's per-card stamps. */
+function foldParStamp(ev: { kind: string; t: string; payload?: unknown }): void {
+  if (ev.kind !== 'ic.par-complete') return
+  const units = (ev.payload as { units?: string[] } | undefined)?.units
+  const t = Date.parse(ev.t)
+  if (!Array.isArray(units) || !Number.isFinite(t)) return
+  setAppState((s) => {
+    const next = { ...s.parChecks }
+    for (const cs of units) if (!(next[cs] >= t)) next[cs] = t
+    return { parChecks: next }
+  })
+}
 
 function handle(msg: ServerMsg): void {
   if (getAppState().replay.active && !REPLAY_SAFE.has(msg.type)) return
@@ -270,6 +311,13 @@ function handle(msg: ServerMsg): void {
         timeline: (msg.timeline ?? []).slice(-600),
         takConnected: msg.takConnected ?? null,
       })
+      // Rehydrate cross-station facts the snapshot's timeline carries.
+      for (const ev of msg.timeline ?? []) foldParStamp(ev)
+      // Late joiner: adopt the live mayday banner + exposure labels.
+      const snapAlert = (msg as { alert?: { kind: string } | null }).alert
+      if (snapAlert) setAppState({ alert: snapAlert as never })
+      const snapExposure = (msg as { exposureLabels?: unknown[] }).exposureLabels
+      if (snapExposure?.length) getExposureLayer()?.set(snapExposure as never)
       break
     }
     case 'incident': {
@@ -403,6 +451,7 @@ function handle(msg: ServerMsg): void {
       // would flood the 600-event window and evict SITREP's milestones.
       if (msg.event.kind !== 'unit.track') {
         setAppState((s) => ({ timeline: [...s.timeline, msg.event].slice(-600) }))
+        foldParStamp(msg.event)
       }
       break
     case 'voice_command':

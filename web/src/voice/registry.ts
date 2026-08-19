@@ -253,7 +253,10 @@ export const INTENTS: Record<string, IntentDef> = {
     run: async () => {
       const s = getAppState()
       if (!s.incident) return { ok: false, echo: 'NO ACTIVE INCIDENT', tone: 'warn' }
-      if (!s.isolateMode) (await import('../actions')).toggleIsolateMode()
+      if (!s.isolateMode) {
+        const applied = (await import('../actions')).toggleIsolateMode()
+        if (!applied) return { ok: false, echo: 'ISOLATE NOT READY — see the notice on screen', tone: 'warn' }
+      }
       return { ok: true, echo: 'ISOLATE ON' }
     },
   },

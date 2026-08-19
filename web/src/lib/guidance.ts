@@ -40,10 +40,12 @@ export function computeNextStep(s: AppState): NextStepId | null {
     // 2D-first order: the perimeter is drawn RIGHT HERE on the tactical map;
     // ISOLATE (the 3D building study) is the step after it.
     if (!hasPerimeter) return 'perimeter'
-    if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode) return 'isolate'
+    if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode && s.activeIncidentMode) return 'isolate'
     return null
   }
-  if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode) return 'isolate'
+  // ISOLATE is disarmed when the operator toggled ACTIVE INCIDENT off —
+  // the chip must never point at a control that will refuse the tap.
+  if (hasCapability(s.profile, 'tactical.view-lock') && !s.isolateMode && s.activeIncidentMode) return 'isolate'
   if (s.isolateMode && !hasPerimeter) return 'perimeter'
   return null
 }
