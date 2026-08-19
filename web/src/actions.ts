@@ -2349,12 +2349,16 @@ let demoDispatchTimer: ReturnType<typeof setTimeout> | null = null
 /** Next dispatchAssignment() call runs in compressed DEMO timing. */
 let demoDispatchPending = false
 
+let demoVisListener: (() => void) | null = null
+
 /** Ending a box mid-demo must forget the pending dispatch AND the compressed
  *  timing latch — else the next real dispatch inherits demo pacing. */
 function cancelDemoDispatch(): void {
   if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
   demoDispatchTimer = null
   demoDispatchPending = false
+  if (demoVisListener) document.removeEventListener('visibilitychange', demoVisListener)
+  demoVisListener = null
 }
 
 /** A drafted confirm-class voice action must die with its incident. */
@@ -2391,14 +2395,26 @@ export async function runDemoScenario(): Promise<void> {
     const armedFor = getAppState().incident?.id
     // Let the fly-in land before units start rolling — but only dispatch if
     // THIS demo's incident is still current when the timer fires.
-    if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
-    demoDispatchTimer = setTimeout(() => {
+    cancelDemoDispatch()
+    const armedAt = Date.now()
+    const fire = () => {
+      if (demoDispatchTimer) clearTimeout(demoDispatchTimer)
       demoDispatchTimer = null
+      if (demoVisListener) document.removeEventListener('visibilitychange', demoVisListener)
+      demoVisListener = null
       if (armedFor && getAppState().incident?.id === armedFor) {
         demoDispatchPending = true
         void dispatchAssignment()
       }
-    }, 4000)
+    }
+    demoDispatchTimer = setTimeout(fire, 4000)
+    // Hidden tabs throttle timers hard (minutes, not seconds). If the
+    // presenter switches apps during the fly-in, roll the first alarm the
+    // moment the tab is visible again instead of waiting out the throttle.
+    demoVisListener = () => {
+      if (!document.hidden && demoDispatchTimer && Date.now() - armedAt >= 4000) fire()
+    }
+    document.addEventListener('visibilitychange', demoVisListener)
   } catch (err) {
     console.error('[demo] scenario failed:', err)
     notify('DEMO COULD NOT START — check the server link and try SCENARIOS ▸ DEMO', 'red')

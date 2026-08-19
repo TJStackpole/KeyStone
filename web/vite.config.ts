@@ -47,8 +47,10 @@ export default defineConfig({
   },
   server: {
     // Ports follow the same overrides the server honors, so a second stack
-    // (e.g. a git worktree checkout) can run beside the main one.
-    port: Number(process.env.WATCHTOWER_WEB_PORT ?? 5173),
+    // (e.g. a git worktree checkout) can run beside the main one. PORT is
+    // the dev harness's assigned port (autoPort) — the web app has no
+    // callbacks pinned to 5173, so any port works; explicit override wins.
+    port: Number(process.env.WATCHTOWER_WEB_PORT ?? process.env.PORT ?? 5173),
     proxy: {
       '/api': `http://localhost:${process.env.WATCHTOWER_SERVER_PORT ?? 4010}`,
       '/ws': { target: `ws://localhost:${process.env.WATCHTOWER_SERVER_PORT ?? 4010}`, ws: true },
