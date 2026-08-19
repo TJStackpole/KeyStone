@@ -3,7 +3,12 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Incident, TimelineEvent } from './types.js'
 
-const OPS_SETTINGS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../data/ops-settings.json')
+// Env override is a TEST seam (mirrors requests.ts) — the suite must never
+// write the real demo config; a stray test value would silently re-cadence
+// the live PAR clock at the next boot.
+function opsSettingsPath(): string {
+  return process.env.OPS_SETTINGS_PATH ?? resolve(dirname(fileURLToPath(import.meta.url)), '../data/ops-settings.json')
+}
 
 // ---------------------------------------------------------------------------
 // OPS CLOCK — server-authoritative elapsed-time + PAR discipline, so every
@@ -39,7 +44,7 @@ export class OpsClock {
   private timer: NodeJS.Timeout | null = null
   private parIntervalMin = (() => {
     try {
-      const v = (JSON.parse(readFileSync(OPS_SETTINGS_PATH, 'utf8')) as { parIntervalMin?: number }).parIntervalMin
+      const v = (JSON.parse(readFileSync(opsSettingsPath(), 'utf8')) as { parIntervalMin?: number }).parIntervalMin
       if (typeof v === 'number' && v >= 5 && v <= 60) return Math.round(v)
     } catch {
       // no settings file yet — default cadence
@@ -66,7 +71,7 @@ export class OpsClock {
     // The operator's cadence choice must survive a mid-incident server
     // bounce — snapping back to 20 silently would corrupt PAR discipline.
     try {
-      writeFileSync(OPS_SETTINGS_PATH, JSON.stringify({ parIntervalMin: this.parIntervalMin }))
+      writeFileSync(opsSettingsPath(), JSON.stringify({ parIntervalMin: this.parIntervalMin }))
     } catch {
       // read-only disk — session-only setting
     }

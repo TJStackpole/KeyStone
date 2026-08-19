@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flyToAlert } from '../actions'
 import { setAppState, useAppSlice } from '../state/store'
+import { alertKey, markAlertDismissed } from '../ws'
 
 /**
  * Full-screen emergency alert (mayday / zone breach). The red frame stays up
@@ -12,8 +13,12 @@ export function MaydayAlert() {
   const [acked, setAcked] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
+  // Reset ACKNOWLEDGE only when a genuinely NEW alert arrives — a reconnect
+  // snapshot re-delivers the SAME alert as a new object, and un-acking it
+  // would slam the card back onto an IC who already acknowledged.
+  const ackedKeyRef = useRef('')
   useEffect(() => {
-    setAcked(false)
+    if (alert && alertKey(alert) !== ackedKeyRef.current) setAcked(false)
     if (!alert) return
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
@@ -41,10 +46,22 @@ export function MaydayAlert() {
                 CENTER ON MEMBER
               </button>
             )}
-            <button className="chip chip-btn amber active" onClick={() => setAcked(true)}>
+            <button
+              className="chip chip-btn amber active"
+              onClick={() => {
+                ackedKeyRef.current = alertKey(alert)
+                setAcked(true)
+              }}
+            >
               ACKNOWLEDGE
             </button>
-            <button className="chip chip-btn" onClick={() => setAppState({ alert: null })}>
+            <button
+              className="chip chip-btn"
+              onClick={() => {
+                markAlertDismissed(alert)
+                setAppState({ alert: null })
+              }}
+            >
               CLEAR
             </button>
           </div>

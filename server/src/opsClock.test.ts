@@ -3,6 +3,10 @@ import { test } from 'node:test'
 import { DEFAULT_PAR_INTERVAL_MIN, OpsClock } from './opsClock.js'
 import type { Incident, TimelineEvent } from './types.js'
 
+// Isolate persistence: the interval setter writes a settings file, and the
+// suite must never touch (or be poisoned by) the real demo config.
+process.env.OPS_SETTINGS_PATH = `${process.env.TMPDIR ?? '/tmp'}/ks-ops-settings-test-${process.pid}.json`
+
 // OPS CLOCK regression coverage: the drumbeat and the PAR nag are DERIVED
 // from the persisted timeline on every tick — these tests pin the
 // idempotency-across-restart contract and the reset semantics.

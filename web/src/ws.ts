@@ -228,6 +228,17 @@ const REPLAY_SAFE = new Set([
   'policy',
 ])
 
+/** Identity of an alert the operator locally CLEARED — a reconnect snapshot
+ *  must not resurrect it (the server holds a live alert until the script or
+ *  incident clears it; the CLEAR button is a local decision). */
+export function alertKey(a: { kind?: string; callsign?: string; at?: string } | null | undefined): string {
+  return a ? `${a.kind ?? ''}|${a.callsign ?? ''}|${a.at ?? ''}` : ''
+}
+let dismissedAlertKey = ''
+export function markAlertDismissed(a: { kind?: string; callsign?: string; at?: string } | null): void {
+  dismissedAlertKey = alertKey(a)
+}
+
 /** A completed PAR belongs to every station and survives reloads — fold the
  *  record's ic.par-complete events into the riding list's per-card stamps. */
 function foldParStamp(ev: { kind: string; t: string; payload?: unknown }): void {
@@ -314,8 +325,8 @@ function handle(msg: ServerMsg): void {
       // Rehydrate cross-station facts the snapshot's timeline carries.
       for (const ev of msg.timeline ?? []) foldParStamp(ev)
       // Late joiner: adopt the live mayday banner + exposure labels.
-      const snapAlert = (msg as { alert?: { kind: string } | null }).alert
-      if (snapAlert) setAppState({ alert: snapAlert as never })
+      const snapAlert = (msg as { alert?: { kind: string; callsign?: string; at?: string } | null }).alert
+      if (snapAlert && alertKey(snapAlert) !== dismissedAlertKey) setAppState({ alert: snapAlert as never })
       const snapExposure = (msg as { exposureLabels?: unknown[] }).exposureLabels
       if (snapExposure?.length) getExposureLayer()?.set(snapExposure as never)
       break

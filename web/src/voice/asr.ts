@@ -137,6 +137,7 @@ class WebSpeechProvider implements AsrProvider {
   private interim = ''
   private cb: AsrCallbacks | null = null
   private stopping = false
+  private fatal = false
 
   async start(cb: AsrCallbacks): Promise<void> {
     const Ctor = (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike; SpeechRecognition?: new () => SpeechRecognitionLike })
@@ -146,6 +147,7 @@ class WebSpeechProvider implements AsrProvider {
     this.finals = ''
     this.interim = ''
     this.stopping = false
+    this.fatal = false
     const rec = new Cls()
     this.rec = rec
     rec.continuous = true
@@ -162,6 +164,10 @@ class WebSpeechProvider implements AsrProvider {
     }
     rec.onerror = (e) => {
       if (e.error === 'aborted' || e.error === 'no-speech') return
+      // A surfaced error means this recognizer is done — the onend restart
+      // below must NOT resurrect it (PttButton drops its provider ref on
+      // error, so nothing could ever stop a restarted instance).
+      this.fatal = true
       // Raw Web Speech codes read as gibberish on the chip — translate the
       // ones an operator can act on.
       const msg =
@@ -177,6 +183,7 @@ class WebSpeechProvider implements AsrProvider {
         this.cb?.onFinal(`${this.finals}${this.interim}`.trim())
         return
       }
+      if (this.fatal) return
       // Chrome self-ends continuous recognition after a few quiet seconds —
       // while the PTT is still HELD that must not wedge the chip in
       // LISTENING with the utterance dropped. Restart and keep capturing;

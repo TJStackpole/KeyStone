@@ -847,12 +847,15 @@ export function resetIsolate(): void {
 let lastPersist: Promise<void> = Promise.resolve()
 
 async function persistIncident(incident: Incident): Promise<void> {
+  // 8s cap: the chain serializes stand-ups in order, and ONE black-holed
+  // POST must not stall every later stand-up and dispatch behind it.
   setLayerStatus('persistence', 'loading')
   try {
     const res = await fetch('/api/incident', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(incident),
+      signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) throw new Error(`server ${res.status}`)
     setLayerStatus('persistence', 'ok')

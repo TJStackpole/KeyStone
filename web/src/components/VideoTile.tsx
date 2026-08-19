@@ -48,9 +48,11 @@ export function VideoTile({
       if (dead) return
       attempts += 1
       // Three strikes: MediaMTX clearly isn't running (keyless/no-docker
-      // deployment) — stop churning and say so honestly.
+      // deployment) — show the honest card, but keep a SLOW background probe
+      // so feeds attach when the sidecar comes up mid-session.
       if (attempts >= 3) {
         setState('offline')
+        retry = setTimeout(connect, 45_000)
         return
       }
       setState('lost')
@@ -76,6 +78,7 @@ export function VideoTile({
         hls.loadSource(hlsUrl(stream))
         hls.attachMedia(video)
         hls.on(HlsCtor.Events.FRAG_BUFFERED, () => {
+          attempts = 0
           if (!dead) setState('live')
           void video.play().catch(() => undefined)
         })
@@ -90,7 +93,10 @@ export function VideoTile({
       }
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = hlsUrl(stream)
-        video.onloadeddata = () => !dead && setState('live')
+        video.onloadeddata = () => {
+          attempts = 0
+          if (!dead) setState('live')
+        }
         video.onerror = scheduleRetry
         return true
       }
@@ -118,6 +124,7 @@ export function VideoTile({
         }, 4000)
         video.onloadeddata = () => {
           clearTimeout(frameCheck)
+          attempts = 0 // healthy again — hiccups must not accumulate for life
           if (!dead) setState('live')
         }
         session.pc.onconnectionstatechange = () => {
