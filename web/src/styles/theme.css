@@ -1112,7 +1112,7 @@ html, body {
 .tak-link-btn {
   position: absolute;
   right: 14px;
-  bottom: 12px;
+  bottom: 92px; /* clear of the glove-sized PTT button parked at bottom-right */
   z-index: 24;
   display: inline-flex;
   align-items: center;
