@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import WebSocket from 'ws'
 
 // ---------------------------------------------------------------------------
@@ -87,6 +90,9 @@ export function extractKeywords(text: string): TranscriptKeyword[] {
 /** WS client to the whisper sidecar; reconnects forever. Emits 'line'. */
 export class WhisperLink extends EventEmitter {
   private backoff = 2000
+  /** True while the transcription sidecar's ws is up — the scripted FDNY
+   *  channel yields to real transcription whenever this is live. */
+  connected = false
 
   constructor(private readonly url: string) {
     super()
@@ -100,6 +106,7 @@ export class WhisperLink extends EventEmitter {
     const ws = new WebSocket(this.url)
     ws.on('open', () => {
       this.backoff = 2000
+      this.connected = true
       console.log(`[comms] whisper sidecar linked at ${this.url}`)
     })
     ws.on('message', (raw: WebSocket.RawData) => {
@@ -123,6 +130,7 @@ export class WhisperLink extends EventEmitter {
       this.backoff = Math.min(this.backoff * 1.6, 20_000)
     }
     ws.on('close', retry)
+      this.connected = false
     ws.on('error', () => ws.close())
   }
 }
@@ -195,6 +203,67 @@ function localize(text: string): string {
     .replace(/on the Fulton side/g, 'on the far side')
     .replace(/100 Gold Street/g, ctxAddress ?? 'the incident address')
     .replace(/Gold Street/g, ctxStreet)
+}
+
+// ------------------------- scripted FDNY channel ----------------------------
+// Keyless FDNY-channel transcript: the bundled dispatch recording's OWN
+// script (assets/audio/dispatch-script.txt — single source of truth with the
+// mp3), replayed as-if-live from INCIDENT START so the radio narrative and
+// the board tell the same story: 10-75 -> all hands -> searches -> knocked
+// down. Yields to the faster-whisper sidecar whenever it is connected.
+// SIMULATED per the platform rule (live:false -> the UI badges it).
+
+const FDNY_SCRIPT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../assets/audio/dispatch-script.txt')
+// Offsets pace the 9-transmission arc across ~3 minutes; the first beats
+// land while a demo audience is still looking at the arrival picture.
+const FDNY_SCRIPT_OFFSETS = [6, 28, 50, 72, 88, 108, 130, 152, 175]
+
+function loadFdnyScript(): { offset: number; text: string }[] {
+  try {
+    const raw = readFileSync(FDNY_SCRIPT_PATH, 'utf8')
+    const lines = raw
+      .split('\n')
+      .map((l) => l.replace(/\[\[[^\]]*\]\]/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+    return lines.map((text, i) => ({ offset: FDNY_SCRIPT_OFFSETS[i] ?? 175 + (i - 8) * 25, text }))
+  } catch {
+    return [] // script missing — channel stays quiet rather than crashing
+  }
+}
+
+export class ScriptedFdnyComms extends EventEmitter {
+  private timers: NodeJS.Timeout[] = []
+
+  constructor(private readonly whisperLive: () => boolean) {
+    super()
+  }
+
+  /** Begin the narrative at incident stand-up. Restarts cleanly. */
+  start(): void {
+    this.stop()
+    for (const item of loadFdnyScript()) {
+      const t = setTimeout(() => {
+        if (this.whisperLive()) return // real transcription owns the channel
+        const text = localize(item.text)
+        const line: TranscriptLine = {
+          id: `fdny-script-${randomUUID()}`,
+          ts: new Date().toISOString(),
+          text,
+          keywords: extractKeywords(text),
+          live: false,
+        }
+        this.emit('line', 'fdny' as CommsChannel, line)
+      }, item.offset * 1000)
+      t.unref?.()
+      this.timers.push(t)
+    }
+  }
+
+  /** The narrative dies with its box. */
+  stop(): void {
+    for (const t of this.timers) clearTimeout(t)
+    this.timers = []
+  }
 }
 
 /** Loops the scripted channels on their own clocks. Emits ('line', channel, line). */

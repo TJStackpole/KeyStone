@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
-import { setSimCommsContext, SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
+import { ScriptedFdnyComms, setSimCommsContext, SimComms, WhisperLink, type CommsChannel, type TranscriptLine } from './comms.js'
 import { DispatchFeed, type FeedIncident } from './dispatchFeed.js'
 import { env } from './env.js'
 import {
@@ -716,6 +716,13 @@ whisper.on('line', (line: TranscriptLine) => {
 })
 whisper.start()
 
+// Keyless FDNY channel: the bundled dispatch recording's own script, replayed
+// as-if-live from incident stand-up (SIMULATED); yields when whisper is up.
+const fdnyScript = new ScriptedFdnyComms(() => whisper.connected)
+fdnyScript.on('line', (channel: CommsChannel, line: TranscriptLine) => {
+  broadcast({ type: 'transcript', channel, line })
+})
+
 // ---------------------------------------------------------------------------
 // SIMULATED citywide dispatch feed (FDNY / NYPD / PAPD dispatch centers):
 // the "other boxes" running around the city, broken down by FDNY division
@@ -1067,6 +1074,7 @@ app.post('/api/incident', (req, res) => {
   seenChatIds.clear()
   const state = createIncident(incident)
   setSimCommsContext(incident.address)
+  fdnyScript.start() // the box's radio narrative begins at stand-up
   console.log(`[incident] created ${incident.id} — ${incident.type} @ ${incident.address}`)
   broadcast({ type: 'incident', incident: state.incident })
   ticker('new-incident', `${incident.type} — ${incident.address}`, {
@@ -1093,6 +1101,7 @@ app.delete('/api/incident', (_req, res) => {
   for (const u of registry.all()) registry.remove(u.uid)
   const prevIncident = getState().incident
   setSimCommsContext(null)
+  fdnyScript.stop()
   const state = clearIncident()
   broadcast({ type: 'incident', incident: null })
   broadcast({ type: 'exposure', labels: [] })
@@ -1244,6 +1253,7 @@ const scenario = new ScenarioEngine({
     simChatter.reset() // drill units announce their arrivals too
     const state = createIncident(incident)
     setSimCommsContext(incident.address)
+    fdnyScript.stop() // drills carry their own scripted radio traffic
     console.log(`[scenario] incident ${incident.id} — ${incident.address}`)
     broadcast({ type: 'incident', incident: state.incident })
   },
